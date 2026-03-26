@@ -1,0 +1,47 @@
+{
+  "winner": "player",
+  "total_turns": 3,
+  "final_player_hp": 98,
+  "final_enemy_hp": -3.2275390625,
+  "player_name": "YK",
+  "enemy_name": "고블린",
+  "logs": [
+    {
+      "turn": 1,
+      "actor": "player",
+      "action": "attack",
+      "action_detail": "attack",
+      "damage_dealt": 79,
+      "hp_after": 72.7724609375,
+      "mp_after": 30,
+      "is_dodge": false,
+      "is_crit": false
+    },
+    {
+      "turn": 2,
+      "actor": "enemy",
+      "action": "attack",
+      "action_detail": "attack",
+      "damage_dealt": 0,
+      "hp_after": 98,
+      "mp_after": 0,
+      "is_dodge": true,
+      "is_crit": false
+    },
+    {
+      "turn": 3,
+      "actor": "player",
+      "action": "attack",
+      "action_detail": "attack",
+      "damage_dealt": 76,
+      "hp_after": -3.2275390625,
+      "mp_after": 30,
+      "is_dodge": false,
+      "is_crit": false
+    }
+  ],
+  "log_type": "player",
+  "player_lv": 2,
+  "timestamp": "20260326_123617",
+  "items_used": []
+}

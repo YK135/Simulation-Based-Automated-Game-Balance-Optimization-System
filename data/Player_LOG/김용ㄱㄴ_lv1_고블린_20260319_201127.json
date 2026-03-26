@@ -1,0 +1,13 @@
+{
+  "winner": "enemy",
+  "total_turns": 0,
+  "final_player_hp": -8,
+  "final_enemy_hp": 192.68554687499997,
+  "player_name": "김용ㄱㄴ",
+  "enemy_name": "고블린",
+  "logs": [],
+  "log_type": "player",
+  "player_lv": 1,
+  "timestamp": "20260319_201127",
+  "items_used": []
+}

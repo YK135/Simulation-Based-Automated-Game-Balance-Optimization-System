@@ -1,0 +1,31 @@
+{
+  "winner": "player",
+  "total_turns": 1,
+  "final_player_hp": 98,
+  "final_enemy_hp": -47.959533691406236,
+  "player_name": "YK",
+  "enemy_name": "박쥐",
+  "logs": [
+    {
+      "turn": 1,
+      "actor": "player",
+      "action": "attack",
+      "action_detail": "attack",
+      "damage_dealt": 78,
+      "hp_after": -47.959533691406236,
+      "mp_after": 30,
+      "is_dodge": false,
+      "is_crit": false
+    }
+  ],
+  "log_type": "simulation",
+  "difficulty": "easy",
+  "player_lv": 2,
+  "win_rate": 0.706,
+  "timestamp": "20260326_123632",
+  "monster_stats": {
+    "hp": 30.04046630859376,
+    "stg": 10.013488769531254,
+    "arm": 10.013488769531254
+  }
+}

@@ -1,0 +1,75 @@
+{
+  "winner": "player",
+  "total_turns": 5,
+  "final_player_hp": 15,
+  "final_enemy_hp": -73.33203125,
+  "player_name": "YK",
+  "enemy_name": "고블린",
+  "logs": [
+    {
+      "turn": 1,
+      "actor": "player",
+      "action": "attack",
+      "action_detail": "attack",
+      "damage_dealt": 80,
+      "hp_after": 79.66796875,
+      "mp_after": 30,
+      "is_dodge": false,
+      "is_crit": false
+    },
+    {
+      "turn": 2,
+      "actor": "enemy",
+      "action": "attack",
+      "action_detail": "attack",
+      "damage_dealt": 42,
+      "hp_after": 56,
+      "mp_after": 0,
+      "is_dodge": false,
+      "is_crit": false
+    },
+    {
+      "turn": 3,
+      "actor": "player",
+      "action": "attack",
+      "action_detail": "attack",
+      "damage_dealt": 77,
+      "hp_after": 2.66796875,
+      "mp_after": 30,
+      "is_dodge": false,
+      "is_crit": false
+    },
+    {
+      "turn": 4,
+      "actor": "enemy",
+      "action": "attack",
+      "action_detail": "attack",
+      "damage_dealt": 41,
+      "hp_after": 15,
+      "mp_after": 0,
+      "is_dodge": false,
+      "is_crit": false
+    },
+    {
+      "turn": 5,
+      "actor": "player",
+      "action": "attack",
+      "action_detail": "attack",
+      "damage_dealt": 76,
+      "hp_after": -73.33203125,
+      "mp_after": 30,
+      "is_dodge": false,
+      "is_crit": false
+    }
+  ],
+  "log_type": "simulation",
+  "difficulty": "hard",
+  "player_lv": 2,
+  "win_rate": 0.464,
+  "timestamp": "20260326_123623",
+  "monster_stats": {
+    "hp": 159.66796875,
+    "stg": 4.2578125,
+    "arm": 12.7734375
+  }
+}

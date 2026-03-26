@@ -1,0 +1,119 @@
+{
+  "winner": "player",
+  "total_turns": 13,
+  "final_player_hp": 100,
+  "final_enemy_hp": -66.31445312500003,
+  "player_name": "김용ㄱㄴ",
+  "enemy_name": "고블린",
+  "logs": [
+    {
+      "turn": 1,
+      "actor": "player",
+      "action": "attack",
+      "action_detail": "attack",
+      "damage_dealt": 51,
+      "hp_after": 141.68554687499997,
+      "mp_after": 25,
+      "is_dodge": false,
+      "is_crit": false
+    },
+    {
+      "turn": 2,
+      "actor": "enemy",
+      "action": "attack",
+      "action_detail": "attack",
+      "damage_dealt": 0,
+      "hp_after": 200,
+      "mp_after": 0,
+      "is_dodge": true,
+      "is_crit": false
+    },
+    {
+      "turn": 4,
+      "actor": "player",
+      "action": "attack",
+      "action_detail": "attack",
+      "damage_dealt": 47,
+      "hp_after": 94.68554687499997,
+      "mp_after": 25,
+      "is_dodge": false,
+      "is_crit": false
+    },
+    {
+      "turn": 5,
+      "actor": "enemy",
+      "action": "attack",
+      "action_detail": "attack",
+      "damage_dealt": 49,
+      "hp_after": 151,
+      "mp_after": 0,
+      "is_dodge": false,
+      "is_crit": false
+    },
+    {
+      "turn": 7,
+      "actor": "player",
+      "action": "attack",
+      "action_detail": "attack",
+      "damage_dealt": 44,
+      "hp_after": 50.68554687499997,
+      "mp_after": 25,
+      "is_dodge": false,
+      "is_crit": false
+    },
+    {
+      "turn": 8,
+      "actor": "enemy",
+      "action": "attack",
+      "action_detail": "attack",
+      "damage_dealt": 51,
+      "hp_after": 100,
+      "mp_after": 0,
+      "is_dodge": false,
+      "is_crit": false
+    },
+    {
+      "turn": 10,
+      "actor": "player",
+      "action": "attack",
+      "action_detail": "attack",
+      "damage_dealt": 47,
+      "hp_after": 3.6855468749999716,
+      "mp_after": 25,
+      "is_dodge": false,
+      "is_crit": false
+    },
+    {
+      "turn": 11,
+      "actor": "enemy",
+      "action": "attack",
+      "action_detail": "attack",
+      "damage_dealt": 0,
+      "hp_after": 100,
+      "mp_after": 0,
+      "is_dodge": true,
+      "is_crit": false
+    },
+    {
+      "turn": 13,
+      "actor": "player",
+      "action": "attack",
+      "action_detail": "attack",
+      "damage_dealt": 70,
+      "hp_after": -66.31445312500003,
+      "mp_after": 25,
+      "is_dodge": false,
+      "is_crit": true
+    }
+  ],
+  "log_type": "simulation",
+  "difficulty": "normal",
+  "player_lv": 1,
+  "win_rate": 0.57,
+  "timestamp": "20260319_201115",
+  "monster_stats": {
+    "hp": 192.68554687499997,
+    "stg": 5.1382812499999995,
+    "arm": 15.41484375
+  }
+}
