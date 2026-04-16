@@ -1,0 +1,174 @@
+{
+  "winner": "player",
+  "total_turns": 14,
+  "final_player_hp": 287,
+  "final_enemy_hp": -1.6000259399414176,
+  "player_name": "2312312312",
+  "enemy_name": "고블린",
+  "logs": [
+    {
+      "turn": 1,
+      "actor": "player",
+      "action": "skill",
+      "action_detail": "강타1",
+      "damage_dealt": 16,
+      "hp_after": 89.39997406005858,
+      "mp_after": 15,
+      "is_dodge": false,
+      "is_crit": false
+    },
+    {
+      "turn": 2,
+      "actor": "enemy",
+      "action": "attack",
+      "action_detail": "attack",
+      "damage_dealt": 6,
+      "hp_after": 314,
+      "mp_after": 0,
+      "is_dodge": false,
+      "is_crit": false
+    },
+    {
+      "turn": 3,
+      "actor": "player",
+      "action": "skill",
+      "action_detail": "강타1",
+      "damage_dealt": 16,
+      "hp_after": 73.39997406005858,
+      "mp_after": 5,
+      "is_dodge": false,
+      "is_crit": false
+    },
+    {
+      "turn": 4,
+      "actor": "enemy",
+      "action": "attack",
+      "action_detail": "attack",
+      "damage_dealt": 6,
+      "hp_after": 308,
+      "mp_after": 0,
+      "is_dodge": false,
+      "is_crit": false
+    },
+    {
+      "turn": 5,
+      "actor": "player",
+      "action": "item",
+      "action_detail": "MP_S_potion",
+      "damage_dealt": 0,
+      "hp_after": 308,
+      "mp_after": 25,
+      "is_dodge": false,
+      "is_crit": false
+    },
+    {
+      "turn": 6,
+      "actor": "enemy",
+      "action": "attack",
+      "action_detail": "attack",
+      "damage_dealt": 5,
+      "hp_after": 303,
+      "mp_after": 0,
+      "is_dodge": false,
+      "is_crit": false
+    },
+    {
+      "turn": 7,
+      "actor": "player",
+      "action": "skill",
+      "action_detail": "강타1",
+      "damage_dealt": 25,
+      "hp_after": 48.39997406005858,
+      "mp_after": 15,
+      "is_dodge": false,
+      "is_crit": false
+    },
+    {
+      "turn": 8,
+      "actor": "player",
+      "action": "skill",
+      "action_detail": "강타1",
+      "damage_dealt": 18,
+      "hp_after": 30.399974060058582,
+      "mp_after": 5,
+      "is_dodge": false,
+      "is_crit": false
+    },
+    {
+      "turn": 9,
+      "actor": "enemy",
+      "action": "attack",
+      "action_detail": "attack",
+      "damage_dealt": 5,
+      "hp_after": 298,
+      "mp_after": 0,
+      "is_dodge": false,
+      "is_crit": false
+    },
+    {
+      "turn": 10,
+      "actor": "player",
+      "action": "item",
+      "action_detail": "MP_S_potion",
+      "damage_dealt": 0,
+      "hp_after": 298,
+      "mp_after": 25,
+      "is_dodge": false,
+      "is_crit": false
+    },
+    {
+      "turn": 11,
+      "actor": "enemy",
+      "action": "attack",
+      "action_detail": "attack",
+      "damage_dealt": 6,
+      "hp_after": 292,
+      "mp_after": 0,
+      "is_dodge": false,
+      "is_crit": false
+    },
+    {
+      "turn": 12,
+      "actor": "player",
+      "action": "skill",
+      "action_detail": "강타1",
+      "damage_dealt": 17,
+      "hp_after": 13.399974060058582,
+      "mp_after": 15,
+      "is_dodge": false,
+      "is_crit": false
+    },
+    {
+      "turn": 13,
+      "actor": "enemy",
+      "action": "attack",
+      "action_detail": "attack",
+      "damage_dealt": 5,
+      "hp_after": 287,
+      "mp_after": 0,
+      "is_dodge": false,
+      "is_crit": false
+    },
+    {
+      "turn": 14,
+      "actor": "player",
+      "action": "skill",
+      "action_detail": "강타1",
+      "damage_dealt": 15,
+      "hp_after": -1.6000259399414176,
+      "mp_after": 5,
+      "is_dodge": false,
+      "is_crit": false
+    }
+  ],
+  "log_type": "simulation",
+  "difficulty": "easy",
+  "player_lv": 1,
+  "win_rate": 1.0,
+  "timestamp": "20260412_175548",
+  "monster_stats": {
+    "hp": 105.39997406005858,
+    "stg": 6.324553812445086,
+    "arm": 6.0
+  }
+}

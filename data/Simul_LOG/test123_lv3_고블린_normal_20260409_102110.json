@@ -1,0 +1,97 @@
+{
+  "winner": "player",
+  "total_turns": 7,
+  "final_player_hp": 98,
+  "final_enemy_hp": -48.08437500000002,
+  "player_name": "test123",
+  "enemy_name": "고블린",
+  "logs": [
+    {
+      "turn": 1,
+      "actor": "player",
+      "action": "skill",
+      "action_detail": "셰이드 1",
+      "damage_dealt": 64,
+      "hp_after": 164.91562499999998,
+      "mp_after": 29,
+      "is_dodge": false,
+      "is_crit": false
+    },
+    {
+      "turn": 2,
+      "actor": "enemy",
+      "action": "attack",
+      "action_detail": "attack",
+      "damage_dealt": 100,
+      "hp_after": 295,
+      "mp_after": 0,
+      "is_dodge": false,
+      "is_crit": false
+    },
+    {
+      "turn": 3,
+      "actor": "player",
+      "action": "skill",
+      "action_detail": "셰이드 1",
+      "damage_dealt": 83,
+      "hp_after": 81.91562499999998,
+      "mp_after": 29,
+      "is_dodge": false,
+      "is_crit": false
+    },
+    {
+      "turn": 4,
+      "actor": "enemy",
+      "action": "attack",
+      "action_detail": "attack",
+      "damage_dealt": 100,
+      "hp_after": 195,
+      "mp_after": 0,
+      "is_dodge": false,
+      "is_crit": false
+    },
+    {
+      "turn": 5,
+      "actor": "player",
+      "action": "skill",
+      "action_detail": "셰이드 1",
+      "damage_dealt": 64,
+      "hp_after": 17.915624999999977,
+      "mp_after": 29,
+      "is_dodge": false,
+      "is_crit": false
+    },
+    {
+      "turn": 6,
+      "actor": "enemy",
+      "action": "attack",
+      "action_detail": "attack",
+      "damage_dealt": 97,
+      "hp_after": 98,
+      "mp_after": 0,
+      "is_dodge": false,
+      "is_crit": false
+    },
+    {
+      "turn": 7,
+      "actor": "player",
+      "action": "skill",
+      "action_detail": "셰이드 1",
+      "damage_dealt": 66,
+      "hp_after": -48.08437500000002,
+      "mp_after": 29,
+      "is_dodge": false,
+      "is_crit": false
+    }
+  ],
+  "log_type": "simulation",
+  "difficulty": "normal",
+  "player_lv": 3,
+  "win_rate": 0.468,
+  "timestamp": "20260409_102110",
+  "monster_stats": {
+    "hp": 228.91562499999998,
+    "stg": 23.913301737735843,
+    "arm": 16.200000000000003
+  }
+}

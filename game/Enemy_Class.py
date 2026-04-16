@@ -3,56 +3,45 @@ Enemy_Class.py
 ─────────────────────────────────────────────
 몬스터 클래스 및 생성 모듈.
 
-변경사항:
-  - 상/중/하 등급 시스템 (경험치 차등 지급)
-  - 몬스터 행동 패턴 (지켜보기 / 일반공격 / 마법공격+디버프)
-  - 중간 보스 / 최종 보스 생성 로직
-  - 경험치: 플레이어 maxexp의 상50% / 중38% / 하32%
-"""
+[밸런스 v5 - 역할 기반 설계]
+  하급: HP 낮음 + 공격 낮음 → 1~2방 처치 가능
+  중급: 균형형 → 3~5방
+  상급: 탱커(HP높고ARM높음) or 유리대포(HP낮고STG높음)
 
+  고블린: 근접 탱커 성향 (HP 높고 ARM 높음)
+  박쥐:   유리대포 성향 (HP 낮고 SPD 빠르고 SP 있음)
+
+  경험치: 상45% / 중34% / 하28%
+  중간 보스: STG 낮추고 HP/ARM/SPARM으로 난이도
+  최종 보스: 동일 원칙 + 저항 50%
+"""
+from __future__ import annotations
 from random import randint, random, choice
 
 
-# ────────────────────────────────────────────
-# 기본 Unit 클래스
-# ────────────────────────────────────────────
-
 class Unit:
     def __init__(self, name, lv, hp, mp, stg, arm, sparm, sp, spd, luc,
-                 grade="중", is_boss=False):
-        self.name   = name
-        self.lv     = lv
-        self.hp     = hp
-        self.mp     = mp
-        self.stg    = stg
-        self.arm    = arm
-        self.sparm  = sparm
-        self.sp     = sp
-        self.spd    = spd
-        self.luc    = luc
-        self.grade  = grade    # "상" | "중" | "하"
-        self.is_boss = is_boss
+                 grade="중", is_boss=False, debuff_resist=0.0):
+        self.name          = name
+        self.lv            = lv
+        self.hp            = hp
+        self.mp            = mp
+        self.stg           = stg
+        self.arm           = arm
+        self.sparm         = sparm
+        self.sp            = sp
+        self.spd           = spd
+        self.luc           = luc
+        self.grade         = grade
+        self.is_boss       = is_boss
+        self.debuff_resist = debuff_resist
 
     def exp_reward(self, player_maxexp: int) -> int:
-        """
-        등급별 경험치 보상.
-        상: maxexp의 50% / 중: 38% / 하: 32%
-        """
-        ratio = {"상": 0.50, "중": 0.38, "하": 0.32}.get(self.grade, 0.38)
+        ratio = {"상": 0.45, "중": 0.34, "하": 0.28}.get(self.grade, 0.34)
         return int(player_maxexp * ratio)
 
     def decide_action(self, player) -> str:
-        """
-        몬스터 행동 결정.
-        반환: "attack" | "magic" | "watch"
-
-        행동 가중치:
-          - 기본: attack 60% / magic 25% / watch 15%
-          - 상급: attack 50% / magic 35% / watch 15%
-          - 보스: attack 45% / magic 40% / watch 15%
-        """
         roll = random()
-
         if self.is_boss:
             if roll < 0.45:   return "attack"
             elif roll < 0.85: return "magic"
@@ -67,23 +56,17 @@ class Unit:
             else:             return "watch"
 
 
-# ────────────────────────────────────────────
-# 등급별 스탯 배율
-# ────────────────────────────────────────────
-
+# ── 등급 배율 ──────────────────────────────
+# 하급: 전반적으로 약하게
+# 상급: 탱커(HP/ARM) or 유리대포(STG) 성향 공존
 GRADE_MULT = {
-    "하": {"hp": 0.75, "stg": 0.80, "arm": 0.80, "sparm": 0.80, "sp": 0.80},
+    "하": {"hp": 0.70, "stg": 0.80, "arm": 0.85, "sparm": 0.85, "sp": 0.80},
     "중": {"hp": 1.00, "stg": 1.00, "arm": 1.00, "sparm": 1.00, "sp": 1.00},
-    "상": {"hp": 1.30, "stg": 1.25, "arm": 1.20, "sparm": 1.20, "sp": 1.25},
+    "상": {"hp": 1.30, "stg": 1.20, "arm": 1.15, "sparm": 1.15, "sp": 1.20},
 }
 
 
-# ────────────────────────────────────────────
-# 몬스터 생성 함수
-# ────────────────────────────────────────────
-
 def _apply_grade(unit: Unit, grade: str) -> Unit:
-    """등급 배율을 적용한 새 Unit 반환"""
     m = GRADE_MULT[grade]
     unit.hp    = int(unit.hp    * m["hp"])
     unit.stg   = round(unit.stg   * m["stg"],   1)
@@ -94,156 +77,110 @@ def _apply_grade(unit: Unit, grade: str) -> Unit:
     return unit
 
 
-def Make_Goblin(player_lv: int, grade: str = "중") -> Unit:
+def Make_Goblin(player_lv: int, grade: str) -> Unit:
     """
-    플레이어 레벨 기반 고블린 생성.
-    grade: "상" | "중" | "하"
+    고블린: 근접 탱커 성향
+    HP 중간, ARM 강함, STG 적정
+    하급: 플레이어 2~3방 처치 / 중급: 4~5방 / 상급: 6~7방
+    (Lv1 HP 120→85, ARM 6→5 로 초반 답답함 완화)
     """
-    base = Unit("고블린", 1, 75, 0, 2, 6, 0, 0, 5, 5)
     lv = max(1, player_lv)
-
+    # Lv1 STG=7 고정, 이후 레벨부터 성장
+    base_stg = 7 if lv == 1 else round(8 + 2.5 * (lv - 1), 1)
     unit = Unit(
-        name="고블린",
-        lv=lv,
-        hp=int(base.hp + 22 * (lv - 1)),
-        mp=0,
-        stg=round(base.stg + 2 * (lv - 1), 1),
-        arm=round(base.arm + 1.5 * (lv - 1), 1),
-        sparm=round(base.sparm + 1.2 * (lv - 1), 1),
-        sp=0,
-        spd=round(base.spd + 2 * (lv - 1), 1),
-        luc=round(base.luc + 1.2 * (lv - 1), 1),
+        name  = "고블린",
+        lv    = lv,
+        hp    = int(85  + 24 * (lv - 1)),
+        mp    = 0,
+        stg   = base_stg,
+        arm   = round(5   + 1.2 * (lv - 1), 1),
+        sparm = round(3   + 0.8 * (lv - 1), 1),
+        sp    = 0,
+        spd   = round(8   + 0.5 * (lv - 1), 1),
+        luc   = round(5   + 0.6 * (lv - 1), 1),
     )
     return _apply_grade(unit, grade)
 
 
-def Make_Bat(player_lv: int, grade: str = "중") -> Unit:
+def Make_Bat(player_lv: int, grade: str) -> Unit:
     """
-    플레이어 레벨 기반 박쥐 생성.
-    박쥐는 스피드가 빠른 대신 체력이 낮음.
+    박쥐: 유리대포 성향
+    HP 낮음, SPD 빠름, SP 있음 (마법 공격)
+    하급: 플레이어 1~2방 처치 / 중급: 2~3방 / 상급: HP 낮고 SP 높음
+    (Lv1 HP 70→55 로 초반 답답함 완화, SP 유지)
     """
-    base = Unit("박쥐", 1, 15, 5, 5, 5, 0, 0, 7, 0)
     lv = max(1, player_lv)
-
     unit = Unit(
-        name="박쥐",
-        lv=lv,
-        hp=int(base.hp + 25 * (lv - 1)),
-        mp=int(5 + lv * 2),
-        stg=round(base.stg + 2 * (lv - 1), 1),
-        arm=round(base.arm + 1.5 * (lv - 1), 1),
-        sparm=round(base.sparm + 1.2 * (lv - 1), 1),
-        sp=round(3 + lv * 1.5, 1),
-        spd=round(base.spd + 2.5 * (lv - 1), 1),   # 박쥐는 스피드 성장 빠름
-        luc=round(base.luc + 1.2 * (lv - 1), 1),
+        name  = "박쥐",
+        lv    = lv,
+        hp    = int(55  + 14 * (lv - 1)),
+        mp    = int(15  + lv * 2),
+        stg   = 5 if lv == 1 else round(6 + 1.8 * (lv - 1), 1),  # Lv1=5 고정
+        arm   = round(3   + 0.8 * (lv - 1), 1),
+        sparm = round(2   + 0.6 * (lv - 1), 1),
+        sp    = round(8   + 2.0 * (lv - 1), 1),
+        spd   = round(12  + 0.8 * (lv - 1), 1),
+        luc   = round(4   + 0.6 * (lv - 1), 1),
     )
     return _apply_grade(unit, grade)
 
 
 def Make_Random_Monster(player_lv: int) -> Unit:
     """
-    랜덤 몬스터 + 랜덤 등급 생성.
-    등급 가중치: 하 40% / 중 45% / 상 15%
+    랜덤 몬스터 + 랜덤 등급
+    하40% / 중45% / 상15%
     """
     roll = random()
-    if roll < 0.40:
-        grade = "하"
-    elif roll < 0.85:
-        grade = "중"
-    else:
-        grade = "상"
+    if   roll < 0.40: grade = "하"
+    elif roll < 0.85: grade = "중"
+    else:             grade = "상"
+    return choice([Make_Goblin, Make_Bat])(player_lv, grade)
 
-    makers = [Make_Goblin, Make_Bat]
-    maker  = choice(makers)
-    return maker(player_lv, grade)
-
-
-# ────────────────────────────────────────────
-# 보스 생성
-# ────────────────────────────────────────────
 
 def Make_MidBoss(player_lv: int, base_monster_snap=None) -> Unit:
     """
-    중간 보스 생성.
-    - 승률 60% 기준 몬스터 스탯 사용 (시뮬레이터에서 생성된 snap 활용)
-    - 체력은 해당 스탯의 1.5배
-    - base_monster_snap이 없으면 고블린 기반으로 생성
+    중간 보스: 오래 버티는 적
+    STG 낮추고 HP/ARM/SPARM/저항으로 난이도 부여
+    Lv14 기준 승률 ~50%, 평균 8~10턴
     """
     lv = max(1, player_lv)
-
-    if base_monster_snap:
-        unit = Unit(
-            name="중간 보스",
-            lv=lv,
-            hp=int(base_monster_snap.hp * 1.5),
-            mp=int(base_monster_snap.mp),
-            stg=base_monster_snap.stg,
-            arm=base_monster_snap.arm,
-            sparm=base_monster_snap.sparm,
-            sp=base_monster_snap.sp,
-            spd=base_monster_snap.spd,
-            luc=base_monster_snap.luc,
-            grade="상",
-            is_boss=True,
-        )
-    else:
-        # 폴백: 고블린 상급 기반
-        base = Make_Goblin(lv, "상")
-        unit = Unit(
-            name="중간 보스",
-            lv=lv,
-            hp=int(base.hp * 1.5),
-            mp=int(lv * 5),
-            stg=base.stg,
-            arm=base.arm,
-            sparm=base.sparm,
-            sp=round(lv * 2.0, 1),
-            spd=base.spd,
-            luc=base.luc,
-            grade="상",
-            is_boss=True,
-        )
+    unit = Unit(
+        name  = "중간 보스",
+        lv    = lv,
+        hp    = 950,
+        mp    = 80,
+        stg   = 35,
+        arm   = 35,
+        sparm = 28,
+        sp    = 20,
+        spd   = 22,
+        luc   = 10,
+        grade = "상",
+        is_boss      = True,
+        debuff_resist = 0.30,
+    )
     return unit
 
 
 def Make_FinalBoss(player_lv: int, base_monster_snap=None) -> Unit:
     """
-    최종 보스 생성.
-    - 플레이어 레벨 30 이상 가정
-    - 승률 49% 기준 스탯 (시뮬레이터에서 생성된 snap 활용)
-    - base_monster_snap이 없으면 고블린 상급 기반
+    최종 보스: HP/ARM/SPARM/저항 위주
+    STG는 적정 수준 유지
     """
-    lv = max(30, player_lv)
-
-    if base_monster_snap:
-        unit = Unit(
-            name="최종 보스",
-            lv=lv,
-            hp=int(base_monster_snap.hp),
-            mp=int(base_monster_snap.mp),
-            stg=base_monster_snap.stg,
-            arm=base_monster_snap.arm,
-            sparm=base_monster_snap.sparm,
-            sp=base_monster_snap.sp,
-            spd=base_monster_snap.spd,
-            luc=base_monster_snap.luc,
-            grade="상",
-            is_boss=True,
-        )
-    else:
-        base = Make_Goblin(lv, "상")
-        unit = Unit(
-            name="최종 보스",
-            lv=lv,
-            hp=int(base.hp * 2.0),
-            mp=int(lv * 8),
-            stg=round(base.stg * 1.3, 1),
-            arm=round(base.arm * 1.2, 1),
-            sparm=round(base.sparm * 1.2, 1),
-            sp=round(lv * 3.0, 1),
-            spd=base.spd,
-            luc=base.luc,
-            grade="상",
-            is_boss=True,
-        )
+    lv = max(25, player_lv)
+    unit = Unit(
+        name  = "최종 보스",
+        lv    = lv,
+        hp    = 2950,
+        mp    = 200,
+        stg   = 72,
+        arm   = 60,
+        sparm = 36,
+        sp    = 50,
+        spd   = 35,
+        luc   = 20,
+        grade = "상",
+        is_boss      = True,
+        debuff_resist = 0.50,
+    )
     return unit

@@ -18,6 +18,7 @@ visualizer.py
 
 import os
 import matplotlib
+matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 import matplotlib.patches as mpatches
 import numpy as np
@@ -59,8 +60,8 @@ COLORS = {
 
 DIFF_LABELS = {
     "hard":   "강함 (목표 45%)",
-    "normal": "중간 (목표 55%)",
-    "easy":   "약함 (목표 65%)",
+    "normal": "중간 (목표 60%)",
+    "easy":   "약함 (목표 70%)",
 }
 
 
@@ -96,7 +97,7 @@ class Visualizer:
         ax.set_facecolor(COLORS["bg"])
 
         diffs      = ["hard", "normal", "easy"]
-        targets    = [0.45, 0.55, 0.65]
+        targets    = [0.45, 0.60, 0.70]
         actuals    = [monsters[d][1].win_rate for d in diffs]
         labels     = [DIFF_LABELS[d] for d in diffs]
         bar_colors = [COLORS[d] for d in diffs]

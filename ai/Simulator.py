@@ -15,8 +15,14 @@ import copy
 import statistics
 from dataclasses import dataclass
 
-from ai.Battle_Engine import BattleEngine, EntitySnapshot, SKILL_META
-from ai.Auto_AI import PlayerAI, EnemyAI
+try:
+    from ai.Battle_Engine  import BattleEngine, EntitySnapshot, SKILL_META
+    from ai.Auto_AI        import PlayerAI, EnemyAI
+    from game.Enemy_Class  import Make_Goblin, Make_Bat
+except ModuleNotFoundError:
+    from Battle_Engine import BattleEngine, EntitySnapshot, SKILL_META
+    from Auto_AI       import PlayerAI, EnemyAI
+    from Enemy_Class   import Make_Goblin, Make_Bat  # flat 구조 fallback
 
 
 # ────────────────────────────────────────────
@@ -97,23 +103,83 @@ class PlayerPowerIndex:
         elif avg_stat <= 5:
             index -= 0.10
 
+        # ── 5. SPD 유리함 반영 ──
+        # 적 기준 SPD(고블린=8, 박쥐=12)와 비교해 빠를수록 ATB 유리 → index 상향
+        # 기준선: 10 (전사/마법사 평균)
+        spd = getattr(player, "spd", 10.0)
+        if spd >= 14:
+            index += 0.15   # 도적 등 고SPD → 몬스터 더 강하게
+        elif spd >= 12:
+            index += 0.08
+        elif spd <= 7:
+            index -= 0.08   # 느린 직업 → 약간 유리하게
+
         # 범위 제한
         return max(0.4, min(2.0, index))
 
     @staticmethod
     def _skill_expected_dmg(player: EntitySnapshot) -> float:
-        """보유 스킬 중 최고 기대 데미지 반환"""
+        """
+        보유 스킬 중 최고 기대 기여값 반환.
+        공격형: 데미지 기대값
+        생존형(heal/buff/shield): 생존력 보정치로 환산
+        """
         best = 0.0
         for skill in player.learned_skills:
             meta = SKILL_META.get(skill)
             if not meta:
                 continue
-            if player.mp < meta["mp"]:
+            if player.mp < meta.get("mp", 0):
                 continue
-            base_stat = player.stg if meta["type"] == "physical" else player.sp
-            dmg = base_stat * meta["mult"] * meta["hits"]
+
+            stype = meta.get("type", "")
+
+            if stype == "physical":
+                dmg = player.stg * meta.get("mult", 1.0) * meta.get("hits", 1)
+
+            elif stype == "magical":
+                dmg = player.sp * meta.get("mult", 1.0) * meta.get("hits", 1)
+
+            elif stype == "multi_hit":
+                # 기대타수: base_prob + luc_mult * LUC 기반 추정 (평균 2.5타)
+                expected_hits = min(2.0 + player.luc * 0.05, meta.get("max_hits", 4))
+                dmg = player.stg * expected_hits * meta.get("dmg_decay", 0.75)
+
+            elif stype == "tank_attack":
+                dmg = (player.arm * meta.get("arm_mult", 1.0)
+                       + player.maxhp * meta.get("hp_mult", 0.0))
+
+            elif stype == "counter":
+                # 피해를 받기 전이면 낮게 평가
+                recent = getattr(player, "last_damage_taken", 0)
+                dmg = (recent * meta.get("counter_mult", 0.5)
+                       + player.arm * meta.get("arm_mult", 1.0))
+                dmg = min(dmg, player.maxhp * meta.get("cap", 1.0))
+                dmg *= 0.5  # 조건부 스킬이라 가중치 절반
+
+            elif stype == "heal":
+                # 회복량을 생존력 보정치로 환산 (데미지 단위로 표현)
+                heal = meta.get("base_heal", 0) + player.sp * meta.get("sp_mult", 0.0)
+                dmg  = heal * 0.6  # 회복은 딜 기여보다 약하게 평가
+
+            elif stype == "buff":
+                # 스탯 증가 비율 → 기대 딜 증가분으로 환산
+                amount = meta.get("buff_amount", 0.0)
+                turns  = meta.get("buff_turns", 1)
+                stat   = meta.get("buff_stat", "")
+                base   = player.stg if stat == "stg" else player.sp if stat == "sp" else 0
+                dmg    = base * amount * turns * 0.5
+
+            elif stype == "shield":
+                shield_val = player.maxhp * meta.get("shield_mult", 0.0)
+                dmg        = shield_val * 0.5  # 방어 기여 절반 환산
+
+            else:
+                dmg = 0.0
+
             if dmg > best:
                 best = dmg
+
         return best
 
 
@@ -187,7 +253,7 @@ class StatTuner:
       → 목표 승률을 낮춰서 더 강한 몬스터 생성 (긴장감 유지)
     """
 
-    # 기본 목표 승률
+    # 기본 목표 승률 (수정: easy 0.75 → 0.70)
     BASE_TARGET = {
         "hard":   0.45,
         "normal": 0.60,
@@ -221,7 +287,7 @@ class StatTuner:
     def tune(self, difficulty: str) -> Tuple:
         target = self._adjusted_target(difficulty)
 
-        lo, hi     = 0.1, 5.0
+        lo, hi     = 0.8, 3.5  # HP 완화 공식 덕분에 range 넓어도 HP 폭등 없음
         best_enemy = copy.deepcopy(self.base_enemy)
         best_sim   = None
 
@@ -248,12 +314,21 @@ class StatTuner:
         return best_enemy, final_sim
 
     def _scale_enemy(self, scale: float) -> EntitySnapshot:
+        """
+        HP 완화 공식: e.hp * (060 + 0.40 * scale)
+          scale=0.8 → HP × 1.13  (약한 몬스터)
+          scale=1.0 → HP × 1.20  (기준선)
+          scale=1.6 → HP × 1.41  (강한 몬스터)
+        기존 HP × scale 방식 대비 초반 HP 폭등 방지.
+        STG는 sqrt(scale), ARM 상한 1.2배로 완화.
+        """
+        import math
         e = copy.deepcopy(self.base_enemy)
-        e.hp    = max(1.0, e.hp    * scale)
-        e.maxhp = max(1.0, e.maxhp * scale)
-        e.stg   = max(1.0, e.stg   * scale)
-        e.arm   = max(0.0, e.arm   * scale)
-        e.luc   = max(0.0, e.luc   * scale)
+        e.hp    = max(1.0, e.hp * (0.60 + 0.40 * scale))
+        e.maxhp = e.hp
+        e.stg   = max(1.0, e.stg * math.sqrt(scale))
+        e.arm   = max(0.0, e.arm * min(scale, 1.2))  # 1.5 → 1.2
+        e.luc   = max(0.0, e.luc * min(scale, 1.2))
         return e
 
 
@@ -261,16 +336,43 @@ class StatTuner:
 # 몬스터 팩토리
 # ────────────────────────────────────────────
 
-BASE_ENEMIES = {
-    "고블린": EntitySnapshot(
-        name="고블린", hp=75, maxhp=75, mp=0, maxmp=0,
-        stg=2, arm=6, sparm=0, sp=0, luc=5, lv=1,
-    ),
-    "박쥐": EntitySnapshot(
-        name="박쥐", hp=15, maxhp=15, mp=0, maxmp=0,
-        stg=5, arm=5, sparm=0, sp=0, luc=0, lv=1,
-    ),
-}
+def _unit_to_snap(unit) -> EntitySnapshot:
+    """
+    Enemy_Class.Unit → EntitySnapshot 변환 헬퍼.
+    Simulator 전체에서 이 함수만 사용 — 수치 출처를 Enemy_Class 단일화.
+    """
+    return EntitySnapshot(
+        name=unit.name,
+        hp=unit.hp,       maxhp=unit.hp,
+        mp=getattr(unit, 'mp', 0),
+        maxmp=getattr(unit, 'mp', 0),
+        stg=unit.stg,     arm=unit.arm,
+        sparm=unit.sparm, sp=getattr(unit, 'sp', 0),
+        luc=unit.luc,     lv=unit.lv,
+        spd=getattr(unit, 'spd', 10),
+    )
+
+
+def _make_base_enemy(enemy_type: str, player_lv: int) -> EntitySnapshot:
+    """
+    Enemy_Class.Make_Goblin / Make_Bat 중급(grade="중") 직접 호출.
+    Simulator가 독립적인 몬스터 수치를 갖지 않도록 단일 출처 보장.
+    """
+    lv = max(1, player_lv)
+    if enemy_type == "박쥐":
+        return _unit_to_snap(Make_Bat(lv, "중"))
+    else:
+        return _unit_to_snap(Make_Goblin(lv, "중"))
+
+
+# 하위 호환용 스냅샷 (Enemy_Class Lv1 중급 기준으로 자동 생성)
+def _make_base_enemies():
+    return {
+        "고블린": _unit_to_snap(Make_Goblin(1, "중")),
+        "박쥐":   _unit_to_snap(Make_Bat(1, "중")),
+    }
+
+BASE_ENEMIES = _make_base_enemies()
 
 
 class MonsterFactory:
@@ -278,31 +380,41 @@ class MonsterFactory:
 
     def __init__(self, player: EntitySnapshot, enemy_type: str = "고블린"):
         self.player     = player
-        self.base_enemy = BASE_ENEMIES.get(enemy_type, BASE_ENEMIES["고블린"])
+        self.enemy_type = enemy_type                               # ← 추가
+        self.base_enemy = _make_base_enemy(enemy_type, player.lv) # 레벨 기반 동적 생성
         self.tuner      = StatTuner(player, self.base_enemy)
 
-    def generate_all(self, verbose: bool = True) -> dict:
+    def generate_all(self, verbose: bool = True, monitor=None) -> dict:
+        """
+        verbose=True : 메인 콘솔에 출력
+        monitor      : BalanceHook 인스턴스 또는 None
+                       _monitor_write() 메서드로 파일 IPC 전송
+        """
         results = {}
         labels  = {"hard": "강함", "normal": "중간", "easy": "약함"}
 
-        if verbose:
-            pi = self.tuner.power_index
-            status = "강함" if pi > 1.1 else ("약함" if pi < 0.9 else "보통")
-            print(f"  [밸런싱] 플레이어 전투력 지수: {pi:.2f} ({status})")
-            for diff in ["hard", "normal", "easy"]:
-                adj = self.tuner._adjusted_target(diff)
-                print(f"    {labels[diff]} 목표 승률: {adj*100:.0f}%")
+        def _out(msg: str):
+            if verbose:
+                print(msg, flush=True)
+            if monitor is not None and hasattr(monitor, '_monitor_write'):
+                monitor._monitor_write(msg)
+
+        _out(f"  [AI] {self.enemy_type} 밸런스 분석 시작")
+        _out(f"  플레이어 전투력 지수: {self.tuner.power_index:.2f}")
+        _out("")
 
         for diff in ["hard", "normal", "easy"]:
-            if verbose:
-                print(f"  [{labels[diff]}] 계산 중...", end=" ", flush=True)
-
+            adj = self.tuner._adjusted_target(diff)
+            _out(f"  [{labels[diff]}] 목표 승률 {adj*100:.0f}%  계산 중...")
             enemy_snap, sim = self.tuner.tune(diff)
-
-            if verbose:
-                print(f"완료 — 승률 {sim.win_rate*100:.1f}% | "
-                      f"HP {enemy_snap.hp:.0f} | STG {enemy_snap.stg:.1f}")
-
             results[diff] = (enemy_snap, sim)
+            _out(f"  [{labels[diff]}] 완료 — 승률 {sim.win_rate*100:.1f}%"
+                 f"  HP {int(enemy_snap.hp)}  STG {round(enemy_snap.stg, 1)}")
+
+        _out("")
+        _out(f"  [AI] {self.enemy_type} 분석 완료!")
+
+        # __DONE__ 신호는 Balance_Hook의 _monitor_done()에서 전송
+        # (마지막 스레드 완료 시점에 한 번만)
 
         return results

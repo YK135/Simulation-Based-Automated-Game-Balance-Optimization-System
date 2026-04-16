@@ -1,0 +1,174 @@
+{
+  "winner": "player",
+  "total_turns": 14,
+  "final_player_hp": 28,
+  "final_enemy_hp": -21.03124999999997,
+  "player_name": "test1",
+  "enemy_name": "박쥐",
+  "logs": [
+    {
+      "turn": 1,
+      "actor": "enemy",
+      "action": "attack",
+      "action_detail": "attack",
+      "damage_dealt": 76,
+      "hp_after": 224,
+      "mp_after": 12,
+      "is_dodge": false,
+      "is_crit": false
+    },
+    {
+      "turn": 2,
+      "actor": "player",
+      "action": "attack",
+      "action_detail": "attack",
+      "damage_dealt": 41,
+      "hp_after": 149.96875000000003,
+      "mp_after": 25,
+      "is_dodge": false,
+      "is_crit": false
+    },
+    {
+      "turn": 3,
+      "actor": "enemy",
+      "action": "attack",
+      "action_detail": "attack",
+      "damage_dealt": 74,
+      "hp_after": 150,
+      "mp_after": 12,
+      "is_dodge": false,
+      "is_crit": false
+    },
+    {
+      "turn": 4,
+      "actor": "player",
+      "action": "attack",
+      "action_detail": "attack",
+      "damage_dealt": 42,
+      "hp_after": 107.96875000000003,
+      "mp_after": 25,
+      "is_dodge": false,
+      "is_crit": false
+    },
+    {
+      "turn": 5,
+      "actor": "enemy",
+      "action": "attack",
+      "action_detail": "attack",
+      "damage_dealt": 74,
+      "hp_after": 76,
+      "mp_after": 12,
+      "is_dodge": false,
+      "is_crit": false
+    },
+    {
+      "turn": 6,
+      "actor": "player",
+      "action": "item",
+      "action_detail": "HP_L_potion",
+      "damage_dealt": 0,
+      "hp_after": 226,
+      "mp_after": 25,
+      "is_dodge": false,
+      "is_crit": false
+    },
+    {
+      "turn": 7,
+      "actor": "enemy",
+      "action": "attack",
+      "action_detail": "attack",
+      "damage_dealt": 74,
+      "hp_after": 152,
+      "mp_after": 12,
+      "is_dodge": false,
+      "is_crit": false
+    },
+    {
+      "turn": 8,
+      "actor": "player",
+      "action": "attack",
+      "action_detail": "attack",
+      "damage_dealt": 47,
+      "hp_after": 60.96875000000003,
+      "mp_after": 25,
+      "is_dodge": false,
+      "is_crit": false
+    },
+    {
+      "turn": 9,
+      "actor": "enemy",
+      "action": "attack",
+      "action_detail": "attack",
+      "damage_dealt": 74,
+      "hp_after": 78,
+      "mp_after": 12,
+      "is_dodge": false,
+      "is_crit": false
+    },
+    {
+      "turn": 10,
+      "actor": "player",
+      "action": "item",
+      "action_detail": "HP_M_potion",
+      "damage_dealt": 0,
+      "hp_after": 178,
+      "mp_after": 25,
+      "is_dodge": false,
+      "is_crit": false
+    },
+    {
+      "turn": 11,
+      "actor": "enemy",
+      "action": "attack",
+      "action_detail": "attack",
+      "damage_dealt": 76,
+      "hp_after": 102,
+      "mp_after": 12,
+      "is_dodge": false,
+      "is_crit": false
+    },
+    {
+      "turn": 12,
+      "actor": "player",
+      "action": "attack",
+      "action_detail": "attack",
+      "damage_dealt": 41,
+      "hp_after": 19.96875000000003,
+      "mp_after": 25,
+      "is_dodge": false,
+      "is_crit": false
+    },
+    {
+      "turn": 13,
+      "actor": "enemy",
+      "action": "attack",
+      "action_detail": "attack",
+      "damage_dealt": 74,
+      "hp_after": 28,
+      "mp_after": 12,
+      "is_dodge": false,
+      "is_crit": false
+    },
+    {
+      "turn": 14,
+      "actor": "player",
+      "action": "attack",
+      "action_detail": "attack",
+      "damage_dealt": 41,
+      "hp_after": -21.03124999999997,
+      "mp_after": 25,
+      "is_dodge": false,
+      "is_crit": false
+    }
+  ],
+  "log_type": "simulation",
+  "difficulty": "normal",
+  "player_lv": 1,
+  "win_rate": 0.534,
+  "timestamp": "20260406_174530",
+  "monster_stats": {
+    "hp": 190.96875000000003,
+    "stg": 17.840438615684313,
+    "arm": 6.0
+  }
+}
