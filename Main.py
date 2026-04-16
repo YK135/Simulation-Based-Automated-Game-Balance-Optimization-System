@@ -8,7 +8,7 @@ from random import randint, random
 import sys, os, time
 
 _ROOT = os.path.dirname(os.path.abspath(__file__))
-for _sub in ["game", "ai", "core", "interfave"]:
+for _sub in ["game", "ai", "core", "interface"]:
     _p = os.path.join(_ROOT, _sub)
     if _p not in sys.path:
         sys.path.insert(0, _p)

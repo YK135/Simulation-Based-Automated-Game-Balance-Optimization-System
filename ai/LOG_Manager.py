@@ -150,6 +150,7 @@ class LogSerializer:
             "final_enemy_hp":  result.final_enemy_hp,
             "player_name":     result.player_name,
             "enemy_name":      result.enemy_name,
+            "final_player_items": list(getattr(result, "final_player_items", [])),
             "logs": [
                 {
                     "turn":          log.turn,
@@ -161,6 +162,10 @@ class LogSerializer:
                     "mp_after":      log.mp_after,
                     "is_dodge":      log.is_dodge,
                     "is_crit":       log.is_crit,
+                    "debuff_applied": log.debuff_applied,
+                    "escaped":       log.escaped,
+                    "player_pt":     log.player_pt,
+                    "enemy_pt":      log.enemy_pt,
                 }
                 for log in result.logs
             ],
@@ -177,6 +182,10 @@ class LogSerializer:
                 action=e["action"], action_detail=e["action_detail"],
                 damage_dealt=e["damage_dealt"], hp_after=e["hp_after"],
                 mp_after=e["mp_after"], is_dodge=e["is_dodge"], is_crit=e["is_crit"],
+                debuff_applied=e.get("debuff_applied", ""),
+                escaped=e.get("escaped", False),
+                player_pt=e.get("player_pt", 0.0),
+                enemy_pt=e.get("enemy_pt", 0.0),
             )
             for e in data["logs"]
         ]
@@ -186,6 +195,7 @@ class LogSerializer:
             final_enemy_hp=data["final_enemy_hp"],
             player_name=data["player_name"], enemy_name=data["enemy_name"],
             logs=logs,
+            final_player_items=data.get("final_player_items", []),
         )
 
 

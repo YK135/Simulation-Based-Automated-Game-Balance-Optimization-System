@@ -17,6 +17,8 @@ visualizer.py
 """
 
 import os
+os.environ.setdefault("MPLCONFIGDIR", "/tmp/ai_rpg_matplotlib")
+os.makedirs(os.environ["MPLCONFIGDIR"], exist_ok=True)
 import matplotlib
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt

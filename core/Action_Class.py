@@ -51,16 +51,20 @@ def _p(msg: str, delay: float = LINE_DELAY):
 # ────────────────────────────────────────────
 
 def _snap_player(player, item_list: list) -> EntitySnapshot:
-    return EntitySnapshot.from_player(player)
+    snap = EntitySnapshot.from_player(player)
+    snap.items = list(item_list)
+    return snap
 
 
 def _snap_enemy(enemy) -> EntitySnapshot:
     return EntitySnapshot.from_enemy(enemy)
 
 
-def _sync_back(player, snap: EntitySnapshot):
+def _sync_back(player, snap: EntitySnapshot, item_list: list | None = None):
     player.hp = snap.hp
     player.mp = snap.mp
+    if item_list is not None:
+        item_list[:] = list(snap.items)
 
 
 def _use_item(p_snap: EntitySnapshot, item_list: list, item_name: str) -> str:
@@ -71,11 +75,15 @@ def _use_item(p_snap: EntitySnapshot, item_list: list, item_name: str) -> str:
         before = int(p_snap.hp)
         p_snap.hp = min(p_snap.maxhp, p_snap.hp + meta["amount"])
         item_list.remove(item_name)
+        if item_name in p_snap.items:
+            p_snap.items.remove(item_name)
         return f"  {item_name} 사용 → HP {before} → {int(p_snap.hp)}"
     elif meta["stat"] == "mp":
         before = int(p_snap.mp)
         p_snap.mp = min(p_snap.maxmp, p_snap.mp + meta["amount"])
         item_list.remove(item_name)
+        if item_name in p_snap.items:
+            p_snap.items.remove(item_name)
         return f"  {item_name} 사용 → MP {before} → {int(p_snap.mp)}"
     return "  사용할 수 없는 아이템입니다."
 
@@ -254,10 +262,10 @@ class Act:
             Battle_interface(p_snap, e_snap)
 
             if p_snap.hp <= 0:
-                _sync_back(self.player, p_snap)
+                _sync_back(self.player, p_snap, self.item_list)
                 return "lose"
             if e_snap.hp <= 0:
-                _sync_back(self.player, p_snap)
+                _sync_back(self.player, p_snap, self.item_list)
                 return "win"
 
             key = input("입력: ").strip().lower()
@@ -267,7 +275,7 @@ class Act:
             if key == "1":
                 _manual_attack(p_snap, e_snap, self.player.name, self.enemy.name)
                 if e_snap.hp <= 0:
-                    _sync_back(self.player, p_snap)
+                    _sync_back(self.player, p_snap, self.item_list)
                     time.sleep(END_PAUSE)
                     return "win"
                 _enemy_turn(e_snap, p_snap, self.enemy_ai, self.enemy.name, self.player.name)
@@ -304,7 +312,7 @@ class Act:
                     if not ok:
                         continue
                     if e_snap.hp <= 0:
-                        _sync_back(self.player, p_snap)
+                        _sync_back(self.player, p_snap, self.item_list)
                         time.sleep(END_PAUSE)
                         return "win"
                     _enemy_turn(e_snap, p_snap, self.enemy_ai, self.enemy.name, self.player.name)
@@ -340,6 +348,11 @@ class Act:
                         continue
                     msg = _use_item(p_snap, self.item_list, items[idx])
                     _p(msg, 0.8)
+                    _enemy_turn(e_snap, p_snap, self.enemy_ai,
+                                self.enemy.name, self.player.name)
+                    p_snap.tick_debuffs(); p_snap.tick_buffs()
+                    e_snap.tick_debuffs(); e_snap.tick_buffs()
+                    time.sleep(0.6)
                 except ValueError:
                     _p("  숫자를 입력하세요.", 0.6)
                     continue
@@ -382,7 +395,7 @@ class Act:
                 if _rnd() <= chance:
                     _p("  도망에 성공했다!")
                     time.sleep(END_PAUSE)
-                    _sync_back(self.player, p_snap)
+                    _sync_back(self.player, p_snap, self.item_list)
                     return "escaped"
                 else:
                     _p(f"  도망에 실패했다! (성공률 {int(chance*100)}%)")
@@ -404,13 +417,16 @@ class Act:
 
                 if result.winner == "player":
                     p_snap.hp = result.final_player_hp
-                    _sync_back(self.player, p_snap)
+                    p_snap.items = list(result.final_player_items)
+                    _sync_back(self.player, p_snap, self.item_list)
                     return "win"
                 elif result.winner == "enemy":
                     self.player.hp = 0
+                    self.item_list[:] = list(result.final_player_items)
                     return "lose"
                 else:
-                    _sync_back(self.player, p_snap)
+                    p_snap.items = list(result.final_player_items)
+                    _sync_back(self.player, p_snap, self.item_list)
                     return "win"
 
             else:
@@ -419,10 +435,10 @@ class Act:
 
             # 턴 종료 후 사망 체크
             if p_snap.hp <= 0:
-                _sync_back(self.player, p_snap)
+                _sync_back(self.player, p_snap, self.item_list)
                 time.sleep(END_PAUSE)
                 return "lose"
             if e_snap.hp <= 0:
-                _sync_back(self.player, p_snap)
+                _sync_back(self.player, p_snap, self.item_list)
                 time.sleep(END_PAUSE)
                 return "win"

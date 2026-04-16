@@ -18,6 +18,7 @@ from dataclasses import dataclass
 from typing import Optional, List
 
 from ai.Battle_Engine import BattleResult, TurnLog
+from ai.BehaviorAnalyzer import BehaviorAnalyzer
 
 
 # ────────────────────────────────────────────
@@ -120,6 +121,7 @@ class RuleBasedAnalyzer:
         sim_result:    Optional[BattleResult] = None,
     ) -> FeedbackReport:
         st   = _LogStats(player_result)
+        behavior = BehaviorAnalyzer().analyze([player_result])
         won  = (player_result.winner == "player")
         good = []
         bad  = []
@@ -139,6 +141,9 @@ class RuleBasedAnalyzer:
         if player_result.total_turns <= 5:
             good.append(str(player_result.total_turns) + "턴 만에 빠르게 처치했습니다")
             score += 5
+        if behavior.play_style in ("스킬 중심형", "균형형") and won:
+            good.append("전투 행동 패턴이 " + behavior.play_style + "으로 분류되었습니다")
+            score += 3
 
         # 아쉬운 점
         if not won:
@@ -171,6 +176,10 @@ class RuleBasedAnalyzer:
         # 제안
         if st.skill_count == 0:
             sugg.append("MP가 30% 이상일 때 스킬을 먼저 사용해보세요")
+        if behavior.play_style == "기본 공격 중심형":
+            sugg.append("기본 공격 비중이 높습니다. 주요 스킬의 MP 대비 효율을 비교해보세요")
+        if behavior.play_style == "생존 관리형":
+            sugg.append("아이템 의존도가 높습니다. HP가 낮아지기 전에 방어형 스킬을 섞어보세요")
         if not won:
             sugg.append("HP가 30% 이하로 떨어지면 즉시 포션을 사용하세요")
         if st.skill_rate > 0.5 and not won:

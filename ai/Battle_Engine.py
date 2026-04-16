@@ -203,6 +203,7 @@ class BattleResult:
     final_enemy_hp: float
     player_name: str
     enemy_name: str
+    final_player_items: list = field(default_factory=list)
 
 
 # ────────────────────────────────────────────
@@ -816,6 +817,7 @@ class BattleEngine:
             final_enemy_hp=self.enemy.hp,
             player_name=self.player.name,
             enemy_name=self.enemy.name,
+            final_player_items=list(self.player.items),
         )
 
 
