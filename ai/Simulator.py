@@ -253,12 +253,33 @@ class StatTuner:
       → 목표 승률을 낮춰서 더 강한 몬스터 생성 (긴장감 유지)
     """
 
-    # 기본 목표 승률 (수정: easy 0.75 → 0.70)
-    BASE_TARGET = {
+    # ── 몬스터 종류별 기본 목표 승률 ──────────────────
+    # 몬스터 컨셉에 맞게 난이도 목표를 차별화.
+    # 박쥐는 "유리대포" 컨셉 — HP/STG 낮고 MP/SP 있음. 물리적으로
+    # 플레이어가 거의 항상 이김. 목표 승률을 80/90/95%로 설정해서
+    # "박쥐 = 청소용 쉬운 몬스터, 마법 크리로 변수" 포지션을 명확화.
+    # 고블린은 "균형잡힌 탱커" — 표준 난이도 45/60/70%.
+    # _TARGET_BY_NAME에 없는 몬스터는 DEFAULT_TARGET 사용.
+    DEFAULT_TARGET = {
         "hard":   0.45,
         "normal": 0.60,
         "easy":   0.70,
     }
+    _TARGET_BY_NAME = {
+        "박쥐": {
+            "hard":   0.80,   # 강한 박쥐도 플레이어가 80% 이김 (유리대포)
+            "normal": 0.90,
+            "easy":   0.95,
+        },
+        "고블린": {
+            "hard":   0.45,
+            "normal": 0.60,
+            "easy":   0.70,
+        },
+    }
+
+    # 기존 BASE_TARGET은 호환성 유지용 (외부 코드가 참조할 수 있음)
+    BASE_TARGET = DEFAULT_TARGET
     TOLERANCE = 0.03
     MAX_ITER  = 20
     SIM_N     = 300
@@ -266,6 +287,10 @@ class StatTuner:
     def __init__(self, player: EntitySnapshot, base_enemy: EntitySnapshot):
         self.player     = player
         self.base_enemy = base_enemy
+
+        # 몬스터 이름 기반 목표 승률 결정
+        enemy_name = getattr(base_enemy, "name", "").strip()
+        self.target_table = self._TARGET_BY_NAME.get(enemy_name, self.DEFAULT_TARGET)
 
         # 플레이어 전투력 지수 계산
         self.power_index = PlayerPowerIndex.calc(player)
@@ -279,13 +304,14 @@ class StatTuner:
 
         보정 범위: ±0.08 (기존 ±0.15에서 축소)
         축소 이유: 이분탐색이 따라갈 수 없을 정도로 공격적인 목표 방지.
-                   PowerIndex 1.3 → 목표 -4.5%p (기존 -4.5%p 와 같아 보이지만
-                   실제로는 기존이 더 극단적이었고, 수렴 실패 유발).
+
+        target_table은 몬스터 종류에 따라 다르게 적용됨 (박쥐 = 유리대포).
+        상한을 0.92로 확장 — 박쥐 easy 목표 95% 수렴 허용.
         """
-        base   = self.BASE_TARGET[difficulty]
+        base   = self.target_table[difficulty]
         delta  = (1.0 - self.power_index) * 0.08
         target = base + delta
-        return round(max(0.20, min(0.85, target)), 3)
+        return round(max(0.20, min(0.97, target)), 3)
 
     def tune(self, difficulty: str) -> Tuple:
         target = self._adjusted_target(difficulty)
@@ -317,6 +343,12 @@ class StatTuner:
 
         # 최종 검증
         final_sim = BattleSimulator(self.player, best_enemy, n=500).run()
+
+        # 난이도 라벨을 몬스터 스냅샷에 기록 (UI 표시용)
+        # hard/normal/easy → 약/중/강과 반대 매핑 주의:
+        #   hard = 플레이어가 이기기 어려움 → 몬스터 입장에서 "강함"
+        #   easy = 플레이어가 이기기 쉬움 → 몬스터 입장에서 "약함"
+        best_enemy.difficulty = difficulty
         return best_enemy, final_sim
 
     def _scale_enemy(self, scale: float) -> EntitySnapshot:
@@ -332,7 +364,7 @@ class StatTuner:
         """
         import math
         e = copy.deepcopy(self.base_enemy)
-        e.hp    = max(1.0, e.hp * (0.60 + 0.40 * scale))
+        e.hp = max(1.0, e.hp * (0.60 + 0.30 * scale))
         e.maxhp = e.hp
         e.stg   = max(1.0, e.stg * math.sqrt(scale))
         e.arm   = max(0.0, e.arm * min(scale, 1.8))  # 1.2 → 1.8

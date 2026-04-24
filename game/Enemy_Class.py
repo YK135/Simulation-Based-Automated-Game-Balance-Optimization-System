@@ -107,17 +107,19 @@ def Make_Bat(player_lv: int, grade: str) -> Unit:
     박쥐: 유리대포 성향
     HP 낮음, SPD 빠름, SP 있음 (마법 공격)
     하급: 플레이어 1~2방 처치 / 중급: 3~5방 / 상급: HP 낮고 SP 높음
-    (v3: HP 55→80, 레벨당 14→16 — DamageCalc v2 공식과 밸런스 재정렬)
+    (v4: MP 15+lv*2 → 30+lv*4 — 파이어볼1을 3~4회 쓸 수 있어야
+         유리대포 컨셉 유지 가능. 이전엔 MP 17이라 마법 1회 쓰면 끝.
+         sparm 2→4: 마법 방어 의미있게, 플레이어 마법사 상대 변수 제공.)
     """
     lv = max(1, player_lv)
     unit = Unit(
         name  = "박쥐",
         lv    = lv,
         hp    = int(80  + 16 * (lv - 1)),
-        mp    = int(15  + lv * 2),
+        mp    = int(30  + lv * 4),
         stg   = 5 if lv == 1 else round(6 + 1.8 * (lv - 1), 1),  # Lv1=5 고정
         arm   = round(3   + 0.8 * (lv - 1), 1),
-        sparm = round(2   + 0.6 * (lv - 1), 1),
+        sparm = round(4   + 0.8 * (lv - 1), 1),
         sp    = round(8   + 2.0 * (lv - 1), 1),
         spd   = round(12  + 0.8 * (lv - 1), 1),
         luc   = round(4   + 0.6 * (lv - 1), 1),

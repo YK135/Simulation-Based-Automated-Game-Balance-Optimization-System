@@ -73,6 +73,7 @@ class EntitySnapshot:
     buffs: list = field(default_factory=list)
     shield: float = 0.0
     last_damage_taken: float = 0.0
+    difficulty: str = ""  # Simulator가 튜닝 시 "hard"/"normal"/"easy" 기록
 
     def effective_stg(self) -> float:
         debuff_r = sum(d.amount for d in self.debuffs if d.stat == "stg")
@@ -170,6 +171,7 @@ class EntitySnapshot:
             luc=enemy.luc,
             lv=enemy.lv,
             spd=getattr(enemy, "spd", 10.0),
+            difficulty=getattr(enemy, "difficulty", ""),  # 난이도 라벨 보존
         )
 
 

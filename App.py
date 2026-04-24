@@ -401,7 +401,11 @@ def use_item():
 @app.route("/api/rest", methods=["POST"])
 def rest():
     """
-    요청: { "choice": "heal" | "train" }
+    요청: { "choice": "heal" | "mp" | "train" }
+
+    heal:  HP 최대치의 1/3 회복
+    mp:    MP 최대치의 1/3 회복 (테스트용 — 본게임에선 탐험 이벤트로만)
+    train: 랜덤 경험치 획득 (maxexp의 60~80%)
     """
     gs = _get_session()
     if not gs:
@@ -421,6 +425,16 @@ def rest():
                         "message": f"체력 {heal} 회복! ({int(player.hp)}/{int(player.maxhp)})",
                         "player": _player_dict(player, gs["items"])})
 
+    elif choice == "mp":
+        if player.mp >= player.maxmp:
+            return jsonify({"ok": True, "message": "이미 마나가 가득 찼습니다.",
+                            "player": _player_dict(player, gs["items"])})
+        mp_gain   = min(int(player.maxmp / 3), int(player.maxmp - player.mp))
+        player.mp = min(player.maxmp, player.mp + mp_gain)
+        return jsonify({"ok": True,
+                        "message": f"마나 {mp_gain} 회복! ({int(player.mp)}/{int(player.maxmp)})",
+                        "player": _player_dict(player, gs["items"])})
+
     elif choice == "train":
         ratio   = 0.60 + random() * 0.20
         exp_gain = int(player.maxexp * ratio)
@@ -431,7 +445,7 @@ def rest():
                         "message": f"수련으로 {exp_gain} 경험치 획득!",
                         "player": _player_dict(player, gs["items"])})
 
-    return jsonify({"ok": False, "error": "choice는 heal 또는 train이어야 합니다."})
+    return jsonify({"ok": False, "error": "choice는 heal, mp, train 중 하나여야 합니다."})
 
 
 # ─────────────────────────────────────────────

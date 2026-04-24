@@ -1,0 +1,20 @@
+{
+  "winner": "player",
+  "total_turns": 5,
+  "final_player_hp": 223,
+  "final_enemy_hp": -7,
+  "player_name": "테스터",
+  "enemy_name": "고블린",
+  "final_player_items": [
+    "HP_S_potion",
+    "HP_S_potion",
+    "HP_M_potion",
+    "MP_S_potion",
+    "MP_S_potion"
+  ],
+  "logs": [],
+  "log_type": "player",
+  "player_lv": 1,
+  "timestamp": "20260424_195348",
+  "items_used": []
+}

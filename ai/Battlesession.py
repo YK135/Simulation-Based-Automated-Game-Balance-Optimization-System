@@ -257,16 +257,42 @@ class BattleSession:
 
     # ── 내부: 현재 상태 dict 반환 ────────────
 
+    _DIFF_LABEL = {
+        "hard":   "강함",
+        "normal": "중간",
+        "easy":   "약함",
+        "":       "",
+    }
+
     def _state(self, messages: list = None) -> dict:
+        e = self.enemy
+        diff_raw = getattr(e, "difficulty", "")
         return {
             "turn":       self.turn,
             "player_hp":  round(self.player.hp, 1),
             "player_mp":  round(self.player.mp, 1),
             "player_maxhp": self.player.maxhp,
             "player_maxmp": self.player.maxmp,
-            "enemy_hp":   max(0.0, round(self.enemy.hp, 1)),
-            "enemy_maxhp": self.enemy.maxhp,
-            "enemy_name": self.enemy.name,
+            "enemy_hp":   max(0.0, round(e.hp, 1)),
+            "enemy_maxhp": e.maxhp,
+            "enemy_name": e.name,
+            # ── 몬스터 상세 정보 (UI 표시용) ──
+            "enemy_info": {
+                "name":        e.name,
+                "lv":          e.lv,
+                "difficulty":  diff_raw,  # "hard"/"normal"/"easy"/""
+                "difficulty_label": self._DIFF_LABEL.get(diff_raw, diff_raw),  # "강함"/"중간"/"약함"
+                "hp":          max(0.0, round(e.hp, 1)),
+                "maxhp":       round(e.maxhp, 1),
+                "mp":          round(e.mp, 1),
+                "maxmp":       round(e.maxmp, 1),
+                "stg":         round(e.stg, 1),
+                "arm":         round(e.arm, 1),
+                "sparm":       round(e.sparm, 1),
+                "sp":          round(e.sp, 1),
+                "spd":         round(e.spd, 1),
+                "luc":         round(e.luc, 1),
+            },
             "items":      self.get_items(),
             "skills":     self.get_skills(),
             "done":       self.done,

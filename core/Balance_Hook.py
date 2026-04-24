@@ -147,6 +147,7 @@ class BalanceHook:
             sparm=unit.sparm, sp=unit.sp,
             luc=unit.luc,   lv=unit.lv,
             spd=getattr(unit, "spd", 10),
+            difficulty="normal",  # 폴백은 중간 난이도로 표기
         )
 
     def __init__(self, player, item_list, show_graph=False, verbose=True):
@@ -424,6 +425,9 @@ class _SnapUnit:
         self.grade         = getattr(snap, 'grade', '중')
         self.is_boss       = getattr(snap, 'is_boss', False)
         self.debuff_resist = getattr(snap, 'debuff_resist', 0.0)
+        # 난이도 라벨 보존 (UI 표시용) — EntitySnapshot → _SnapUnit → EntitySnapshot
+        # 왕복 변환 시 difficulty가 소실되지 않도록 명시적으로 복사.
+        self.difficulty    = getattr(snap, 'difficulty', '')
 
     def exp_reward(self, player_maxexp: int) -> int:
         ratio = {"상": 0.45, "중": 0.34, "하": 0.28}.get(self.grade, 0.34)
