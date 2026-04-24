@@ -148,7 +148,8 @@ class BattleSession:
             dmg, dodge, crit = DamageCalc.physical(
                 self.player.effective_stg(), self.player.luc,
                 self.enemy.effective_arm(),  self.enemy.luc,
-                mult=4.3
+                skill_mult=1.0,
+                role="player",
             )
             if dodge:
                 msgs.append(f"{self.enemy.name}이(가) 공격을 회피했다!")
@@ -228,7 +229,8 @@ class BattleSession:
             dmg, dodge, crit = DamageCalc.physical(
                 self.enemy.effective_stg(), self.enemy.luc,
                 self.player.effective_arm(), self.player.luc,
-                mult=4.8
+                skill_mult=1.0,
+                role="monster",
             )
             if dodge:
                 msgs.append(f"{self.player.name}이(가) 공격을 회피했다!")

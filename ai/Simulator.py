@@ -22,7 +22,7 @@ try:
 except ModuleNotFoundError:
     from Battle_Engine import BattleEngine, EntitySnapshot, SKILL_META
     from Auto_AI       import PlayerAI, EnemyAI
-    from Enemy_Class   import Make_Goblin, Make_Bat  # flat 구조 fallback
+    from game.Enemy_Class   import Make_Goblin, Make_Bat  # flat 구조 fallback
 
 
 # ────────────────────────────────────────────
@@ -277,17 +277,23 @@ class StatTuner:
         PowerIndex > 1.0 (강한 상태) → 목표 승률 감소 (더 강한 몬스터)
         PowerIndex < 1.0 (약한 상태) → 목표 승률 증가 (더 약한 몬스터)
 
-        보정 범위: ±0.15
+        보정 범위: ±0.08 (기존 ±0.15에서 축소)
+        축소 이유: 이분탐색이 따라갈 수 없을 정도로 공격적인 목표 방지.
+                   PowerIndex 1.3 → 목표 -4.5%p (기존 -4.5%p 와 같아 보이지만
+                   실제로는 기존이 더 극단적이었고, 수렴 실패 유발).
         """
         base   = self.BASE_TARGET[difficulty]
-        delta  = (1.0 - self.power_index) * 0.15
+        delta  = (1.0 - self.power_index) * 0.08
         target = base + delta
         return round(max(0.20, min(0.85, target)), 3)
 
     def tune(self, difficulty: str) -> Tuple:
         target = self._adjusted_target(difficulty)
 
-        lo, hi     = 0.8, 3.5  # HP 완화 공식 덕분에 range 넓어도 HP 폭등 없음
+        # lo=0.6: 약한 몬스터 충분히 약하게 (easy 목표 70% 도달용)
+        # hi=5.0: 강한 몬스터 충분히 강하게 (hard 목표 45% 도달용)
+        # HP 완화 공식 (0.60 + 0.40*scale)로 HP 폭등 방지되므로 hi 확장 안전
+        lo, hi     = 0.6, 5.0
         best_enemy = copy.deepcopy(self.base_enemy)
         best_sim   = None
 
@@ -316,19 +322,21 @@ class StatTuner:
     def _scale_enemy(self, scale: float) -> EntitySnapshot:
         """
         HP 완화 공식: e.hp * (060 + 0.40 * scale)
-          scale=0.8 → HP × 1.13  (약한 몬스터)
-          scale=1.0 → HP × 1.20  (기준선)
-          scale=1.6 → HP × 1.41  (강한 몬스터)
+          scale=0.6 → HP × 0.84  (가장 약한 몬스터)
+          scale=1.0 → HP × 1.00  (기준선)
+          scale=3.0 → HP × 1.80  (강한 몬스터)
+          scale=5.0 → HP × 2.60  (최강 몬스터)
         기존 HP × scale 방식 대비 초반 HP 폭등 방지.
-        STG는 sqrt(scale), ARM 상한 1.2배로 완화.
+        STG는 sqrt(scale), ARM/LUC 상한 1.8배로 완화.
+        ARM 상한을 1.2→1.8로 확장: 강함 난이도의 방어력 차별화 강화.
         """
         import math
         e = copy.deepcopy(self.base_enemy)
         e.hp    = max(1.0, e.hp * (0.60 + 0.40 * scale))
         e.maxhp = e.hp
         e.stg   = max(1.0, e.stg * math.sqrt(scale))
-        e.arm   = max(0.0, e.arm * min(scale, 1.2))  # 1.5 → 1.2
-        e.luc   = max(0.0, e.luc * min(scale, 1.2))
+        e.arm   = max(0.0, e.arm * min(scale, 1.8))  # 1.2 → 1.8
+        e.luc   = max(0.0, e.luc * min(scale, 1.8))  # 1.2 → 1.8
         return e
 
 
@@ -418,3 +426,124 @@ class MonsterFactory:
         # (마지막 스레드 완료 시점에 한 번만)
 
         return results
+
+# ────────────────────────────────────────────
+# 터미널 단독 실행용 진입점
+# ────────────────────────────────────────────
+# 사용법:
+#   python3 -m ai.Simulator          (기본: 전사 Lv1)
+#   python3 -m ai.Simulator --job 전사 --lv 4 --enemy 박쥐
+#   python3 -m ai.Simulator --lv 10 --enemy 고블린 --n 500
+
+def _build_player_snap(job: str, lv: int) -> EntitySnapshot:
+    """
+    Player_Class 기반으로 지정 직업/레벨의 플레이어 스냅샷 생성.
+    Lv.py의 apply_growth를 순차 적용하여 실제 게임과 동일한 스탯 계산.
+    """
+    try:
+        from game.Player_Class import JOB_BASE_STATS
+        from game.Lv import LV_ as _LV
+    except ModuleNotFoundError:
+        from game.Player_Class import JOB_BASE_STATS
+        from game.Lv import LV_ as _LV
+
+    base = JOB_BASE_STATS[job]
+
+    # 임시 플레이어 객체 (apply_growth가 요구하는 속성만 갖춤)
+    class _TempPlayer:
+        pass
+
+    p = _TempPlayer()
+    p.name = f"테스트_{job}"
+    p.job = job
+    p.lv = 1
+    p.maxhp = base["hp"]; p.hp = base["hp"]
+    p.maxmp = base["mp"]; p.mp = base["mp"]
+    p.stg = base["stg"];  p.sp = base["sp"]
+    p.arm = base["arm"];  p.sparm = base["sparm"]
+    p.spd = base["spd"];  p.luc = base["luc"]
+    p.skill = None
+    p.learned_skills = []
+
+    # Lv1 → target lv까지 성장 누적
+    for _ in range(lv - 1):
+        p.lv += 1
+        _LV.apply_growth(p)
+
+    return EntitySnapshot(
+        name=p.name,
+        hp=p.maxhp, maxhp=p.maxhp,
+        mp=p.maxmp, maxmp=p.maxmp,
+        stg=p.stg, arm=p.arm,
+        sparm=p.sparm, sp=p.sp,
+        luc=p.luc, lv=p.lv,
+        spd=p.spd,
+        learned_skills=list(getattr(p, "learned_skills", []) or []),
+    )
+
+
+def _run_standalone(job: str, lv: int, enemy_type: str, n: int):
+    """터미널 단독 실행: 플레이어 생성 → MonsterFactory 실행 → 결과 출력"""
+    print("=" * 60)
+    print(f"  Simulator 단독 실행")
+    print(f"  직업: {job}  |  레벨: {lv}  |  적: {enemy_type}  |  시뮬: {n}회")
+    print("=" * 60)
+
+    p_snap = _build_player_snap(job, lv)
+
+    print(f"\n[플레이어 스탯]")
+    print(f"  이름={p_snap.name}  Lv={p_snap.lv}")
+    print(f"  HP={int(p_snap.maxhp)}  MP={int(p_snap.maxmp)}")
+    print(f"  STG={p_snap.stg:.1f}  SP={p_snap.sp:.1f}")
+    print(f"  ARM={p_snap.arm:.1f}  SPARM={p_snap.sparm:.1f}")
+    print(f"  SPD={p_snap.spd:.1f}  LUC={p_snap.luc:.1f}")
+
+    idx = PlayerPowerIndex.calc(p_snap)
+    print(f"\n[PowerIndex] {idx:.2f}")
+
+    factory = MonsterFactory(p_snap, enemy_type)
+    # SIM_N 오버라이드
+    factory.tuner.SIM_N = n
+
+    print(f"\n[기본 몬스터 스탯 — 중급 Lv{lv}]")
+    be = factory.base_enemy
+    print(f"  HP={int(be.hp)}  STG={be.stg:.1f}  ARM={be.arm:.1f}  "
+          f"SPARM={be.sparm:.1f}  SP={be.sp:.1f}  SPD={be.spd:.1f}  LUC={be.luc:.1f}")
+
+    print(f"\n[밸런스 튜닝 중... (n={n})]\n")
+    results = factory.generate_all(verbose=True, monitor=None)
+
+    print("\n" + "=" * 60)
+    print("  최종 결과")
+    print("=" * 60)
+    for diff in ["hard", "normal", "easy"]:
+        if diff not in results:
+            continue
+        enemy_snap, sim = results[diff]
+        label = {"hard": "강함", "normal": "중간", "easy": "약함"}[diff]
+        target = factory.tuner._adjusted_target(diff)
+        deviation = (sim.win_rate - target) * 100
+        print(f"\n  [{label}]  목표 {target*100:.0f}%  →  실제 {sim.win_rate*100:.1f}%  "
+              f"(편차 {deviation:+.1f}%p)")
+        print(f"    몬스터 HP={int(enemy_snap.hp)}  STG={enemy_snap.stg:.1f}  "
+              f"ARM={enemy_snap.arm:.1f}  LUC={enemy_snap.luc:.1f}")
+        print(f"    평균 턴={sim.avg_turns}  평균 잔여HP={sim.avg_final_hp}")
+    print()
+
+
+if __name__ == "__main__":
+    import argparse
+
+    parser = argparse.ArgumentParser(description="Battle Simulator 단독 실행")
+    parser.add_argument("--job", default="전사",
+                        choices=["전사", "마법사", "탱커", "도적"],
+                        help="플레이어 직업 (기본: 전사)")
+    parser.add_argument("--lv", type=int, default=1, help="플레이어 레벨 (기본: 1)")
+    parser.add_argument("--enemy", default="박쥐",
+                        choices=["박쥐", "고블린"],
+                        help="몬스터 종류 (기본: 박쥐)")
+    parser.add_argument("--n", type=int, default=300,
+                        help="시뮬레이션 횟수 (기본: 300)")
+
+    args = parser.parse_args()
+    _run_standalone(args.job, args.lv, args.enemy, args.n)

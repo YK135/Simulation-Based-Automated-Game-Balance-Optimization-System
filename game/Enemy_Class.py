@@ -81,8 +81,8 @@ def Make_Goblin(player_lv: int, grade: str) -> Unit:
     """
     고블린: 근접 탱커 성향
     HP 중간, ARM 강함, STG 적정
-    하급: 플레이어 2~3방 처치 / 중급: 4~5방 / 상급: 6~7방
-    (Lv1 HP 120→85, ARM 6→5 로 초반 답답함 완화)
+    하급: 플레이어 2~3방 처치 / 중급: 4~6방 / 상급: 7~9방
+    (v3: HP 85→120, 레벨당 24→26 — DamageCalc v2 공식과 밸런스 재정렬)
     """
     lv = max(1, player_lv)
     # Lv1 STG=7 고정, 이후 레벨부터 성장
@@ -90,7 +90,7 @@ def Make_Goblin(player_lv: int, grade: str) -> Unit:
     unit = Unit(
         name  = "고블린",
         lv    = lv,
-        hp    = int(85  + 24 * (lv - 1)),
+        hp    = int(120 + 26 * (lv - 1)),
         mp    = 0,
         stg   = base_stg,
         arm   = round(5   + 1.2 * (lv - 1), 1),
@@ -106,14 +106,14 @@ def Make_Bat(player_lv: int, grade: str) -> Unit:
     """
     박쥐: 유리대포 성향
     HP 낮음, SPD 빠름, SP 있음 (마법 공격)
-    하급: 플레이어 1~2방 처치 / 중급: 2~3방 / 상급: HP 낮고 SP 높음
-    (Lv1 HP 70→55 로 초반 답답함 완화, SP 유지)
+    하급: 플레이어 1~2방 처치 / 중급: 3~5방 / 상급: HP 낮고 SP 높음
+    (v3: HP 55→80, 레벨당 14→16 — DamageCalc v2 공식과 밸런스 재정렬)
     """
     lv = max(1, player_lv)
     unit = Unit(
         name  = "박쥐",
         lv    = lv,
-        hp    = int(55  + 14 * (lv - 1)),
+        hp    = int(80  + 16 * (lv - 1)),
         mp    = int(15  + lv * 2),
         stg   = 5 if lv == 1 else round(6 + 1.8 * (lv - 1), 1),  # Lv1=5 고정
         arm   = round(3   + 0.8 * (lv - 1), 1),

@@ -240,13 +240,32 @@ class EnemyAI:
     ENEMY_DEBUFF_SKILLS = ["약화1", "마약화1", "저주1", "둔화1"]
     ENEMY_MAGIC_SKILLS = ["파이어볼1", "아이스볼릿1"]
 
+    # unit이 None일 때 사용할 기본 행동 확률.
+    # watch는 게임 진행을 늦추므로 제거, SP가 있는 몬스터는 magic 확률 증가.
+    DEFAULT_ATTACK_PROB_NO_SP = 1.00  # SP=0 몬스터: 100% 공격
+    DEFAULT_ATTACK_PROB_SP    = 0.55  # SP>0 몬스터: 55% 공격, 45% 마법
+
     def __init__(self, unit=None):
         self.unit = unit
 
-    def decide(self, attacker: EntitySnapshot, defender: EntitySnapshot) -> Action:
-        action_type = "attack"
+    def _decide_action_type(self, attacker: EntitySnapshot, defender: EntitySnapshot) -> str:
+        """
+        unit이 있으면 unit.decide_action 사용 (게임 경로).
+        없으면 attacker의 SP/MP 상황 기반 기본 확률 (시뮬 경로).
+        Digital Twin 원칙을 완벽히 지키진 못하지만, 시뮬 전투가
+        기본 공격만 하는 상태보다는 실제 게임에 가깝게 동작.
+        """
         if self.unit:
-            action_type = self.unit.decide_action(defender)
+            return self.unit.decide_action(defender)
+
+        # unit 없는 경우: attacker 스펙으로 판단
+        from random import random as rr
+        has_sp_kit = attacker.sp > 0 and attacker.maxmp > 0
+        threshold = self.DEFAULT_ATTACK_PROB_SP if has_sp_kit else self.DEFAULT_ATTACK_PROB_NO_SP
+        return "attack" if rr() < threshold else "magic"
+
+    def decide(self, attacker: EntitySnapshot, defender: EntitySnapshot) -> Action:
+        action_type = self._decide_action_type(attacker, defender)
 
         if action_type == "watch":
             return Action("watch", "watching")

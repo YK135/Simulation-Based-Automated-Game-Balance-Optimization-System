@@ -267,8 +267,14 @@ class DamageCalc:
         if randint(1, 100) <= evade_chance:
             return 0, True, False
 
-        base = atk_stat * 100 / (100 + def_stat)
-        base = max(base, atk_stat * 0.2)
+        # 데미지 공식 (v2):
+        #   base = atk_stat * 200 / (100 + def_stat)
+        #   저레벨(atk=12, def=5) 기준 평균 22~23, Lv1 전투가 4~5턴에 끝나도록 튜닝.
+        #   기존 100/(100+def) 공식은 상한이 atk_stat 자체라 전투가 너무 길어졌음.
+        # 최소값:
+        #   atk_stat * 0.4  → def가 매우 높아도 최소 보장 데미지 확보
+        base = atk_stat * 200 / (100 + def_stat)
+        base = max(base, atk_stat * 0.4)
         base *= skill_mult
         base *= role_mult
         base *= uniform(0.9, 1.1)
@@ -750,6 +756,8 @@ class BattleEngine:
             dmg, is_dodge, is_crit = DamageCalc.physical(
                 attacker.effective_stg(), attacker.luc,
                 defender.effective_arm(), defender.luc,
+                skill_mult=1.0,
+                role="player" if actor == "player" else "monster",
             )
             actual = 0 if is_dodge else _apply_damage_with_shield(defender, dmg)
             log.damage_dealt = actual
@@ -775,6 +783,8 @@ class BattleEngine:
                 dmg, is_dodge, is_crit = DamageCalc.physical(
                     attacker.effective_stg(), attacker.luc,
                     defender.effective_arm(), defender.luc,
+                    skill_mult=1.0,
+                    role="player" if actor == "player" else "monster",
                 )
                 actual = 0 if is_dodge else _apply_damage_with_shield(defender, dmg)
                 log.action = "attack"
