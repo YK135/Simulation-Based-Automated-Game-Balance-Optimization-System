@@ -281,26 +281,29 @@ async function explore() {
     const data = r.data;
 
     // 이벤트 종류에 따라 배너 표시
+    // App.py가 보내는 실제 키: "battle", "midboss", "finalboss",
+    //                         "item", "rest", "nothing"
     const event = data.event;
     if (event === "battle") {
         currentBattle = data.battle_state;
         showEvent(`⚔️ 전투 발생: ${data.enemy?.name || "?"}`, "#f48771");
     } else if (event === "item") {
-        showEvent(`🎁 아이템 획득!`);
-    } else if (event === "heal") {
-        showEvent(`💚 회복 이벤트`);
-    } else if (event === "mp") {
-        showEvent(`💙 MP 회복 이벤트`);
-    } else if (event === "mid_boss" || event === "final_boss") {
+        showEvent(`🎁 아이템 획득: ${data.item || ""}`);
+    } else if (event === "rest") {
+        showEvent(`💤 휴식 지점 도착 — 회복/수련 가능`);
+    } else if (event === "midboss" || event === "finalboss") {
         currentBattle = data.battle_state;
-        showEvent(`👹 보스 출현!`, "#f48771");
+        showEvent(`👹 보스 출현: ${data.enemy?.name || "?"}`, "#f48771");
+    } else if (event === "gameover") {
+        showEvent(`💀 게임 오버 — HP가 0입니다. 새 게임을 시작하세요.`, "#f48771");
     } else if (event === "nothing") {
         showEvent(`... 아무 일도 일어나지 않았다`);
     } else {
         showEvent(`이벤트: ${event}`);
     }
 
-    // 플레이어 상태 업데이트
+    // ⭐ 모든 응답에 player가 있어야 좌측 UI 갱신됨
+    // (App.py가 모든 explore 응답에 player를 포함하도록 수정됨)
     if (data.player) currentPlayer = data.player;
     renderAll();
 }

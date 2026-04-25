@@ -205,7 +205,8 @@ def explore():
 
     # HP 0 체크
     if player.hp <= 0:
-        return jsonify({"ok": True, "event": "gameover"})
+        return jsonify({"ok": True, "event": "gameover",
+                        "player": _player_dict(player, gs["items"])})
 
     # 전투 중이면 먼저 끝내야 함
     if gs["battle"] is not None:
@@ -217,7 +218,8 @@ def explore():
         state = _start_battle(gs, boss, is_boss=True)
         return jsonify({"ok": True, "event": "finalboss",
                         "enemy": {"name": boss.name, "hp": boss.hp},
-                        "battle_state": state})
+                        "battle_state": state,
+                        "player": _player_dict(player, gs["items"])})
 
     if turn == 25 and not gs["mid_boss_cleared"]:
         cached = gs["hook"]._get_cached_monsters("고블린")
@@ -226,7 +228,8 @@ def explore():
         state  = _start_battle(gs, boss, is_boss=False)
         return jsonify({"ok": True, "event": "midboss",
                         "enemy": {"name": boss.name, "hp": boss.hp},
-                        "battle_state": state})
+                        "battle_state": state,
+                        "player": _player_dict(player, gs["items"])})
 
     # ── 일반 이벤트 ──
     gs["turn"] += 1
@@ -243,6 +246,7 @@ def explore():
             "event":       "battle",
             "enemy":       {"name": enemy.name, "hp": enemy.hp},
             "battle_state": state,
+            "player":      _player_dict(player, gs["items"]),
         })
 
     elif 13 <= rd <= 15:
@@ -250,7 +254,8 @@ def explore():
         gained = items[randint(0, len(items) - 1)]
         items.append(gained)
         return jsonify({"ok": True, "event": "item", "item": gained,
-                        "message": f"[아이템 획득] {gained}을(를) 발견했다!"})
+                        "message": f"[아이템 획득] {gained}을(를) 발견했다!",
+                        "player": _player_dict(player, gs["items"])})
 
     elif 16 <= rd <= 17:
         # 휴식
@@ -259,11 +264,13 @@ def explore():
                         "options": [
                             {"key": "heal",  "label": "체력 회복 (maxHP의 1/3)"},
                             {"key": "train", "label": "수련 (경험치 60~80%)"},
-                        ]})
+                        ],
+                        "player": _player_dict(player, gs["items"])})
 
     else:
         return jsonify({"ok": True, "event": "nothing",
-                        "message": "조용하다... 아무 일도 일어나지 않았다."})
+                        "message": "조용하다... 아무 일도 일어나지 않았다.",
+                        "player": _player_dict(player, gs["items"])})
 
 
 def _start_battle(gs: dict, enemy, is_boss: bool = False) -> dict:
