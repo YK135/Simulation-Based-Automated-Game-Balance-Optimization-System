@@ -292,6 +292,7 @@ class BattleSession:
         diff_raw = getattr(e, "difficulty", "")
         return {
             "turn":       self.turn,
+            "is_boss":    self.is_boss,   # UI: 보스전이면 도망 버튼 숨김
             "player_hp":  round(self.player.hp, 1),
             "player_mp":  round(self.player.mp, 1),
             "player_maxhp": self.player.maxhp,

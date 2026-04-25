@@ -225,7 +225,7 @@ def explore():
         cached = gs["hook"]._get_cached_monsters("고블린")
         base   = cached.get("normal", (None, None))[0] if cached else None
         boss   = Make_MidBoss(player.lv, base)
-        state  = _start_battle(gs, boss, is_boss=False)
+        state  = _start_battle(gs, boss, is_boss=True)
         return jsonify({"ok": True, "event": "midboss",
                         "enemy": {"name": boss.name, "hp": boss.hp},
                         "battle_state": state,

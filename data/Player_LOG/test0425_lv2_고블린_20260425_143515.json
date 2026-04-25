@@ -1,0 +1,23 @@
+{
+  "winner": "escaped",
+  "total_turns": 1,
+  "final_player_hp": 324,
+  "final_enemy_hp": 306.59981620788574,
+  "player_name": "test0425",
+  "enemy_name": "고블린",
+  "final_player_items": [
+    "HP_S_potion",
+    "HP_S_potion",
+    "HP_M_potion",
+    "MP_S_potion",
+    "MP_S_potion",
+    "MP_S_potion",
+    "HP_M_potion",
+    "HP_M_potion"
+  ],
+  "logs": [],
+  "log_type": "player",
+  "player_lv": 2,
+  "timestamp": "20260425_143515",
+  "items_used": []
+}

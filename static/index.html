@@ -481,7 +481,7 @@ function renderBattle() {
     panel.innerHTML = `
         <h2>⚔️ 전투 중 <span style="color:#888;font-size:12px;">(턴 ${b.turn})</span></h2>
         <div class="enemy-name">
-            ${b.enemy_name}${lvBadge}${diffBadge}
+            ${b.enemy_name}${lvBadge}${diffBadge}${b.is_boss ? '<span style="background:#7c2d12; color:#fbbf24; border:1px solid #fbbf24; padding:2px 8px; border-radius:10px; font-size:11px; margin-left:6px;">👹 BOSS</span>' : ''}
         </div>
         <div>HP: ${Math.round(b.enemy_hp)}/${b.enemy_maxhp}</div>
         <div class="hp-bar"><div class="hp-fill" style="width:${eHpPct}%"></div></div>
@@ -499,7 +499,7 @@ function renderBattle() {
 
         <div style="margin-top:10px;">
             <button class="attack" onclick="battleAction('attack')">⚔️ 공격</button>
-            <button class="escape" onclick="battleAction('escape')">🏃 도망</button>
+            ${b.is_boss ? '' : `<button class="escape" onclick="battleAction('escape')">🏃 도망</button>`}
         </div>
         ${skillButtons ? `<div style="margin-top:6px;">${skillButtons}</div>` : ""}
         ${itemButtons ? `<div style="margin-top:6px;">${itemButtons}</div>` : ""}
