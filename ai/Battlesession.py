@@ -22,7 +22,7 @@ from random import randint, random as _random
 
 from Battle_Engine import (
     EntitySnapshot, DamageCalc, execute_skill,
-    SKILL_META, BattleEngine, Action, BattleResult
+    SKILL_META, BattleEngine, Action, BattleResult, TurnLog
 )
 from Auto_AI import PlayerAI, EnemyAI
 
@@ -47,6 +47,11 @@ class BattleSession:
         self.turn    = 0
         self.done    = False   # 전투 종료 여부
         self.winner  = None    # "player" | "enemy" | "escaped"
+
+        # 행동 로그 — BehaviorAnalyzer 입력용.
+        # 매 플레이어/적 행동마다 TurnLog를 append. to_battle_result()에서
+        # BattleResult.logs로 전달되어 LOG_Manager가 JSON 저장.
+        self.logs: list = []
 
         # 적 ATB용 (간단히 매 플레이어 행동마다 적도 행동)
         self._enemy_ai = EnemyAI()
@@ -144,16 +149,16 @@ class BattleSession:
         BalanceHook.after_battle()이 이 타입을 요구함 →
         LOG_Manager.save_player_log()가 data/Player_LOG/에 JSON 저장.
 
-        주의: BattleSession은 현재 상세 action log를 수집하지 않으므로
-              logs=[] 빈 리스트로 반환. 상세 로그 필요 시 _enemy_action /
-              _player_action에서 BattleLog를 append 하도록 추후 확장.
-              (최소 요건 — 승패/턴수/최종HP — 는 로그 분석에 충분)
+        self.logs에는 매 행동마다 추가된 TurnLog가 들어있음:
+          - 플레이어: attack, skill, item, escape, *_failed
+          - 적: attack, skill, watch, *_failed
+        BehaviorAnalyzer가 이 데이터로 행동 패턴 분석.
         """
         winner = self.winner or "unknown"
         return BattleResult(
             winner=winner,
             total_turns=self.turn,
-            logs=[],
+            logs=list(self.logs),
             final_player_hp=self.player.hp,
             final_enemy_hp=self.enemy.hp,
             player_name=self.player.name,
@@ -164,7 +169,7 @@ class BattleSession:
     # ── 내부: 플레이어 행동 처리 ─────────────
 
     def _player_action(self, action: str, msgs: list) -> str:
-        """처리 후 "ok" | "escaped" 반환"""
+        """처리 후 "ok" | "escaped" 반환. 모든 분기에서 TurnLog를 self.logs에 추가."""
 
         # 기본 공격
         if action == "attack":
@@ -174,6 +179,7 @@ class BattleSession:
                 skill_mult=1.0,
                 role="player",
             )
+            actual = 0 if dodge else int(dmg)
             if dodge:
                 msgs.append(f"{self.enemy.name}이(가) 공격을 회피했다!")
             else:
@@ -182,14 +188,36 @@ class BattleSession:
                 msgs.append(f"{self.player.name} → 공격{tag} | {dmg} 데미지")
                 msgs.append(f"{self.enemy.name} HP: {max(0, int(self.enemy.hp))}")
 
+            self.logs.append(TurnLog(
+                turn=self.turn,
+                actor="player",
+                action="attack",
+                action_detail="basic_attack",
+                damage_dealt=actual,
+                hp_after=max(0, self.enemy.hp),
+                mp_after=self.player.mp,
+                is_dodge=dodge,
+                is_crit=crit,
+            ))
+
         # 스킬
         elif action.startswith("skill:"):
             skill_name = action[6:]
+            mp_before = self.player.mp
             dmg, mp_lack, debuff_name = execute_skill(
                 skill_name, self.player, self.enemy
             )
             if mp_lack:
                 msgs.append("MP가 부족합니다!")
+                self.logs.append(TurnLog(
+                    turn=self.turn,
+                    actor="player",
+                    action="skill_failed",
+                    action_detail=f"{skill_name}(mp_lack)",
+                    damage_dealt=0,
+                    hp_after=self.enemy.hp,
+                    mp_after=self.player.mp,
+                ))
             else:
                 meta = SKILL_META.get(skill_name, {})
                 if meta.get("type") == "debuff":
@@ -197,35 +225,76 @@ class BattleSession:
                                 "stg":"공격력","spd":"스피드"}.get(
                         meta.get("debuff_stat",""), "스탯")
                     msgs.append(f"{skill_name} 사용 → {self.enemy.name} {stat_kor} 감소!")
+                    self.logs.append(TurnLog(
+                        turn=self.turn,
+                        actor="player",
+                        action="skill",
+                        action_detail=skill_name,
+                        damage_dealt=0,
+                        hp_after=self.enemy.hp,
+                        mp_after=self.player.mp,
+                        debuff_applied=debuff_name or meta.get("debuff_stat", ""),
+                    ))
                 else:
                     self.enemy.hp -= dmg
                     msgs.append(f"{skill_name} 사용 → {dmg} 데미지")
                     msgs.append(f"{self.enemy.name} HP: {max(0, int(self.enemy.hp))}")
+                    self.logs.append(TurnLog(
+                        turn=self.turn,
+                        actor="player",
+                        action="skill",
+                        action_detail=skill_name,
+                        damage_dealt=int(dmg),
+                        hp_after=max(0, self.enemy.hp),
+                        mp_after=self.player.mp,
+                    ))
 
         # 아이템
         elif action.startswith("item:"):
             item_name = action[5:]
             if item_name not in self.items:
                 msgs.append("해당 아이템이 없습니다.")
+                # 실패한 아이템도 기록 (행동 의도 분석용)
+                self.logs.append(TurnLog(
+                    turn=self.turn,
+                    actor="player",
+                    action="item_failed",
+                    action_detail=f"{item_name}(not_in_inventory)",
+                ))
             else:
                 from Battle_Engine import ITEM_META
                 meta = ITEM_META.get(item_name, {})
                 if meta.get("stat") == "hp":
                     before = int(self.player.hp)
-                    amount = meta["amount"](self.player)  # 동적 계산
+                    amount = meta["amount"](self.player)
                     self.player.hp = min(self.player.maxhp, self.player.hp + amount)
                     msgs.append(f"{item_name} 사용 → HP {before} → {int(self.player.hp)} (+{amount})")
                 elif meta.get("stat") == "mp":
                     before = int(self.player.mp)
-                    amount = meta["amount"](self.player)  # 동적 계산
+                    amount = meta["amount"](self.player)
                     self.player.mp = min(self.player.maxmp, self.player.mp + amount)
                     msgs.append(f"{item_name} 사용 → MP {before} → {int(self.player.mp)} (+{amount})")
                 self.items.remove(item_name)
+                self.logs.append(TurnLog(
+                    turn=self.turn,
+                    actor="player",
+                    action="item",
+                    action_detail=item_name,
+                    hp_after=self.enemy.hp,  # 적 HP는 변화 없음
+                    mp_after=self.player.mp,
+                ))
 
         # 도망
         elif action == "escape":
             if self.is_boss:
                 msgs.append("...도망칠 수 없다!")
+                self.logs.append(TurnLog(
+                    turn=self.turn,
+                    actor="player",
+                    action="escape_blocked",
+                    action_detail="boss_battle",
+                    escaped=False,
+                ))
                 return "ok"
             p_spd = self.player.effective_spd()
             e_spd = self.enemy.effective_spd()
@@ -235,7 +304,15 @@ class BattleSession:
             elif ratio >= 1.0: chance = 0.60
             elif ratio >= 0.7: chance = 0.35
             else:              chance = 0.15
-            if _random() <= chance:
+            success = _random() <= chance
+            self.logs.append(TurnLog(
+                turn=self.turn,
+                actor="player",
+                action="escape",
+                action_detail=f"chance={chance:.2f}",
+                escaped=success,
+            ))
+            if success:
                 return "escaped"
             else:
                 msgs.append(f"도망에 실패했다! (성공률 {int(chance*100)}%)")
@@ -257,6 +334,7 @@ class BattleSession:
                 skill_mult=1.0,
                 role="monster",
             )
+            actual = 0 if dodge else int(dmg)
             if dodge:
                 msgs.append(f"{self.player.name}이(가) 공격을 회피했다!")
             else:
@@ -264,21 +342,61 @@ class BattleSession:
                 tag = " (치명타!)" if crit else ""
                 msgs.append(f"{self.enemy.name} → 공격{tag} | {dmg} 데미지")
                 msgs.append(f"{self.player.name} HP: {max(0, int(self.player.hp))}")
+            self.logs.append(TurnLog(
+                turn=self.turn,
+                actor="enemy",
+                action="attack",
+                action_detail="basic_attack",
+                damage_dealt=actual,
+                hp_after=max(0, self.player.hp),
+                mp_after=self.enemy.mp,
+                is_dodge=dodge,
+                is_crit=crit,
+            ))
 
         elif action.action_type == "skill":
             dmg, mp_lack, debuff_name = execute_skill(
                 action.detail, self.enemy, self.player
             )
-            if not mp_lack:
+            if mp_lack:
+                # MP 부족으로 스킬 실패 — 기록은 남김
+                self.logs.append(TurnLog(
+                    turn=self.turn,
+                    actor="enemy",
+                    action="skill_failed",
+                    action_detail=f"{action.detail}(mp_lack)",
+                    damage_dealt=0,
+                    hp_after=self.player.hp,
+                    mp_after=self.enemy.mp,
+                ))
+            else:
                 if dmg > 0:
                     self.player.hp -= dmg
                     msgs.append(f"{self.enemy.name} → {action.detail} | {dmg} 데미지")
                     msgs.append(f"{self.player.name} HP: {max(0, int(self.player.hp))}")
                 elif debuff_name:
                     msgs.append(f"{self.enemy.name} → {action.detail} 사용!")
+                self.logs.append(TurnLog(
+                    turn=self.turn,
+                    actor="enemy",
+                    action="skill",
+                    action_detail=action.detail,
+                    damage_dealt=int(dmg) if dmg > 0 else 0,
+                    hp_after=max(0, self.player.hp),
+                    mp_after=self.enemy.mp,
+                    debuff_applied=debuff_name or "",
+                ))
 
         elif action.action_type == "watch":
             msgs.append(f"{self.enemy.name}이(가) 기회를 엿보고 있다...")
+            self.logs.append(TurnLog(
+                turn=self.turn,
+                actor="enemy",
+                action="watch",
+                action_detail="watching",
+                hp_after=self.player.hp,
+                mp_after=self.enemy.mp,
+            ))
 
     # ── 내부: 현재 상태 dict 반환 ────────────
 
