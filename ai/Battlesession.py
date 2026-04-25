@@ -22,7 +22,7 @@ from random import randint, random as _random
 
 from Battle_Engine import (
     EntitySnapshot, DamageCalc, execute_skill,
-    SKILL_META, BattleEngine, Action
+    SKILL_META, BattleEngine, Action, BattleResult
 )
 from Auto_AI import PlayerAI, EnemyAI
 
@@ -106,16 +106,16 @@ class BattleSession:
             return self._state(messages=msgs)
 
         # ── 적 행동 ───────────────────────────
-        # 아이템 사용은 턴 소모 없음 (적 행동 스킵)
-        if not action.startswith("item"):
-            self._enemy_action(msgs)
+        # 콘솔 전투(Act.action)와 동일하게 아이템 사용 후에도 적 턴 진행.
+        # Digital Twin 원칙: UI가 달라도 전투 룰은 동일해야 함.
+        self._enemy_action(msgs)
 
-            # 플레이어 사망 체크
-            if self.player.hp <= 0:
-                self.done   = True
-                self.winner = "enemy"
-                msgs.append(f"{self.player.name}이(가) 쓰러졌다...")
-                return self._state(messages=msgs)
+        # 플레이어 사망 체크
+        if self.player.hp <= 0:
+            self.done   = True
+            self.winner = "enemy"
+            msgs.append(f"{self.player.name}이(가) 쓰러졌다...")
+            return self._state(messages=msgs)
 
         return self._state(messages=msgs)
 
@@ -137,6 +137,29 @@ class BattleSession:
         from collections import Counter
         cnt = Counter(self.items)
         return [{"name": k, "count": v} for k, v in cnt.items()]
+
+    def to_battle_result(self) -> BattleResult:
+        """
+        전투 종료 후 BattleResult로 변환.
+        BalanceHook.after_battle()이 이 타입을 요구함 →
+        LOG_Manager.save_player_log()가 data/Player_LOG/에 JSON 저장.
+
+        주의: BattleSession은 현재 상세 action log를 수집하지 않으므로
+              logs=[] 빈 리스트로 반환. 상세 로그 필요 시 _enemy_action /
+              _player_action에서 BattleLog를 append 하도록 추후 확장.
+              (최소 요건 — 승패/턴수/최종HP — 는 로그 분석에 충분)
+        """
+        winner = self.winner or "unknown"
+        return BattleResult(
+            winner=winner,
+            total_turns=self.turn,
+            logs=[],
+            final_player_hp=self.player.hp,
+            final_enemy_hp=self.enemy.hp,
+            player_name=self.player.name,
+            enemy_name=self.enemy.name,
+            final_player_items=list(self.items),
+        )
 
     # ── 내부: 플레이어 행동 처리 ─────────────
 
@@ -278,20 +301,20 @@ class BattleSession:
             "enemy_name": e.name,
             # ── 몬스터 상세 정보 (UI 표시용) ──
             "enemy_info": {
-                "name":        e.name,
-                "lv":          e.lv,
-                "difficulty":  diff_raw,  # "hard"/"normal"/"easy"/""
-                "difficulty_label": self._DIFF_LABEL.get(diff_raw, diff_raw),  # "강함"/"중간"/"약함"
-                "hp":          max(0.0, round(e.hp, 1)),
-                "maxhp":       round(e.maxhp, 1),
-                "mp":          round(e.mp, 1),
-                "maxmp":       round(e.maxmp, 1),
-                "stg":         round(e.stg, 1),
-                "arm":         round(e.arm, 1),
-                "sparm":       round(e.sparm, 1),
-                "sp":          round(e.sp, 1),
-                "spd":         round(e.spd, 1),
-                "luc":         round(e.luc, 1),
+                "name":             e.name,
+                "lv":               e.lv,
+                "difficulty":       diff_raw,
+                "difficulty_label": self._DIFF_LABEL.get(diff_raw, diff_raw),
+                "hp":               max(0.0, round(e.hp, 1)),
+                "maxhp":            round(e.maxhp, 1),
+                "mp":               round(e.mp, 1),
+                "maxmp":            round(e.maxmp, 1),
+                "stg":              round(e.stg, 1),
+                "arm":              round(e.arm, 1),
+                "sparm":            round(e.sparm, 1),
+                "sp":               round(e.sp, 1),
+                "spd":              round(e.spd, 1),
+                "luc":              round(e.luc, 1),
             },
             "items":      self.get_items(),
             "skills":     self.get_skills(),

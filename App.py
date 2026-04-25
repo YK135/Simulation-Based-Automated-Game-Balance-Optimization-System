@@ -7,13 +7,13 @@ BattleSession.py가 전투 상태를 들고 있고,
 
 엔드포인트:
   POST /api/new_game          — 게임 시작 (이름, 직업)
-  GET  /api/status            — 현재 플레이어 상태
+  GET  /api/status            — 현재 플레이어 상태 (스킬/아이템 목록 포함)
   POST /api/explore           — 탐험 (다음 이벤트 결정)
   GET  /api/battle/state      — 현재 전투 상태
   POST /api/battle/action     — 전투 행동 (공격/스킬/아이템/도망)
   POST /api/use_item          — 필드에서 아이템 사용
-  GET  /api/skills            — 스킬 목록
-  GET  /api/items             — 아이템 목록
+  POST /api/rest              — 휴식 (heal/mp/train)
+  GET  /                      — 테스트용 웹 UI (static/index.html)
 
 세션:
   Flask session 쿠키로 user_id 관리.
@@ -312,6 +312,12 @@ def battle_action():
     battle = gs["battle"]
     result = battle.step(action)
 
+    # ── [요청 1] 세션 재고 동기화 ─────────────────────
+    # BattleSession.__init__에서 self.items = list(items)로 별개 리스트를
+    # 만들기 때문에, 전투 중 아이템 사용 결과를 매 step마다 세션에 반영해야
+    # 전투 종료 후에도 인벤토리 수량이 맞게 유지됨.
+    gs["items"] = list(battle.items)
+
     # 전투 종료 처리
     if result["done"]:
         player = gs["player"]
@@ -341,6 +347,18 @@ def battle_action():
             gs["mid_boss_cleared"] = True
             gs["items"].append("HP_L_potion")
             result["messages"].append("보상: HP_L_potion 획득!")
+
+        # ── [요청 2] 전투 로그 저장 — 분석 파이프라인 연결 ──
+        # BalanceHook.after_battle()을 호출하면:
+        #   1) LOG_Manager.save_player_log() — data/Player_LOG/에 JSON 저장
+        #   2) 패배 시 FeedbackEngine 실행 (AI 복기 분석)
+        # 이로써 2학기 BehaviorAnalyzer/FeedbackEngine이
+        # Flask 경로로 플레이한 데이터도 분석할 수 있게 됨.
+        try:
+            battle_result = battle.to_battle_result()
+            gs["hook"].after_battle(battle_result)
+        except Exception as e:
+            print(f"[WARN] after_battle 호출 실패: {e}")
 
         gs["battle"] = None  # 전투 세션 초기화
         result["player"] = _player_dict(player, gs["items"])
