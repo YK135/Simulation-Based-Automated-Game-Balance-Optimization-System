@@ -639,12 +639,16 @@ def execute_skill(
 # ────────────────────────────────────────────
 
 ITEM_META = {
-    "HP_S_potion": {"stat": "hp", "amount": 50},
-    "HP_M_potion": {"stat": "hp", "amount": 100},
-    "HP_L_potion": {"stat": "hp", "amount": 150},
-    "MP_S_potion": {"stat": "mp", "amount": 20},
-    "MP_M_potion": {"stat": "mp", "amount": 40},
-    "MP_L_potion": {"stat": "mp", "amount": 60},
+    # amount는 (user) -> int 함수.
+    # Digital Twin 원칙: game/Item.py의 공식과 완전히 일치시킴.
+    # max(고정 최소값, maxhp/maxmp 비율) 형태.
+    # 호출 시 meta["amount"](user) 형태로 사용.
+    "HP_S_potion": {"stat": "hp", "amount": lambda u: max(300, int(u.maxhp * 0.12))},
+    "HP_M_potion": {"stat": "hp", "amount": lambda u: max(500, int(u.maxhp * 0.20))},
+    "HP_L_potion": {"stat": "hp", "amount": lambda u: max(850, int(u.maxhp * 0.30))},
+    "MP_S_potion": {"stat": "mp", "amount": lambda u: max(20,  int(u.maxmp * 0.15))},
+    "MP_M_potion": {"stat": "mp", "amount": lambda u: max(40,  int(u.maxmp * 0.25))},
+    "MP_L_potion": {"stat": "mp", "amount": lambda u: max(60,  int(u.maxmp * 0.35))},
 }
 
 
@@ -652,10 +656,11 @@ def use_item(item_name: str, user: EntitySnapshot) -> bool:
     meta = ITEM_META.get(item_name)
     if not meta or item_name not in user.items:
         return False
+    amount = meta["amount"](user)
     if meta["stat"] == "hp":
-        user.hp = min(user.maxhp, user.hp + meta["amount"])
+        user.hp = min(user.maxhp, user.hp + amount)
     elif meta["stat"] == "mp":
-        user.mp = min(user.maxmp, user.mp + meta["amount"])
+        user.mp = min(user.maxmp, user.mp + amount)
     user.items.remove(item_name)
     return True
 

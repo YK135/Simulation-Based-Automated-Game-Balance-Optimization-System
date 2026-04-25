@@ -212,12 +212,14 @@ class BattleSession:
                 meta = ITEM_META.get(item_name, {})
                 if meta.get("stat") == "hp":
                     before = int(self.player.hp)
-                    self.player.hp = min(self.player.maxhp, self.player.hp + meta["amount"])
-                    msgs.append(f"{item_name} 사용 → HP {before} → {int(self.player.hp)}")
+                    amount = meta["amount"](self.player)  # 동적 계산
+                    self.player.hp = min(self.player.maxhp, self.player.hp + amount)
+                    msgs.append(f"{item_name} 사용 → HP {before} → {int(self.player.hp)} (+{amount})")
                 elif meta.get("stat") == "mp":
                     before = int(self.player.mp)
-                    self.player.mp = min(self.player.maxmp, self.player.mp + meta["amount"])
-                    msgs.append(f"{item_name} 사용 → MP {before} → {int(self.player.mp)}")
+                    amount = meta["amount"](self.player)  # 동적 계산
+                    self.player.mp = min(self.player.maxmp, self.player.mp + amount)
+                    msgs.append(f"{item_name} 사용 → MP {before} → {int(self.player.mp)} (+{amount})")
                 self.items.remove(item_name)
 
         # 도망

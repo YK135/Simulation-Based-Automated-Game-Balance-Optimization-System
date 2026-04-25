@@ -404,16 +404,20 @@ def use_item():
 
     if meta["stat"] == "hp":
         before     = int(player.hp)
-        player.hp  = min(player.maxhp, player.hp + meta["amount"])
+        amount     = meta["amount"](player)  # 동적 계산
+        player.hp  = min(player.maxhp, player.hp + amount)
         items.remove(item_name)
-        return jsonify({"ok": True, "message": f"{item_name} 사용 → HP {before} → {int(player.hp)}",
+        return jsonify({"ok": True,
+                        "message": f"{item_name} 사용 → HP {before} → {int(player.hp)} (+{amount})",
                         "player": _player_dict(player, items)})
 
     elif meta["stat"] == "mp":
         before     = int(player.mp)
-        player.mp  = min(player.maxmp, player.mp + meta["amount"])
+        amount     = meta["amount"](player)  # 동적 계산
+        player.mp  = min(player.maxmp, player.mp + amount)
         items.remove(item_name)
-        return jsonify({"ok": True, "message": f"{item_name} 사용 → MP {before} → {int(player.mp)}",
+        return jsonify({"ok": True,
+                        "message": f"{item_name} 사용 → MP {before} → {int(player.mp)} (+{amount})",
                         "player": _player_dict(player, items)})
 
     return jsonify({"ok": False, "error": "사용할 수 없는 아이템입니다."})
