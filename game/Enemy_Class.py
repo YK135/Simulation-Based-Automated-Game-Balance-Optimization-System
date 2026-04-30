@@ -251,35 +251,54 @@ def Make_Assassin(player_lv: int, grade: str) -> Unit:
 
 def Make_Random_Monster(player_lv: int) -> Unit:
     """
-    랜덤 몬스터 + 랜덤 등급
-    하40% / 중45% / 상15%
+    랜덤 몬스터 + 랜덤 등급. 레벨대별 풀 적용 (Phase 1 통합).
+      Lv1+:  고블린, 박쥐
+      Lv3+:  + 슬라임
+      Lv6+:  + 골렘
+      Lv7+:  + 유령
+      Lv10+: + 암살자
+    등급: 하40% / 중45% / 상15%
+
+    Balance_Hook의 _ENEMY_POOL과 동일한 규칙 — 콘솔/웹 풀 일치.
+    Balance_Hook을 의존하기 어려운 외부 호출(레거시 콘솔 등)을 위해
+    여기서도 단일 출처 풀을 정의해서 동일하게 적용.
     """
     roll = random()
     if   roll < 0.40: grade = "하"
     elif roll < 0.85: grade = "중"
     else:             grade = "상"
-    return choice([Make_Goblin, Make_Bat])(player_lv, grade)
+
+    pool = [Make_Goblin, Make_Bat]
+    if player_lv >= 3:  pool.append(Make_Slime)
+    if player_lv >= 6:  pool.append(Make_Golem)
+    if player_lv >= 7:  pool.append(Make_Ghost)
+    if player_lv >= 10: pool.append(Make_Assassin)
+    return choice(pool)(player_lv, grade)
 
 
 def Make_MidBoss(player_lv: int, base_monster_snap=None) -> Unit:
     """
-    중간 보스: 오래 버티는 적 (Lv14 전후)
-    스펙: hp 1250, mp 100, stg 42, arm 38, sparm 32, sp 24,
-          spd 25, luc 12, debuff_resist 0.30
-    의도: Lv14 기준 너무 쉽게 무너지지 않게 조정
+    중간 보스: 오래 버티는 적 (Lv14 전후) — 5차 조정.
+    스펙(5차): hp 1200, mp 100, stg 36, arm 27, sparm 24, sp 28,
+              spd 24, luc 22, debuff_resist 0.30
+    의도: 탱커도 클리어 가능하게.
+      - 4차에서 탱커만 1% (장기전 마모 + 공격 안 통함)
+      - hp 1300→1200 (장기전 단축)
+      - arm 30→27 (탱커 STG 데미지 통하게)
+      - 목표: 모든 직업 40~95% 정도, 탱커 30% 이상
     """
     lv = max(1, player_lv)
     unit = Unit(
         name  = "중간 보스",
         lv    = lv,
-        hp    = 1250,
+        hp    = 1200,
         mp    = 100,
-        stg   = 42,
-        arm   = 38,
-        sparm = 32,
-        sp    = 24,
-        spd   = 25,
-        luc   = 12,
+        stg   = 36,
+        arm   = 27,
+        sparm = 24,
+        sp    = 28,
+        spd   = 24,
+        luc   = 22,
         grade = "상",
         is_boss      = True,
         debuff_resist = 0.30,
@@ -289,24 +308,29 @@ def Make_MidBoss(player_lv: int, base_monster_snap=None) -> Unit:
 
 def Make_FinalBoss(player_lv: int, base_monster_snap=None) -> Unit:
     """
-    최종 보스: HP/ARM/SPARM/저항 위주 (Lv25 전후)
-    스펙: hp 3100, mp 220, stg 72, arm 60, sparm 50, sp 52,
-          spd 40, luc 28, debuff_resist 0.50
-    의도: 마법사/도적이 너무 쉽게 무너뜨리지 않게,
-          전사/탱커도 절망적이지 않게.
+    최종 보스: HP/저항 위주 (Lv25 전후) — 4차 조정.
+    스펙(4차): hp 3000, mp 220, stg 56, arm 44, sparm 36, sp 54,
+              spd 34, luc 40, debuff_resist 0.50
+    의도: 도전적이지만 가능한 보스.
+      - 3차: 도적 100, 전사 100, 마법사 99, 탱커 100 → 너무 쉬움
+      - hp 2700→3000 (장기전 강화)
+      - stg 50→56 / arm 40→44 / sparm 32→36
+      - luc 38→40 (도적 회피·크리 견제)
+      - spd 32→34
+      - 목표: 모든 직업 50~80% 정도
     """
     lv = max(25, player_lv)
     unit = Unit(
         name  = "최종 보스",
         lv    = lv,
-        hp    = 3100,
+        hp    = 3000,
         mp    = 220,
-        stg   = 72,
-        arm   = 60,
-        sparm = 50,
-        sp    = 52,
-        spd   = 40,
-        luc   = 28,
+        stg   = 56,
+        arm   = 44,
+        sparm = 36,
+        sp    = 54,
+        spd   = 34,
+        luc   = 40,
         grade = "상",
         is_boss      = True,
         debuff_resist = 0.50,

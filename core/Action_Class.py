@@ -130,6 +130,8 @@ def _manual_attack(p_snap: EntitySnapshot, e_snap: EntitySnapshot,
         p_snap.effective_stg(), p_snap.luc,
         e_snap.effective_arm(), e_snap.luc,
         role="player",
+        attacker=p_snap,
+        defender=e_snap,
     )
     if is_dodge:
         _p(f"  {enemy_name}이(가) 공격을 회피했다!")
@@ -219,6 +221,8 @@ def _enemy_turn(e_snap: EntitySnapshot, p_snap: EntitySnapshot,
         e_snap.effective_stg(), e_snap.luc,
         p_snap.effective_arm(), p_snap.luc,
         role="monster",
+        attacker=e_snap,
+        defender=p_snap,
     )
     if is_dodge:
         _p(f"  {player_name}이(가) 공격을 회피했다!")
@@ -257,6 +261,14 @@ class Act:
     def action(self) -> str:
         p_snap = _snap_player(self.player, self.item_list)
         e_snap = _snap_enemy(self.enemy)
+
+        # ── first_strike 처리 (암살자) ──
+        # 적이 first_strike=True 이면 플레이어 입력 전에 적이 먼저 공격.
+        # SPD와 무관하게 강제 선공. Phase 1 디자인: 암살자 = 초반 폭딜 위협.
+        if getattr(e_snap, "first_strike", False):
+            _p(f"  {self.enemy.name}이(가) 먼저 기습한다!")
+            _enemy_turn(e_snap, p_snap, self.enemy_ai,
+                        self.enemy.name, self.player.name)
 
         while True:
             Battle_interface(p_snap, e_snap)

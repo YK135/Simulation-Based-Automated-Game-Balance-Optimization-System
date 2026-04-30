@@ -113,7 +113,9 @@ def _run_battle(enemy, is_boss: bool = False) -> str:
 
 # ── 이벤트 ──────────────────────────────────
 def _event_battle():
-    enemy_type = "고블린" if random() < 0.5 else "박쥐"
+    # 콘솔/Flask 동일 풀 사용 — Balance_Hook의 _ENEMY_POOL 기준.
+    # Lv1: 고블린/박쥐, Lv3+: 슬라임, Lv6+: 골렘, Lv7+: 유령, Lv10+: 암살자.
+    enemy_type = hook.pick_random_enemy_type()
 
     # AI 밸런싱 — 이 메시지만 1.5초 자동
     print()

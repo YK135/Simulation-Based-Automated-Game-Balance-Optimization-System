@@ -281,6 +281,34 @@ class ATBSystem:
 # ────────────────────────────────────────────
 
 class DamageCalc:
+    """
+    데미지 계산 통합 클래스 (Phase 1 — 역할 기반 메커니즘 통합).
+
+    기본 공식 (v2):
+      base = atk_stat * 200 / (100 + def_stat)
+      base = max(base, atk_stat * 0.4)         # 최소 데미지 보장
+      base *= skill_mult * role_mult * uniform(0.9, 1.1)
+      crit (luc * 0.5%, 상한 40%) → +50%
+
+    역할 기반 추가 (Phase 1):
+      - 회피: def_luc * 0.4 + dodge_bonus*100 - dodge_penalty_per_extra_hit
+              (유령: dodge_bonus=0.20, 다단히트시 hit당 회피 감소)
+      - 첫 공격 보너스: attacker.has_attacked == False 면 first_attack_bonus 적용
+              (암살자: first_attack_bonus=1.15)
+      - 상성: defender의 physical_resist / magical_resist
+              (슬라임: 물리 0.65 / 마법 1.10, 골렘: 반대)
+      - 최종 최소 데미지 보장: atk_stat * 0.20
+              (상성으로 깎여도 공격력의 20% 이상은 보장)
+
+    호출 흐름:
+      physical(): 물리 데미지 → _calc(damage_type="physical")
+      magical():  마법 데미지 → _calc(damage_type="magical")
+      _calc():    회피 → 기본 → 첫공 → 상성 → 크리 → 최소 보장 → 정수화
+
+    호출 시 attacker / defender 스냅샷을 넘겨야 역할 메커니즘 적용됨.
+    옛 호출 (attacker/defender 인자 없음)도 후방 호환 — 기본값은 1.0/0.0.
+    """
+
     ROLE_MULT = {
         "player": 1.0,
         "monster": 1.0,
@@ -805,6 +833,16 @@ class BattleEngine:
         self.action_count = 0
 
     def run(self, player_ai, enemy_ai) -> BattleResult:
+        # ── first_strike 처리 (암살자) ──
+        # ATB 무관하게 첫 턴에 적이 강제 선공. Phase 1 디자인.
+        # 시뮬/콘솔/Flask 3경로 모두 동일 규칙으로 작동.
+        if getattr(self.enemy, "first_strike", False):
+            self.action_count += 1
+            action = enemy_ai(self.enemy, self.player)
+            self._execute_action(action, self.enemy, self.player, "enemy")
+            if self.player.hp <= 0:
+                return self._make_result("enemy")
+
         while self.tick_count < self.MAX_TICKS:
             self.tick_count += 1
 

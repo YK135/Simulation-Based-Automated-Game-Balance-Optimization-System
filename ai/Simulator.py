@@ -384,22 +384,57 @@ class StatTuner:
 
     def _scale_enemy(self, scale: float) -> EntitySnapshot:
         """
-        HP 완화 공식: e.hp * (060 + 0.40 * scale)
-          scale=0.6 → HP × 0.84  (가장 약한 몬스터)
-          scale=1.0 → HP × 1.00  (기준선)
-          scale=3.0 → HP × 1.80  (강한 몬스터)
-          scale=5.0 → HP × 2.60  (최강 몬스터)
-        기존 HP × scale 방식 대비 초반 HP 폭등 방지.
-        STG는 sqrt(scale), ARM/LUC 상한 1.8배로 완화.
-        ARM 상한을 1.2→1.8로 확장: 강함 난이도의 방어력 차별화 강화.
+        몬스터 종족별로 스케일링 축을 다르게 적용.
+        같은 hp/stg만 조정하면 슬라임/골렘/유령 등 특수 몬스터의 난이도가
+        '같은 스탯으로 접히는' 현상이 발생 → 역할별 축 차별화.
+
+        공통 (모든 몬스터):
+          hp:  e.hp * (0.60 + 0.30 * scale)   — 초반 HP 폭등 방지
+          stg: e.stg * sqrt(scale)
+          arm: e.arm * min(scale, 1.8)
+          luc: e.luc * min(scale, 1.8)
+
+        역할 추가 축:
+          슬라임 (저항형): sparm/sp 도 조정 → 마법 약점 활용시 난이도 차이 보장
+          골렘  (탱커형): arm 가중치 추가 + sparm 강화 → 마법 면역 강조
+          유령  (회피형): spd/luc 강화 → 회피·선공 난이도 차이
+          암살자 (속도형): stg/spd/luc 강화 (기존)
+          박쥐  (유리대포): sp 강화 → 마법 데미지 변수
+          고블린 (표준): 공통 축만
         """
         import math
         e = copy.deepcopy(self.base_enemy)
+        et = getattr(e, "enemy_type", "") or e.name
+
+        # ── 공통 스케일링 ──
         e.hp = max(1.0, e.hp * (0.60 + 0.30 * scale))
         e.maxhp = e.hp
         e.stg   = max(1.0, e.stg * math.sqrt(scale))
-        e.arm   = max(0.0, e.arm * min(scale, 1.8))  # 1.2 → 1.8
-        e.luc   = max(0.0, e.luc * min(scale, 1.8))  # 1.2 → 1.8
+        e.arm   = max(0.0, e.arm * min(scale, 1.8))
+        e.luc   = max(0.0, e.luc * min(scale, 1.8))
+
+        # ── 역할별 추가 축 ──
+        if et == "슬라임":
+            # 저항형: 마법 약점 활용 시 난이도 분리
+            e.sparm = max(0.0, e.sparm * min(math.sqrt(scale) * 1.1, 1.8))
+            e.sp    = max(0.0, e.sp * math.sqrt(scale))
+        elif et == "골렘":
+            # 탱커형: arm 한 번 더 + sparm
+            e.arm   = max(0.0, e.arm * min(scale * 0.15 + 1.0, 1.3))  # 추가 +up to 30%
+            e.sparm = max(0.0, e.sparm * min(math.sqrt(scale) * 1.1, 1.8))
+        elif et == "유령":
+            # 회피형: spd/luc 강화 (회피 메커니즘과 시너지)
+            e.spd = max(0.0, e.spd * min(math.sqrt(scale) * 1.05, 1.5))
+            # luc 추가 부스트 (이미 공통에서 하지만 회피형은 더)
+            e.luc = max(0.0, e.luc * min(scale * 0.1 + 1.0, 1.25))
+        elif et == "암살자":
+            # 속도/선공형: spd 추가
+            e.spd = max(0.0, e.spd * min(math.sqrt(scale) * 1.05, 1.4))
+        elif et == "박쥐":
+            # 유리대포: sp 강화
+            e.sp = max(0.0, e.sp * math.sqrt(scale))
+        # 고블린: 공통 축만 (표준형)
+
         return e
 
 
