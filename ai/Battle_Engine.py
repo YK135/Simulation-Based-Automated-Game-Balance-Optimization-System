@@ -451,13 +451,15 @@ SKILL_META = {
         "mp": 8, "mult": 0.80, "type": "physical", "hits": 2  # 0.70 → 0.80: 초반 연타 체감 개선
     },
     "연속공격2": {
-        "mp": 13, "mult": 0.75, "type": "physical", "hits": 3  # 0.65 → 0.75
+        # 스펙: mult 0.70, hits 3 (약간 하향)
+        "mp": 13, "mult": 0.70, "type": "physical", "hits": 3
     },
     "강타1": {
-        "mp": 10, "mult": 1.55, "type": "physical", "hits": 1  # 1.35 → 1.55
+        "mp": 10, "mult": 1.55, "type": "physical", "hits": 1
     },
     "강타2": {
-        "mp": 16, "mult": 1.85, "type": "physical", "hits": 1  # 1.55 → 1.85
+        # 스펙: mult 1.80
+        "mp": 16, "mult": 1.80, "type": "physical", "hits": 1
     },
     "슬래시1": {
         "mp": 12, "mult": 0.65, "type": "physical", "hits": 1, "aoe": True
@@ -475,10 +477,11 @@ SKILL_META = {
     },
 
     "파이어볼1": {
-        "mp": 10, "mult": 1.50, "type": "magical", "hits": 1  # 1.35 → 1.50
+        "mp": 10, "mult": 1.50, "type": "magical", "hits": 1
     },
     "파이어볼2": {
-        "mp": 16, "mult": 1.70, "type": "magical", "hits": 1  # 1.55 → 1.70
+        # 스펙: mult 1.55 (후반 화력 억제)
+        "mp": 16, "mult": 1.55, "type": "magical", "hits": 1
     },
     "아이스볼릿1": {
         "mp": 11, "mult": 1.25, "type": "magical", "hits": 1,
@@ -491,26 +494,29 @@ SKILL_META = {
         "debuff_amount": (0.15, 0.20), "debuff_turns": (2, 3)
     },
     "라이트닝1": {
-        "mp": 12, "mult": 1.55, "type": "magical", "hits": 1  # 1.40 → 1.55
+        "mp": 12, "mult": 1.55, "type": "magical", "hits": 1
     },
     "라이트닝2": {
-        "mp": 19, "mult": 1.75, "type": "magical", "hits": 1  # 1.60 → 1.75
+        # 스펙: mult 1.60
+        "mp": 19, "mult": 1.60, "type": "magical", "hits": 1
     },
     "힐1": {
         "mp": 12, "type": "heal",
         "base_heal": 80, "sp_mult": 1.2, "cap": 0.22
     },
     "힐2": {
+        # 스펙: base_heal 130, sp_mult 1.15, cap 0.30 (유지력 억제)
         "mp": 20, "type": "heal",
-        "base_heal": 150, "sp_mult": 1.35, "cap": 0.35
+        "base_heal": 130, "sp_mult": 1.15, "cap": 0.30
     },
     "효율성1": {
         "mp": 14, "type": "buff",
         "buff_stat": "mp_efficiency", "buff_amount": 0.20, "buff_turns": 2
     },
     "효율성2": {
+        # 스펙: buff_amount 0.25 (0.35 → 0.25, 후반 무한화력 억제)
         "mp": 22, "type": "buff",
-        "buff_stat": "mp_efficiency", "buff_amount": 0.35, "buff_turns": 2
+        "buff_stat": "mp_efficiency", "buff_amount": 0.25, "buff_turns": 2
     },
 
     "몸통박치기1": {
@@ -518,8 +524,9 @@ SKILL_META = {
         "arm_mult": 1.4, "hp_mult": 0.03
     },
     "몸통박치기2": {
+        # 스펙: arm_mult 1.5, hp_mult 0.035
         "mp": 13, "type": "tank_attack",
-        "arm_mult": 1.6, "hp_mult": 0.04
+        "arm_mult": 1.5, "hp_mult": 0.035
     },
     "되갚기1": {
         "mp": 10, "type": "counter",
@@ -547,13 +554,15 @@ SKILL_META = {
         "luc_bonus": 0.8
     },
     "급소찌르기2": {
-        "mp": 15, "mult": 1.40, "type": "physical", "hits": 1,
-        "luc_bonus": 1.2
+        # 스펙: mult 1.30, luc_bonus 0.8 (후반 폭주 억제)
+        "mp": 15, "mult": 1.30, "type": "physical", "hits": 1,
+        "luc_bonus": 0.8
     },
     "연속찌르기": {
+        # 스펙: max_hits 4, base_prob 5, luc_mult 3, prob_decay 20, dmg_decay 0.68
         "mp": 14, "type": "multi_hit",
-        "max_hits": 4, "base_prob": 5, "luc_mult": 5,
-        "prob_decay": 15, "dmg_decay": 0.75
+        "max_hits": 4, "base_prob": 5, "luc_mult": 3,
+        "prob_decay": 20, "dmg_decay": 0.68
     },
     "난사1": {
         "mp": 12, "mult": 0.65, "type": "physical", "hits": 1, "aoe": True
@@ -562,8 +571,9 @@ SKILL_META = {
         "mp": 18, "mult": 0.85, "type": "physical", "hits": 1, "aoe": True
     },
     "추진력": {
+        # 스펙: buff_amount 0.10 (도적 SPD 폭주 억제)
         "mp": 13, "type": "buff",
-        "buff_stat": "spd", "buff_amount": 0.15, "buff_turns": 2
+        "buff_stat": "spd", "buff_amount": 0.10, "buff_turns": 2
     },
 }
 

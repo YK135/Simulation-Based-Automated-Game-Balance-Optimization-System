@@ -39,6 +39,7 @@ except ModuleNotFoundError:
 # ─────────────────────────────────────────────
 JOB_GROWTH = {
     "전사": {
+        # 기준선 직업 — 거의 유지
         "hp":    lambda lv: 44 + lv * 3,
         "mp":    lambda lv: 4 + lv // 5,
         "stg":   lambda lv: 1.4 + lv // 5,
@@ -49,16 +50,18 @@ JOB_GROWTH = {
         "luc":   lambda lv: lv % 2,
     },
     "마법사": {
+        # 후반 과성장 억제: mp 8→7, lv//3→lv//4 / sp 2.2→1.8, lv//4→lv//5 / luc lv%3→lv%4
         "hp":    lambda lv: 38 + lv * 2,
-        "mp":    lambda lv: 6 + lv // 4,
+        "mp":    lambda lv: 7 + lv // 4,
         "stg":   lambda lv: 0.7 + lv // 8,
-        "sp":    lambda lv: 1.6 + lv // 5,
+        "sp":    lambda lv: 1.8 + lv // 5,
         "arm":   lambda lv: 0.8,
         "sparm": lambda lv: 1.4,
         "spd":   lambda lv: 0.6,
-        "luc":   lambda lv: lv % 3,
+        "luc":   lambda lv: lv % 4,
     },
     "탱커": {
+        # 거의 유지
         "hp":    lambda lv: 50 + lv * 4,
         "mp":    lambda lv: 3 + lv // 6,
         "stg":   lambda lv: 1.0 + lv // 7,
@@ -69,14 +72,16 @@ JOB_GROWTH = {
         "luc":   lambda lv: lv % 4,
     },
     "도적": {
+        # 후반 폭주 억제: stg 1.3→1.0, lv//6→lv//7 / spd 1.2→0.9, lv//6→lv//8
+        # luc 1.0→0.6, lv//4→lv//6
         "hp":    lambda lv: 40 + lv * 2,
         "mp":    lambda lv: 5 + lv // 4,
         "stg":   lambda lv: 1.0 + lv // 7,
         "sp":    lambda lv: 0.8 + lv // 7,
         "arm":   lambda lv: 1.0,
         "sparm": lambda lv: 0.7,
-        "spd":   lambda lv: 0.8 + lv // 8,
-        "luc":   lambda lv: 0.65 + lv // 5,
+        "spd":   lambda lv: 0.9 + lv // 8,
+        "luc":   lambda lv: 0.6 + lv // 6,
     },
 }
 
@@ -305,7 +310,7 @@ def _initialize_skills_for_existing_level(player) -> None:
 # 레벨업 시스템
 # ─────────────────────────────────────────────
 class LV_:
-    EXP_GROWTH_RATE = 1.1  # 레벨업 후 필요 경험치 증가율
+    EXP_GROWTH_RATE = 1.18  # 레벨업 후 필요 경험치 증가율
 
     def __init__(self, ply):
         self.player = ply
