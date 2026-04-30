@@ -50,9 +50,9 @@ JOB_GROWTH = {
     },
     "마법사": {
         "hp":    lambda lv: 38 + lv * 2,
-        "mp":    lambda lv: 8 + lv // 3,
+        "mp":    lambda lv: 6 + lv // 4,
         "stg":   lambda lv: 0.7 + lv // 8,
-        "sp":    lambda lv: 2.2 + lv // 4,
+        "sp":    lambda lv: 1.6 + lv // 5,
         "arm":   lambda lv: 0.8,
         "sparm": lambda lv: 1.4,
         "spd":   lambda lv: 0.6,
@@ -71,12 +71,12 @@ JOB_GROWTH = {
     "도적": {
         "hp":    lambda lv: 40 + lv * 2,
         "mp":    lambda lv: 5 + lv // 4,
-        "stg":   lambda lv: 1.3 + lv // 6,
+        "stg":   lambda lv: 1.0 + lv // 7,
         "sp":    lambda lv: 0.8 + lv // 7,
         "arm":   lambda lv: 1.0,
         "sparm": lambda lv: 0.7,
-        "spd":   lambda lv: 1.2 + lv // 6,
-        "luc":   lambda lv: 1.0 + lv // 4,
+        "spd":   lambda lv: 0.8 + lv // 8,
+        "luc":   lambda lv: 0.65 + lv // 5,
     },
 }
 
@@ -305,7 +305,7 @@ def _initialize_skills_for_existing_level(player) -> None:
 # 레벨업 시스템
 # ─────────────────────────────────────────────
 class LV_:
-    EXP_GROWTH_RATE = 1.18  # 레벨업 후 필요 경험치 증가율
+    EXP_GROWTH_RATE = 1.1  # 레벨업 후 필요 경험치 증가율
 
     def __init__(self, ply):
         self.player = ply

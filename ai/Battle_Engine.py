@@ -75,6 +75,28 @@ class EntitySnapshot:
     last_damage_taken: float = 0.0
     difficulty: str = ""  # Simulator가 튜닝 시 "hard"/"normal"/"easy" 기록
 
+    # ── 역할 기반 전투 시스템 (1학기 Phase 1) ──
+    # 상성: 받는 데미지에 곱연산. 1.0 = 보통, 0.65 = 반감, 1.10 = 약점.
+    physical_resist: float = 1.0   # 물리 데미지 받을 때 곱 (슬라임 0.65)
+    magical_resist:  float = 1.0   # 마법 데미지 받을 때 곱 (골렘 0.65)
+
+    # 회피 보정 (유령 +0.20 → 회피율 + 20%p 추가)
+    dodge_bonus: float = 0.0
+
+    # 다단히트 회피 패널티 (유령): hit_count > 1 인 스킬에 대해
+    # dodge_penalty_per_extra_hit 만큼 회피율 감소
+    dodge_penalty_per_extra_hit: float = 0.10
+
+    # 선공/첫공격 (암살자):
+    #   first_strike: 전투 시작 시 무조건 선공 (SPD와 무관)
+    #   first_attack_bonus: 첫 공격 데미지 배율 (1.15 = +15%)
+    first_strike: bool = False
+    first_attack_bonus: float = 1.0
+    has_attacked: bool = False  # 이번 전투에서 첫 공격을 했는지
+
+    # 종족 식별자 (UI 표시 등에 활용)
+    enemy_type: str = ""
+
     def effective_stg(self) -> float:
         debuff_r = sum(d.amount for d in self.debuffs if d.stat == "stg")
         buff_r = sum(b.amount for b in self.buffs if b.stat == "stg")
@@ -171,7 +193,15 @@ class EntitySnapshot:
             luc=enemy.luc,
             lv=enemy.lv,
             spd=getattr(enemy, "spd", 10.0),
-            difficulty=getattr(enemy, "difficulty", ""),  # 난이도 라벨 보존
+            difficulty=getattr(enemy, "difficulty", ""),
+            # 역할 기반 메커니즘 (Phase 1)
+            physical_resist=getattr(enemy, "physical_resist", 1.0),
+            magical_resist=getattr(enemy, "magical_resist", 1.0),
+            dodge_bonus=getattr(enemy, "dodge_bonus", 0.0),
+            dodge_penalty_per_extra_hit=getattr(enemy, "dodge_penalty_per_extra_hit", 0.10),
+            first_strike=getattr(enemy, "first_strike", False),
+            first_attack_bonus=getattr(enemy, "first_attack_bonus", 1.0),
+            enemy_type=getattr(enemy, "enemy_type", ""),
         )
 
 
@@ -253,7 +283,7 @@ class ATBSystem:
 class DamageCalc:
     ROLE_MULT = {
         "player": 1.0,
-        "monster": 1.0,  # 1.1 → 1.0: 몬스터 기본 10% 추가 피해 제거, 공정한 기준선으로 통일
+        "monster": 1.0,
     }
 
     @staticmethod
@@ -264,27 +294,57 @@ class DamageCalc:
         def_luc: float,
         skill_mult: float,
         role_mult: float,
+        # ── Phase 1 신규 인자 (모두 옵셔널, 후방 호환) ──
+        damage_type: str = "physical",   # "physical" | "magical"
+        defender = None,                 # EntitySnapshot — 상성/회피보너스 적용
+        attacker = None,                 # EntitySnapshot — 첫공격 보너스 / has_attacked 갱신
+        hit_count: int = 1,              # 다단히트 (회피 페널티 적용)
     ) -> tuple[int, bool, bool]:
-        evade_chance = min(def_luc * 0.4, 25)
-        if randint(1, 100) <= evade_chance:
+        # ── 회피 판정 (다단히트 + dodge_bonus 반영) ──
+        # 기본: def_luc × 0.4, 상한 25
+        # +dodge_bonus(유령 +20), -다단히트 페널티(다단히트시 회피율 감소)
+        base_evade = min(def_luc * 0.4, 25)
+        if defender is not None:
+            base_evade += defender.dodge_bonus * 100  # 0.20 → +20%p
+            if hit_count > 1:
+                penalty = defender.dodge_penalty_per_extra_hit * 100 * (hit_count - 1)
+                base_evade -= penalty
+        base_evade = max(0.0, min(base_evade, 60.0))  # 상하한 가드
+
+        if randint(1, 100) <= base_evade:
             return 0, True, False
 
-        # 데미지 공식 (v2):
-        #   base = atk_stat * 200 / (100 + def_stat)
-        #   저레벨(atk=12, def=5) 기준 평균 22~23, Lv1 전투가 4~5턴에 끝나도록 튜닝.
-        #   기존 100/(100+def) 공식은 상한이 atk_stat 자체라 전투가 너무 길어졌음.
-        # 최소값:
-        #   atk_stat * 0.4  → def가 매우 높아도 최소 보장 데미지 확보
-        base = atk_stat * 250 / (100 + def_stat)
+        # ── 기본 데미지 공식 (v2) ──
+        base = atk_stat * 200 / (100 + def_stat)
         base = max(base, atk_stat * 0.4)
         base *= skill_mult
         base *= role_mult
         base *= uniform(0.9, 1.1)
 
+        # ── 첫공격 보너스 (암살자) ──
+        if attacker is not None and not attacker.has_attacked:
+            base *= attacker.first_attack_bonus
+            attacker.has_attacked = True
+
+        # ── 상성 적용 (defender의 저항/약점) ──
+        if defender is not None:
+            if damage_type == "physical":
+                base *= defender.physical_resist
+            elif damage_type == "magical":
+                base *= defender.magical_resist
+
+        # ── 크리티컬 ──
         crit_chance = min(atk_luc * 0.5, 40)
         is_crit = randint(1, 100) <= crit_chance
         if is_crit:
             base *= 1.5
+
+        # ── 최소 데미지 보장 (atk_stat × 0.20) ──
+        # 상성으로 깎여도 공격력의 20% 이상은 보장 (Phase 1 디자인 원칙)
+        # 단 회피로 0이 된 경우는 위에서 이미 return 됨
+        min_dmg = atk_stat * 0.20
+        if base < min_dmg:
+            base = min_dmg
 
         return int(base), False, is_crit
 
@@ -296,11 +356,18 @@ class DamageCalc:
         def_luc: float,
         skill_mult: float = 1.0,
         role: str = "player",
+        defender = None,
+        attacker = None,
+        hit_count: int = 1,
     ) -> tuple[int, bool, bool]:
         role_mult = DamageCalc.ROLE_MULT.get(role, 1.0)
         return DamageCalc._calc(
             atk_stg, def_arm, atk_luc, def_luc,
-            skill_mult, role_mult
+            skill_mult, role_mult,
+            damage_type="physical",
+            defender=defender,
+            attacker=attacker,
+            hit_count=hit_count,
         )
 
     @staticmethod
@@ -311,11 +378,18 @@ class DamageCalc:
         def_luc: float,
         skill_mult: float = 1.0,
         role: str = "player",
+        defender = None,
+        attacker = None,
+        hit_count: int = 1,
     ) -> tuple[int, bool, bool]:
         role_mult = DamageCalc.ROLE_MULT.get(role, 1.0)
         return DamageCalc._calc(
             atk_sp, def_sparm, atk_luc, def_luc,
-            skill_mult, role_mult
+            skill_mult, role_mult,
+            damage_type="magical",
+            defender=defender,
+            attacker=attacker,
+            hit_count=hit_count,
         )
 
 
@@ -575,6 +649,8 @@ def execute_skill(
             else:
                 break
 
+        # multi_hit은 hit_count 개수만큼 다단히트 →
+        # defender의 dodge_penalty_per_extra_hit이 적용되어 유령 회피율 감소.
         for i in range(hit_count):
             raw, _, _ = DamageCalc.physical(
                 attacker.effective_stg(),
@@ -582,6 +658,9 @@ def execute_skill(
                 defender.effective_arm(),
                 defender.luc,
                 skill_mult=1.0,
+                attacker=attacker,
+                defender=defender,
+                hit_count=hit_count,  # 다단히트 정보 전달
             )
             total += int(raw * (dmg_decay ** i))
 
@@ -598,6 +677,9 @@ def execute_skill(
                 defender.effective_arm(),
                 defender.luc,
                 skill_mult=meta.get("mult", 1.0),
+                attacker=attacker,
+                defender=defender,
+                hit_count=hits,  # hits>1이면 다단히트로 회피 페널티 적용
             )
             bonus = meta.get("luc_bonus", 0.0)
             if bonus:
@@ -610,6 +692,9 @@ def execute_skill(
                 defender.effective_sparm(),
                 defender.luc,
                 skill_mult=meta.get("mult", 1.0),
+                attacker=attacker,
+                defender=defender,
+                hit_count=hits,
             )
         else:
             return 0, False, ""
@@ -765,6 +850,8 @@ class BattleEngine:
                 defender.effective_arm(), defender.luc,
                 skill_mult=1.0,
                 role="player" if actor == "player" else "monster",
+                attacker=attacker,
+                defender=defender,
             )
             actual = 0 if is_dodge else _apply_damage_with_shield(defender, dmg)
             log.damage_dealt = actual
@@ -792,6 +879,8 @@ class BattleEngine:
                     defender.effective_arm(), defender.luc,
                     skill_mult=1.0,
                     role="player" if actor == "player" else "monster",
+                    attacker=attacker,
+                    defender=defender,
                 )
                 actual = 0 if is_dodge else _apply_damage_with_shield(defender, dmg)
                 log.action = "attack"

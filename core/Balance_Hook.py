@@ -22,7 +22,10 @@ from ai.Simulator      import MonsterFactory, BattleSimulator, BASE_ENEMIES
 from ai.LOG_Manager    import LogManager
 from ai.FeedBack       import FeedbackEngine
 from ai.Visualizer     import Visualizer
-from game.Enemy_Class  import Make_Goblin, Make_Bat
+from game.Enemy_Class  import (
+    Make_Goblin, Make_Bat,
+    Make_Slime, Make_Golem, Make_Ghost, Make_Assassin,
+)
 
 # 루트 디렉토리 (Main.py가 있는 곳)
 ROOT_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -124,9 +127,36 @@ class BalanceHook:
 
     # 폴백 몬스터 팩토리 (하드코딩 제거 — Enemy_Class 기준으로 통일)
     _FALLBACK_MAKERS = {
-        "고블린": Make_Goblin,
-        "박쥐":   Make_Bat,
+        "고블린":   Make_Goblin,
+        "박쥐":     Make_Bat,
+        "슬라임":   Make_Slime,
+        "골렘":     Make_Golem,
+        "유령":     Make_Ghost,
+        "암살자":   Make_Assassin,
     }
+
+    # 레벨대별 등장 가능 몬스터 풀
+    # Phase 1 디자인: 단계적 컨텐츠 도입.
+    # 등장 조건: player.lv >= min_lv 인 몬스터들 중 랜덤 선택.
+    _ENEMY_POOL = [
+        {"type": "고블린",  "min_lv": 1},
+        {"type": "박쥐",    "min_lv": 1},
+        {"type": "슬라임",  "min_lv": 3},
+        {"type": "골렘",    "min_lv": 6},
+        {"type": "유령",    "min_lv": 7},
+        {"type": "암살자",  "min_lv": 10},
+    ]
+
+    def _available_enemy_types(self) -> list:
+        """현재 플레이어 레벨에서 등장 가능한 몬스터 종류 리스트"""
+        return [e["type"] for e in self._ENEMY_POOL
+                if self.player.lv >= e["min_lv"]]
+
+    def pick_random_enemy_type(self) -> str:
+        """레벨대별 풀에서 랜덤 선택 (App.py가 이걸로 spawn)"""
+        from random import choice
+        pool = self._available_enemy_types()
+        return choice(pool) if pool else "고블린"
 
     def _make_fallback(self, enemy_type: str) -> EntitySnapshot:
         """
@@ -138,7 +168,7 @@ class BalanceHook:
         unit  = maker(self.player.lv, "중")
         if self.verbose:
             print(f"  [AI] 시뮬 대기 중 — {enemy_type} 폴백 사용 (Lv{self.player.lv} 중급 기준)")
-        # Unit → EntitySnapshot 변환
+        # Unit → EntitySnapshot 변환 (Phase 1 신규 필드 보존)
         return EntitySnapshot(
             name=unit.name,
             hp=unit.hp,     maxhp=unit.hp,
@@ -147,7 +177,15 @@ class BalanceHook:
             sparm=unit.sparm, sp=unit.sp,
             luc=unit.luc,   lv=unit.lv,
             spd=getattr(unit, "spd", 10),
-            difficulty="normal",  # 폴백은 중간 난이도로 표기
+            difficulty="normal",
+            # 역할 기반 메커니즘
+            physical_resist=getattr(unit, "physical_resist", 1.0),
+            magical_resist=getattr(unit, "magical_resist", 1.0),
+            dodge_bonus=getattr(unit, "dodge_bonus", 0.0),
+            dodge_penalty_per_extra_hit=getattr(unit, "dodge_penalty_per_extra_hit", 0.10),
+            first_strike=getattr(unit, "first_strike", False),
+            first_attack_bonus=getattr(unit, "first_attack_bonus", 1.0),
+            enemy_type=getattr(unit, "enemy_type", unit.name),
         )
 
     def __init__(self, player, item_list, show_graph=False, verbose=True):
@@ -425,9 +463,16 @@ class _SnapUnit:
         self.grade         = getattr(snap, 'grade', '중')
         self.is_boss       = getattr(snap, 'is_boss', False)
         self.debuff_resist = getattr(snap, 'debuff_resist', 0.0)
-        # 난이도 라벨 보존 (UI 표시용) — EntitySnapshot → _SnapUnit → EntitySnapshot
-        # 왕복 변환 시 difficulty가 소실되지 않도록 명시적으로 복사.
         self.difficulty    = getattr(snap, 'difficulty', '')
+        # Phase 1: 역할 기반 메커니즘 — 왕복 변환 시 보존
+        self.physical_resist = getattr(snap, 'physical_resist', 1.0)
+        self.magical_resist  = getattr(snap, 'magical_resist', 1.0)
+        self.dodge_bonus     = getattr(snap, 'dodge_bonus', 0.0)
+        self.dodge_penalty_per_extra_hit = getattr(snap, 'dodge_penalty_per_extra_hit', 0.10)
+        self.first_strike    = getattr(snap, 'first_strike', False)
+        self.first_attack_bonus = getattr(snap, 'first_attack_bonus', 1.0)
+        self.has_attacked    = getattr(snap, 'has_attacked', False)
+        self.enemy_type      = getattr(snap, 'enemy_type', snap.name)
 
     def exp_reward(self, player_maxexp: int) -> int:
         ratio = {"상": 0.45, "중": 0.34, "하": 0.28}.get(self.grade, 0.34)

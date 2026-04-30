@@ -237,7 +237,9 @@ def explore():
 
     if 1 <= rd <= 12:
         # 전투 이벤트
-        enemy_type = "고블린" if random() < 0.5 else "박쥐"
+        # Phase 1: 레벨대별 등장 풀에서 랜덤 선택
+        # (Lv1~2: 고블린/박쥐만, Lv3+: 슬라임 추가, Lv6+: 골렘, Lv7+: 유령, Lv10+: 암살자)
+        enemy_type = gs["hook"].pick_random_enemy_type()
         enemy_snap = gs["hook"].get_enemy(enemy_type)
         enemy      = gs["hook"].make_battle_unit(enemy_snap)
         state      = _start_battle(gs, enemy)

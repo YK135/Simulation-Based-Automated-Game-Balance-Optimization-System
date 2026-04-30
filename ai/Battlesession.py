@@ -94,6 +94,19 @@ class BattleSession:
 
         self.turn += 1
 
+        # ── 첫 턴 + first_strike 처리 (암살자) ──
+        # 적이 first_strike=True 이면 플레이어 행동 전에 적이 먼저 공격.
+        # SPD 무관하게 강제 선공. 이후 턴부터는 정상 흐름.
+        if self.turn == 1 and getattr(self.enemy, "first_strike", False):
+            msgs.append(f"{self.enemy.name}이(가) 먼저 기습한다!")
+            self._enemy_action(msgs)
+            # 플레이어 사망 체크 (선공으로 한방 가능)
+            if self.player.hp <= 0:
+                self.done   = True
+                self.winner = "enemy"
+                msgs.append(f"{self.player.name}이(가) 쓰러졌다...")
+                return self._state(messages=msgs)
+
         # ── 플레이어 행동 ──────────────────────
         p_result = self._player_action(action, msgs)
 
@@ -178,6 +191,8 @@ class BattleSession:
                 self.enemy.effective_arm(),  self.enemy.luc,
                 skill_mult=1.0,
                 role="player",
+                attacker=self.player,
+                defender=self.enemy,
             )
             actual = 0 if dodge else int(dmg)
             if dodge:
@@ -333,6 +348,8 @@ class BattleSession:
                 self.player.effective_arm(), self.player.luc,
                 skill_mult=1.0,
                 role="monster",
+                attacker=self.enemy,
+                defender=self.player,
             )
             actual = 0 if dodge else int(dmg)
             if dodge:

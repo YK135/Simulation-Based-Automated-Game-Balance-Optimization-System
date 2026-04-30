@@ -18,11 +18,17 @@ from dataclasses import dataclass
 try:
     from ai.Battle_Engine  import BattleEngine, EntitySnapshot, SKILL_META
     from ai.Auto_AI        import PlayerAI, EnemyAI
-    from game.Enemy_Class  import Make_Goblin, Make_Bat
+    from game.Enemy_Class  import (
+        Make_Goblin, Make_Bat,
+        Make_Slime, Make_Golem, Make_Ghost, Make_Assassin,
+    )
 except ModuleNotFoundError:
     from Battle_Engine import BattleEngine, EntitySnapshot, SKILL_META
     from Auto_AI       import PlayerAI, EnemyAI
-    from game.Enemy_Class   import Make_Goblin, Make_Bat  # flat 구조 fallback
+    from game.Enemy_Class   import (
+        Make_Goblin, Make_Bat,
+        Make_Slime, Make_Golem, Make_Ghost, Make_Assassin,
+    )
 
 
 # ────────────────────────────────────────────
@@ -276,6 +282,31 @@ class StatTuner:
             "normal": 0.60,
             "easy":   0.70,
         },
+        # ── Phase 1 신규 — 역할 기반 ──
+        # 상성 몬스터(슬라임/골렘)는 직업에 따라 승률 편차가 큼.
+        # → 표준 45/60/70 유지 (시뮬은 PowerIndex로 보정)
+        "슬라임": {
+            "hard":   0.45,
+            "normal": 0.60,
+            "easy":   0.70,
+        },
+        "골렘": {
+            "hard":   0.45,
+            "normal": 0.60,
+            "easy":   0.70,
+        },
+        # 유령: 회피 변수가 커서 결과 분산 큼 → 표준
+        "유령": {
+            "hard":   0.45,
+            "normal": 0.60,
+            "easy":   0.70,
+        },
+        # 암살자: 위협적이라 강함을 살짝 어렵게(40%) — 첫턴 폭딜 컨셉
+        "암살자": {
+            "hard":   0.40,
+            "normal": 0.55,
+            "easy":   0.65,
+        },
     }
 
     # 기존 BASE_TARGET은 호환성 유지용 (외부 코드가 참조할 수 있음)
@@ -380,6 +411,7 @@ def _unit_to_snap(unit) -> EntitySnapshot:
     """
     Enemy_Class.Unit → EntitySnapshot 변환 헬퍼.
     Simulator 전체에서 이 함수만 사용 — 수치 출처를 Enemy_Class 단일화.
+    Phase 1: 역할 기반 메커니즘 필드도 함께 보존.
     """
     return EntitySnapshot(
         name=unit.name,
@@ -390,27 +422,43 @@ def _unit_to_snap(unit) -> EntitySnapshot:
         sparm=unit.sparm, sp=getattr(unit, 'sp', 0),
         luc=unit.luc,     lv=unit.lv,
         spd=getattr(unit, 'spd', 10),
+        # 역할 기반 메커니즘
+        physical_resist=getattr(unit, 'physical_resist', 1.0),
+        magical_resist=getattr(unit, 'magical_resist', 1.0),
+        dodge_bonus=getattr(unit, 'dodge_bonus', 0.0),
+        dodge_penalty_per_extra_hit=getattr(unit, 'dodge_penalty_per_extra_hit', 0.10),
+        first_strike=getattr(unit, 'first_strike', False),
+        first_attack_bonus=getattr(unit, 'first_attack_bonus', 1.0),
+        enemy_type=getattr(unit, 'enemy_type', unit.name),
     )
+
+
+# 신규 5종 포함 — enemy_type 명칭으로 디스패치
+_MAKER_DISPATCH = {
+    "고블린":   Make_Goblin,
+    "박쥐":     Make_Bat,
+    "슬라임":   Make_Slime,
+    "골렘":     Make_Golem,
+    "유령":     Make_Ghost,
+    "암살자":   Make_Assassin,
+}
 
 
 def _make_base_enemy(enemy_type: str, player_lv: int) -> EntitySnapshot:
     """
-    Enemy_Class.Make_Goblin / Make_Bat 중급(grade="중") 직접 호출.
+    enemy_type별 적절한 Make_X 함수를 호출하여 중급 몬스터 생성.
     Simulator가 독립적인 몬스터 수치를 갖지 않도록 단일 출처 보장.
     """
     lv = max(1, player_lv)
-    if enemy_type == "박쥐":
-        return _unit_to_snap(Make_Bat(lv, "중"))
-    else:
-        return _unit_to_snap(Make_Goblin(lv, "중"))
+    maker = _MAKER_DISPATCH.get(enemy_type, Make_Goblin)
+    return _unit_to_snap(maker(lv, "중"))
 
 
 # 하위 호환용 스냅샷 (Enemy_Class Lv1 중급 기준으로 자동 생성)
 def _make_base_enemies():
-    return {
-        "고블린": _unit_to_snap(Make_Goblin(1, "중")),
-        "박쥐":   _unit_to_snap(Make_Bat(1, "중")),
-    }
+    return {name: _unit_to_snap(maker(1, "중"))
+            for name, maker in _MAKER_DISPATCH.items()}
+
 
 BASE_ENEMIES = _make_base_enemies()
 
@@ -572,7 +620,7 @@ if __name__ == "__main__":
                         help="플레이어 직업 (기본: 전사)")
     parser.add_argument("--lv", type=int, default=1, help="플레이어 레벨 (기본: 1)")
     parser.add_argument("--enemy", default="박쥐",
-                        choices=["박쥐", "고블린"],
+                        choices=["박쥐", "고블린", "슬라임", "골렘", "유령", "암살자"],
                         help="몬스터 종류 (기본: 박쥐)")
     parser.add_argument("--n", type=int, default=300,
                         help="시뮬레이션 횟수 (기본: 300)")

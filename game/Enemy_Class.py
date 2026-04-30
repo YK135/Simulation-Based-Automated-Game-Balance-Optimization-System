@@ -115,13 +115,13 @@ def Make_Bat(player_lv: int, grade: str) -> Unit:
     unit = Unit(
         name  = "박쥐",
         lv    = lv,
-        hp    = int(70  + 16 * (lv - 1)),
+        hp    = int(85  + 18 * (lv - 1)),
         mp    = int(30  + lv * 4),
         stg   = 5 if lv == 1 else round(6 + 1.8 * (lv - 1), 1),  # Lv1=5 고정
         arm   = round(3   + 0.8 * (lv - 1), 1),
         sparm = round(4   + 0.8 * (lv - 1), 1),
-        sp    = round(8   + 2.0 * (lv - 1), 1),
-        spd   = round(12  + 0.8 * (lv - 1), 1),
+        sp    = round(10   + 2.3 * (lv - 1), 1),
+        spd   = round(11  + 0.7 * (lv - 1), 1),
         luc   = round(4   + 0.6 * (lv - 1), 1),
     )
     return _apply_grade(unit, grade)
