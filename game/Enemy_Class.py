@@ -90,7 +90,7 @@ def Make_Goblin(player_lv: int, grade: str) -> Unit:
     unit = Unit(
         name  = "고블린",
         lv    = lv,
-        hp    = int(120 + 26 * (lv - 1)),
+        hp    = int(100 + 26 * (lv - 1)),
         mp    = 0,
         stg   = base_stg,
         arm   = round(5   + 1.2 * (lv - 1), 1),
@@ -115,7 +115,7 @@ def Make_Bat(player_lv: int, grade: str) -> Unit:
     unit = Unit(
         name  = "박쥐",
         lv    = lv,
-        hp    = int(80  + 16 * (lv - 1)),
+        hp    = int(70  + 16 * (lv - 1)),
         mp    = int(30  + lv * 4),
         stg   = 5 if lv == 1 else round(6 + 1.8 * (lv - 1), 1),  # Lv1=5 고정
         arm   = round(3   + 0.8 * (lv - 1), 1),

@@ -11,26 +11,26 @@ Player_Class.py
 
 JOB_BASE_STATS = {
     "전사": {
-        "hp": 320, "mp": 25,
-        "stg": 12, "sp": 3,
-        "arm": 7, "sparm": 4,
-        "spd": 10, "luc": 8,
+        "hp": 350, "mp": 30,
+        "stg": 15, "sp": 4,
+        "arm": 8, "sparm": 5,
+        "spd": 10, "luc": 6,
     },
     "마법사": {
-        "hp": 260, "mp": 50,
-        "stg": 6, "sp": 14,
-        "arm": 3, "sparm": 6,
-        "spd": 9, "luc": 7,
+        "hp": 300, "mp": 65,
+        "stg": 8, "sp": 14,
+        "arm": 5, "sparm": 8,
+        "spd": 9, "luc": 8,
     },
     "탱커": {
-        "hp": 380, "mp": 20,
+        "hp": 400, "mp": 25,
         "stg": 8, "sp": 2,
-        "arm": 10, "sparm": 7,
+        "arm": 12, "sparm": 7,
         "spd": 8, "luc": 6,
     },
     "도적": {
-        "hp": 280, "mp": 30,
-        "stg": 11, "sp": 5,
+        "hp": 290, "mp": 30,
+        "stg": 11, "sp": 6,
         "arm": 4, "sparm": 3,
         "spd": 14, "luc": 12,
     },

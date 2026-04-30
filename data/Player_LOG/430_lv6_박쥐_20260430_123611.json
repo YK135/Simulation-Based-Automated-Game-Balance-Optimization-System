@@ -1,0 +1,68 @@
+{
+  "winner": "player",
+  "total_turns": 2,
+  "final_player_hp": 473,
+  "final_enemy_hp": -5,
+  "player_name": "430",
+  "enemy_name": "박쥐",
+  "final_player_items": [
+    "HP_M_potion",
+    "MP_S_potion",
+    "MP_S_potion",
+    "MP_S_potion",
+    "HP_M_potion",
+    "MP_S_potion",
+    "MP_S_potion"
+  ],
+  "logs": [
+    {
+      "turn": 1,
+      "actor": "player",
+      "action": "skill",
+      "action_detail": "연속찌르기",
+      "damage_dealt": 113,
+      "hp_after": 37,
+      "mp_after": 44,
+      "is_dodge": false,
+      "is_crit": false,
+      "debuff_applied": "",
+      "escaped": false,
+      "player_pt": 0.0,
+      "enemy_pt": 0.0
+    },
+    {
+      "turn": 1,
+      "actor": "enemy",
+      "action": "skill",
+      "action_detail": "파이어볼1",
+      "damage_dealt": 57,
+      "hp_after": 473,
+      "mp_after": 44,
+      "is_dodge": false,
+      "is_crit": false,
+      "debuff_applied": "",
+      "escaped": false,
+      "player_pt": 0.0,
+      "enemy_pt": 0.0
+    },
+    {
+      "turn": 2,
+      "actor": "player",
+      "action": "attack",
+      "action_detail": "basic_attack",
+      "damage_dealt": 42,
+      "hp_after": 0,
+      "mp_after": 44,
+      "is_dodge": false,
+      "is_crit": false,
+      "debuff_applied": "",
+      "escaped": false,
+      "player_pt": 0.0,
+      "enemy_pt": 0.0
+    }
+  ],
+  "log_type": "player",
+  "player_lv": 6,
+  "timestamp": "20260430_123611",
+  "items_used": []
+}

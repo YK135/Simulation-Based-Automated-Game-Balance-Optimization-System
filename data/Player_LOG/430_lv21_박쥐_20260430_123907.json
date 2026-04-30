@@ -1,0 +1,37 @@
+{
+  "winner": "player",
+  "total_turns": 1,
+  "final_player_hp": 1550,
+  "final_enemy_hp": -45,
+  "player_name": "430",
+  "enemy_name": "박쥐",
+  "final_player_items": [
+    "MP_S_potion",
+    "HP_L_potion",
+    "MP_S_potion",
+    "MP_S_potion",
+    "MP_S_potion",
+    "MP_S_potion"
+  ],
+  "logs": [
+    {
+      "turn": 1,
+      "actor": "player",
+      "action": "skill",
+      "action_detail": "연속찌르기",
+      "damage_dealt": 435,
+      "hp_after": 0,
+      "mp_after": 166,
+      "is_dodge": false,
+      "is_crit": false,
+      "debuff_applied": "",
+      "escaped": false,
+      "player_pt": 0.0,
+      "enemy_pt": 0.0
+    }
+  ],
+  "log_type": "player",
+  "player_lv": 21,
+  "timestamp": "20260430_123907",
+  "items_used": []
+}

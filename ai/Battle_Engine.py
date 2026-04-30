@@ -275,7 +275,7 @@ class DamageCalc:
         #   기존 100/(100+def) 공식은 상한이 atk_stat 자체라 전투가 너무 길어졌음.
         # 최소값:
         #   atk_stat * 0.4  → def가 매우 높아도 최소 보장 데미지 확보
-        base = atk_stat * 200 / (100 + def_stat)
+        base = atk_stat * 250 / (100 + def_stat)
         base = max(base, atk_stat * 0.4)
         base *= skill_mult
         base *= role_mult

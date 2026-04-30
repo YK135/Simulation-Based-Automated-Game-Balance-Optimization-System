@@ -1,0 +1,36 @@
+{
+  "winner": "escaped",
+  "total_turns": 1,
+  "final_player_hp": 1720,
+  "final_enemy_hp": 1411.1991540527342,
+  "player_name": "430",
+  "enemy_name": "고블린",
+  "final_player_items": [
+    "MP_S_potion",
+    "MP_S_potion",
+    "MP_S_potion",
+    "MP_S_potion",
+    "MP_S_potion"
+  ],
+  "logs": [
+    {
+      "turn": 1,
+      "actor": "player",
+      "action": "escape",
+      "action_detail": "chance=0.95",
+      "damage_dealt": 0,
+      "hp_after": 0.0,
+      "mp_after": 0.0,
+      "is_dodge": false,
+      "is_crit": false,
+      "debuff_applied": "",
+      "escaped": true,
+      "player_pt": 0.0,
+      "enemy_pt": 0.0
+    }
+  ],
+  "log_type": "player",
+  "player_lv": 23,
+  "timestamp": "20260430_124041",
+  "items_used": []
+}
