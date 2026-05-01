@@ -1,544 +1,1488 @@
 <!DOCTYPE html>
 <html lang="ko">
 <head>
-    <meta charset="UTF-8">
-    <title>AI RPG Engine — API Test</title>
-    <style>
-        * { box-sizing: border-box; }
-        body {
-            font-family: "SF Mono", "Menlo", "Consolas", monospace;
-            max-width: 1400px;
-            margin: 0 auto;
-            padding: 20px;
-            background: #1e1e1e;
-            color: #d4d4d4;
-        }
-        h1 { color: #4ec9b0; border-bottom: 2px solid #4ec9b0; padding-bottom: 8px; }
-        h2 { color: #9cdcfe; margin-top: 0; font-size: 15px; margin-bottom: 10px; }
-        .grid {
-            display: grid;
-            grid-template-columns: 400px 1fr;
-            gap: 16px;
-        }
-        .panel {
-            background: #252526;
-            border: 1px solid #3e3e42;
-            border-radius: 6px;
-            padding: 14px;
-            margin-bottom: 12px;
-        }
-        button {
-            background: #0e639c;
-            color: white;
-            border: none;
-            padding: 7px 14px;
-            margin: 3px 3px 3px 0;
-            border-radius: 4px;
-            cursor: pointer;
-            font-family: inherit;
-            font-size: 12px;
-        }
-        button:hover { background: #1177bb; }
-        button:disabled { background: #555; cursor: not-allowed; opacity: 0.5; }
-        button.attack { background: #c03030; }
-        button.attack:hover { background: #d04040; }
-        button.skill { background: #8a2be2; }
-        button.skill:hover { background: #9a3bf2; }
-        button.item { background: #2e8b57; }
-        button.item:hover { background: #3e9b67; }
-        button.escape { background: #6b6b6b; }
-        button.rest { background: #b8860b; }
-        input, select {
-            background: #3c3c3c;
-            color: #d4d4d4;
-            border: 1px solid #555;
-            padding: 5px 9px;
-            margin: 2px;
-            border-radius: 3px;
-            font-family: inherit;
-            font-size: 12px;
-        }
-        pre {
-            background: #0d1117;
-            color: #c9d1d9;
-            padding: 10px;
-            border-radius: 4px;
-            overflow-x: auto;
-            white-space: pre-wrap;
-            word-break: break-word;
-            max-height: 450px;
-            overflow-y: auto;
-            font-size: 11px;
-            margin: 6px 0;
-        }
-        .status-line {
-            display: flex;
-            justify-content: space-between;
-            padding: 3px 0;
-            border-bottom: 1px solid #333;
-            font-size: 13px;
-        }
-        .status-line .label { color: #9cdcfe; }
-        .status-line .value { color: #ce9178; }
-        .hp-bar, .mp-bar, .exp-bar {
-            height: 10px;
-            background: #333;
-            border-radius: 2px;
-            overflow: hidden;
-            margin: 3px 0;
-        }
-        .hp-fill { height: 100%; background: linear-gradient(90deg, #c03030, #ef4444); transition: width 0.3s; }
-        .mp-fill { height: 100%; background: linear-gradient(90deg, #0e639c, #3b82f6); transition: width 0.3s; }
-        .exp-fill { height: 100%; background: linear-gradient(90deg, #f59e0b, #fbbf24); transition: width 0.3s; }
-        .battle-panel { border-color: #c03030; background: #2b1f1f; }
-        .messages {
-            background: #0d1117;
-            padding: 8px;
-            border-radius: 4px;
-            font-size: 12px;
-            margin: 6px 0;
-            max-height: 180px;
-            overflow-y: auto;
-        }
-        .messages div { padding: 2px 0; color: #dcdcaa; border-bottom: 1px dotted #333; }
-        .event-banner {
-            background: #1a3d2a;
-            color: #4ec9b0;
-            padding: 8px;
-            border-radius: 4px;
-            margin: 6px 0;
-            font-weight: bold;
-            text-align: center;
-        }
-        .section-hint { color: #6a9955; font-size: 10px; margin: 4px 0; }
-        .enemy-name { color: #f48771; font-size: 16px; font-weight: bold; }
-        .error-msg { color: #f48771; padding: 6px; }
-    </style>
+<meta charset="UTF-8">
+<title>RPG AI Balancing Dashboard</title>
+<style>
+:root {
+    --bg-darkest:    #0a1419;
+    --bg-dark:       #0f1d24;
+    --bg-panel:      #142632;
+    --bg-panel-2:    #1a3140;
+    --border:        #1e3a4a;
+    --border-active: #2dd4bf;
+    --text-main:     #d6e7ed;
+    --text-dim:      #7a96a3;
+    --text-muted:    #4f6976;
+    --accent-cyan:   #2dd4bf;
+    --accent-blue:   #38bdf8;
+    --accent-warn:   #fbbf24;
+    --hp-red:        #ef4444;
+    --mp-blue:       #3b82f6;
+    --atb-cyan:      #22d3ee;
+    --skill-yellow:  #facc15;
+    --enemy-orange:  #fb923c;
+}
+
+* { box-sizing: border-box; margin: 0; padding: 0; }
+
+body {
+    background: var(--bg-darkest);
+    color: var(--text-main);
+    font-family: 'JetBrains Mono', 'D2Coding', 'Menlo', 'Consolas', monospace;
+    font-size: 12px;
+    min-height: 100vh;
+    padding: 12px;
+    background-image:
+        linear-gradient(rgba(45, 212, 191, 0.02) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(45, 212, 191, 0.02) 1px, transparent 1px);
+    background-size: 24px 24px;
+}
+
+.topbar {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 8px 14px;
+    margin-bottom: 12px;
+    background: var(--bg-panel);
+    border: 1px solid var(--border);
+    border-radius: 4px;
+}
+.brand {
+    display: flex; align-items: center; gap: 10px;
+    font-size: 14px; font-weight: 700;
+    letter-spacing: 0.04em;
+    color: var(--accent-cyan);
+}
+.brand-icon {
+    width: 26px; height: 26px;
+    border: 2px solid var(--accent-cyan);
+    border-radius: 3px;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 14px;
+}
+.clock {
+    font-size: 13px;
+    color: var(--text-dim);
+    letter-spacing: 0.08em;
+}
+
+.dashboard {
+    display: grid;
+    grid-template-columns: 280px 1fr 320px;
+    gap: 12px;
+}
+
+.panel {
+    background: var(--bg-panel);
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    padding: 12px;
+    margin-bottom: 12px;
+}
+.panel-title {
+    font-size: 10px;
+    font-weight: 700;
+    letter-spacing: 0.15em;
+    color: var(--accent-cyan);
+    margin-bottom: 10px;
+    padding-bottom: 6px;
+    border-bottom: 1px dashed var(--border);
+}
+
+/* PLAYER */
+.player-art {
+    width: 100%;
+    aspect-ratio: 1.1 / 1;
+    background: linear-gradient(135deg, #1a3140, #0f1d24);
+    border: 1px solid var(--border);
+    border-radius: 3px;
+    display: flex; align-items: center; justify-content: center;
+    margin-bottom: 12px;
+    position: relative;
+    overflow: hidden;
+}
+.player-art::before {
+    content: '';
+    position: absolute; inset: 0;
+    background:
+        radial-gradient(circle at 30% 20%, rgba(45, 212, 191, 0.08), transparent 60%),
+        radial-gradient(circle at 70% 80%, rgba(56, 189, 248, 0.06), transparent 60%);
+}
+.player-art-icon {
+    font-size: 80px;
+    color: var(--accent-cyan);
+    text-shadow: 0 0 20px rgba(45, 212, 191, 0.4);
+    z-index: 1;
+}
+
+/* ═════════════════════════════════════════════════════════
+   IMAGE SLOTS — 이미지 넣을 자리 전용 스타일
+   - 좌측 초상화: .player-art-img (정사각형 이미지를 영역 가득 채움)
+   - 중앙 도트:   img.combatant-art (96x96 동그라미 안에 도트)
+   ═════════════════════════════════════════════════════════ */
+.player-art-img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;       /* 영역 가득 (cover) — 비율 잘림 가능 */
+    /* object-fit: contain;  ← 비율 유지 + 여백 두려면 이걸로 변경 */
+    border-radius: 3px;
+    z-index: 1;
+    position: relative;
+    image-rendering: pixelated;  /* 도트 이미지일 경우 선명하게 */
+}
+
+img.combatant-art {
+    /* combatant-art 클래스 그대로 적용 (96x96 + 동그라미) */
+    object-fit: contain;
+    padding: 6px;
+    background: linear-gradient(135deg, var(--bg-panel-2), var(--bg-darkest));
+    image-rendering: pixelated;  /* 도트 PNG 선명하게 */
+}
+
+.stats-bars {
+    display: flex; gap: 8px;
+    margin-bottom: 12px;
+}
+.stat-bar {
+    flex: 1;
+    display: flex; flex-direction: column; align-items: center;
+}
+.stat-bar-label {
+    font-size: 9px; font-weight: 700;
+    color: var(--text-dim);
+    margin-bottom: 4px;
+    letter-spacing: 0.1em;
+}
+.stat-bar-track {
+    width: 14px; height: 110px;
+    background: var(--bg-darkest);
+    border: 1px solid var(--border);
+    border-radius: 2px;
+    overflow: hidden;
+    display: flex; flex-direction: column-reverse;
+}
+.stat-bar-fill {
+    width: 100%;
+    transition: height 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+}
+.stat-bar-fill.hp  { background: linear-gradient(180deg, #f87171, var(--hp-red)); box-shadow: 0 0 8px rgba(239, 68, 68, 0.4); }
+.stat-bar-fill.mp  { background: linear-gradient(180deg, #60a5fa, var(--mp-blue)); box-shadow: 0 0 8px rgba(59, 130, 246, 0.4); }
+.stat-bar-fill.atb { background: linear-gradient(180deg, #67e8f9, var(--atb-cyan)); box-shadow: 0 0 10px rgba(34, 211, 238, 0.5); }
+
+@keyframes atb-pulse {
+    0%, 100% { box-shadow: 0 0 10px rgba(34, 211, 238, 0.5); }
+    50%      { box-shadow: 0 0 16px rgba(34, 211, 238, 0.8); }
+}
+.stat-bar-fill.atb.full { animation: atb-pulse 1s ease-in-out infinite; }
+
+.stat-bar-values {
+    text-align: center;
+    margin-top: 4px;
+    font-size: 10px;
+    line-height: 1.3;
+}
+.stat-bar-values .cur { color: var(--text-main); font-weight: 700; }
+.stat-bar-values .max { color: var(--text-muted); font-size: 9px; }
+
+.stat-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 4px 10px;
+    font-size: 10px;
+    margin-top: 8px;
+}
+.stat-row {
+    display: flex; justify-content: space-between;
+    color: var(--text-dim);
+}
+.stat-row .v { color: var(--text-main); font-weight: 700; }
+
+.skill-book {
+    display: grid;
+    grid-template-columns: repeat(5, 1fr);
+    gap: 6px;
+    margin-top: 8px;
+}
+.skill-slot {
+    aspect-ratio: 1;
+    background: var(--bg-darkest);
+    border: 1px solid var(--border);
+    border-radius: 3px;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 16px;
+    color: var(--text-muted);
+    position: relative;
+}
+.skill-slot.learned {
+    color: var(--skill-yellow);
+    border-color: rgba(250, 204, 21, 0.4);
+    background: linear-gradient(135deg, rgba(250, 204, 21, 0.08), transparent);
+}
+
+.btn {
+    width: 100%;
+    padding: 8px 12px;
+    background: var(--bg-darkest);
+    border: 1px solid var(--border);
+    color: var(--text-dim);
+    font-family: inherit;
+    font-size: 11px;
+    letter-spacing: 0.08em;
+    cursor: pointer;
+    transition: all 0.15s;
+    border-radius: 3px;
+}
+.btn:hover:not(:disabled) {
+    border-color: var(--accent-cyan);
+    color: var(--accent-cyan);
+    background: rgba(45, 212, 191, 0.08);
+}
+.btn:disabled { opacity: 0.4; cursor: not-allowed; }
+
+/* CENTER */
+.battle-zone {
+    background: var(--bg-panel);
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    padding: 14px;
+    margin-bottom: 12px;
+    min-height: 280px;
+}
+.battle-header {
+    display: flex; justify-content: space-between; align-items: center;
+    margin-bottom: 14px;
+}
+.battle-title {
+    font-size: 11px; font-weight: 700;
+    letter-spacing: 0.15em;
+    color: var(--accent-cyan);
+}
+.field-name { font-size: 10px; color: var(--text-dim); }
+
+.battle-stage {
+    display: flex; justify-content: space-around; align-items: flex-end;
+    min-height: 200px;
+    padding: 20px 10px;
+    background: linear-gradient(180deg, transparent 0%, rgba(45, 212, 191, 0.03) 100%);
+    border-radius: 3px;
+    position: relative;
+}
+.battle-stage::after {
+    content: '';
+    position: absolute; bottom: 30px; left: 10%; right: 10%;
+    height: 1px;
+    background: linear-gradient(90deg, transparent, rgba(45, 212, 191, 0.3), transparent);
+}
+
+.combatant {
+    display: flex; flex-direction: column; align-items: center;
+    gap: 6px;
+    position: relative;
+}
+.combatant-art {
+    width: 92px; height: 92px;
+    border-radius: 50%;
+    background: linear-gradient(135deg, var(--bg-panel-2), var(--bg-darkest));
+    border: 2px solid var(--border);
+    display: flex; align-items: center; justify-content: center;
+    font-size: 50px;
+}
+.combatant.player .combatant-art {
+    border-color: var(--accent-cyan);
+    box-shadow: 0 0 20px rgba(45, 212, 191, 0.3);
+}
+.combatant.enemy .combatant-art {
+    border-color: var(--enemy-orange);
+    box-shadow: 0 0 16px rgba(251, 146, 60, 0.3);
+}
+.combatant-name { font-size: 11px; font-weight: 700; letter-spacing: 0.04em; }
+.combatant-meta { font-size: 9px; color: var(--text-dim); }
+
+.combatant-bars {
+    display: flex; flex-direction: column;
+    gap: 3px;
+    width: 110px;
+    margin-top: 4px;
+}
+.cb-row {
+    display: flex; align-items: center;
+    gap: 4px; font-size: 8px;
+}
+.cb-label {
+    width: 22px;
+    color: var(--text-dim);
+    font-weight: 700;
+}
+.cb-track {
+    flex: 1;
+    height: 6px;
+    background: var(--bg-darkest);
+    border: 1px solid var(--border);
+    border-radius: 2px;
+    overflow: hidden;
+}
+.cb-fill { height: 100%; transition: width 0.4s; }
+.cb-fill.hp { background: linear-gradient(90deg, #f87171, var(--hp-red)); }
+.cb-fill.mp { background: linear-gradient(90deg, #60a5fa, var(--mp-blue)); }
+.cb-text {
+    width: 50px;
+    text-align: right;
+    font-size: 8px;
+    font-weight: 700;
+}
+
+.target-tag {
+    position: absolute;
+    top: -10px;
+    background: var(--accent-cyan);
+    color: var(--bg-darkest);
+    font-size: 8px; font-weight: 700;
+    padding: 2px 6px;
+    border-radius: 2px;
+    box-shadow: 0 0 8px rgba(45, 212, 191, 0.6);
+}
+
+.log-area {
+    background: var(--bg-darkest);
+    border: 1px solid var(--border);
+    border-radius: 3px;
+    padding: 10px 12px;
+    height: 130px;
+    overflow-y: auto;
+    font-size: 10px;
+    line-height: 1.6;
+    margin-bottom: 12px;
+}
+.log-area::-webkit-scrollbar { width: 6px; }
+.log-area::-webkit-scrollbar-track { background: var(--bg-darkest); }
+.log-area::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
+
+.log-line { color: var(--text-dim); }
+.log-line .ts { color: var(--text-muted); margin-right: 6px; }
+.log-line.crit  { color: var(--accent-warn); }
+.log-line.dmg   { color: #fcd5d5; }
+.log-line.heal  { color: #a7f3d0; }
+.log-line.skill { color: var(--accent-cyan); }
+.log-line.system { color: var(--text-muted); font-style: italic; }
+
+.action-bar {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 8px;
+    margin-bottom: 8px;
+}
+.action-btn {
+    padding: 11px;
+    border: 1px solid var(--border);
+    background: var(--bg-darkest);
+    color: var(--text-main);
+    font-family: inherit;
+    font-size: 11px; font-weight: 700;
+    letter-spacing: 0.08em;
+    cursor: pointer;
+    border-radius: 3px;
+    transition: all 0.15s;
+}
+.action-btn:hover:not(:disabled) {
+    transform: translateY(-1px);
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+}
+.action-btn:disabled { opacity: 0.4; cursor: not-allowed; transform: none; }
+
+.action-btn.attack { border-color: rgba(239, 68, 68, 0.4); color: #fca5a5; background: rgba(239, 68, 68, 0.08); }
+.action-btn.attack:hover:not(:disabled) { background: rgba(239, 68, 68, 0.18); border-color: var(--hp-red); }
+.action-btn.skill { border-color: rgba(34, 211, 238, 0.4); color: var(--atb-cyan); background: rgba(34, 211, 238, 0.06); }
+.action-btn.skill:hover:not(:disabled) { background: rgba(34, 211, 238, 0.16); border-color: var(--atb-cyan); }
+.action-btn.item  { border-color: rgba(250, 204, 21, 0.4); color: var(--skill-yellow); background: rgba(250, 204, 21, 0.06); }
+.action-btn.item:hover:not(:disabled) { background: rgba(250, 204, 21, 0.16); border-color: var(--skill-yellow); }
+.action-btn.escape{ border-color: var(--border); color: var(--text-dim); }
+.action-btn.escape:hover:not(:disabled) { background: var(--bg-panel-2); color: var(--text-main); }
+
+.submenu {
+    background: var(--bg-darkest);
+    border: 1px solid var(--accent-cyan);
+    border-radius: 3px;
+    padding: 8px;
+    margin-bottom: 8px;
+    display: none;
+}
+.submenu.active { display: block; }
+.submenu-title {
+    font-size: 9px;
+    color: var(--accent-cyan);
+    margin-bottom: 6px;
+    letter-spacing: 0.1em;
+    font-weight: 700;
+}
+.submenu-list {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 6px;
+}
+.submenu-item {
+    padding: 6px 8px;
+    background: var(--bg-panel);
+    border: 1px solid var(--border);
+    border-radius: 2px;
+    font-size: 10px;
+    cursor: pointer;
+    color: var(--text-main);
+    text-align: center;
+    transition: all 0.1s;
+}
+.submenu-item:hover {
+    background: var(--bg-panel-2);
+    border-color: var(--accent-cyan);
+    color: var(--accent-cyan);
+}
+.submenu-item .cost {
+    font-size: 8px;
+    color: var(--text-muted);
+    margin-left: 4px;
+}
+
+/* RIGHT */
+.pentagon-wrap {
+    position: relative;
+    aspect-ratio: 1;
+    width: 100%;
+    margin: 6px 0;
+}
+.pentagon-svg { width: 100%; height: 100%; }
+.pentagon-legend {
+    display: flex; justify-content: space-around;
+    font-size: 9px;
+    margin-top: 6px;
+}
+.legend-item {
+    display: flex; align-items: center;
+    gap: 4px;
+    color: var(--text-dim);
+}
+.legend-dot { width: 8px; height: 8px; border-radius: 50%; }
+.legend-dot.ideal   { background: var(--accent-cyan); }
+.legend-dot.current { background: var(--accent-warn); }
+
+.balance-state {
+    margin-top: 8px;
+    font-size: 10px;
+    color: var(--text-dim);
+    text-align: center;
+}
+.balance-state .label {
+    color: var(--accent-cyan);
+    font-weight: 700;
+    letter-spacing: 0.1em;
+}
+
+.sim-controls {
+    display: flex;
+    gap: 6px;
+    margin-bottom: 10px;
+}
+.sim-controls .btn {
+    flex: 1;
+    padding: 6px;
+    font-size: 10px;
+}
+.sim-controls .btn.start {
+    border-color: var(--accent-cyan);
+    color: var(--accent-cyan);
+    background: rgba(45, 212, 191, 0.1);
+}
+
+.ai-level-row {
+    display: flex; align-items: center;
+    gap: 8px;
+    font-size: 10px;
+    margin-bottom: 8px;
+}
+.ai-level-row .lbl { color: var(--text-dim); }
+.ai-level-toggle {
+    display: flex; gap: 4px;
+    margin-left: auto;
+}
+.ai-level-btn {
+    padding: 3px 8px;
+    background: var(--bg-darkest);
+    border: 1px solid var(--border);
+    color: var(--text-dim);
+    font-family: inherit;
+    font-size: 9px;
+    cursor: pointer;
+    border-radius: 2px;
+}
+.ai-level-btn.active {
+    background: rgba(45, 212, 191, 0.15);
+    border-color: var(--accent-cyan);
+    color: var(--accent-cyan);
+}
+
+.winrate-bars {
+    display: flex; flex-direction: column;
+    gap: 4px;
+    margin: 8px 0 6px 0;
+}
+.wr-row {
+    display: flex; align-items: center;
+    gap: 6px; font-size: 9px;
+}
+.wr-label { width: 60px; color: var(--text-dim); }
+.wr-track {
+    flex: 1; height: 10px;
+    background: var(--bg-darkest);
+    border: 1px solid var(--border);
+    border-radius: 2px;
+    overflow: hidden;
+}
+.wr-fill { height: 100%; transition: width 0.5s ease; }
+.wr-fill.player { background: linear-gradient(90deg, #67e8f9, var(--accent-cyan)); }
+.wr-fill.enemy  { background: linear-gradient(90deg, #fca5a5, var(--hp-red)); }
+.wr-pct {
+    width: 36px;
+    text-align: right;
+    font-size: 9px;
+    font-weight: 700;
+}
+
+.sim-stats {
+    font-size: 9px;
+    color: var(--text-dim);
+    text-align: center;
+    margin-top: 4px;
+    border-top: 1px dashed var(--border);
+    padding-top: 6px;
+}
+.sim-stats .v { color: var(--accent-cyan); font-weight: 700; }
+
+.tuner-row {
+    display: flex; flex-direction: column;
+    gap: 4px;
+    margin-bottom: 8px;
+    font-size: 9px;
+}
+.tuner-row .lbl { color: var(--text-dim); }
+.tuner-bar {
+    height: 6px;
+    background: var(--bg-darkest);
+    border: 1px solid var(--border);
+    border-radius: 2px;
+    overflow: hidden;
+}
+.tuner-bar-fill {
+    height: 100%;
+    background: linear-gradient(90deg, var(--accent-cyan), var(--accent-blue));
+    transition: width 0.3s;
+}
+
+.terminal {
+    background: #050a0d;
+    border: 1px solid var(--border);
+    border-radius: 3px;
+    padding: 8px;
+    max-height: 100px;
+    overflow-y: auto;
+    font-size: 9px;
+    line-height: 1.5;
+}
+.terminal-line {
+    color: var(--text-dim);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+.terminal-line .ts { color: var(--text-muted); }
+.terminal-line.ok   { color: #a7f3d0; }
+.terminal-line.warn { color: var(--accent-warn); }
+
+/* MODAL */
+.modal-bg {
+    position: fixed; inset: 0;
+    background: rgba(5, 10, 13, 0.85);
+    display: none;
+    align-items: center;
+    justify-content: center;
+    z-index: 1000;
+    backdrop-filter: blur(4px);
+}
+.modal-bg.active { display: flex; }
+.modal {
+    background: var(--bg-panel);
+    border: 1px solid var(--accent-cyan);
+    border-radius: 4px;
+    padding: 24px;
+    width: 360px;
+    max-width: 90vw;
+}
+.modal h2 {
+    font-size: 13px;
+    color: var(--accent-cyan);
+    margin-bottom: 16px;
+    letter-spacing: 0.15em;
+}
+.form-row { margin-bottom: 12px; }
+.form-row label {
+    font-size: 10px;
+    color: var(--text-dim);
+    display: block;
+    margin-bottom: 4px;
+    letter-spacing: 0.1em;
+}
+.form-row input,
+.form-row select {
+    width: 100%;
+    padding: 8px 10px;
+    background: var(--bg-darkest);
+    border: 1px solid var(--border);
+    color: var(--text-main);
+    font-family: inherit;
+    font-size: 11px;
+    border-radius: 3px;
+}
+.form-row input:focus, .form-row select:focus {
+    border-color: var(--accent-cyan);
+    outline: none;
+}
+.modal .btn.primary {
+    background: var(--accent-cyan);
+    color: var(--bg-darkest);
+    border-color: var(--accent-cyan);
+    font-weight: 700;
+    margin-top: 8px;
+}
+.modal .btn.primary:hover { background: #5eead4; }
+
+.toast {
+    position: fixed;
+    top: 20px; right: 20px;
+    background: var(--bg-panel);
+    border: 1px solid var(--accent-cyan);
+    border-left: 3px solid var(--accent-cyan);
+    padding: 10px 16px;
+    border-radius: 3px;
+    font-size: 11px;
+    z-index: 2000;
+    transform: translateX(110%);
+    transition: transform 0.3s;
+    max-width: 300px;
+}
+.toast.active { transform: translateX(0); }
+.toast.warn   { border-color: var(--accent-warn); border-left-color: var(--accent-warn); }
+.toast.error  { border-color: var(--hp-red); border-left-color: var(--hp-red); }
+
+.ai-balancing {
+    text-align: center;
+    padding: 30px;
+    color: var(--accent-cyan);
+}
+</style>
 </head>
 <body>
-    <h1>🎮 AI RPG Engine — API Test UI</h1>
-    <p style="color:#6a9955; font-size:12px;">
-        개발용 테스트 인터페이스. 실제 웹 UI는 여름방학에 구축 예정.
-    </p>
 
-    <div class="grid">
-        <!-- 왼쪽: 컨트롤 패널 -->
-        <div>
-            <!-- 게임 시작 -->
-            <div class="panel">
-                <h2>📝 게임 시작</h2>
-                <input id="playerName" placeholder="이름" value="테스터" style="width:100px;">
-                <select id="playerJob">
-                    <option value="전사">전사</option>
-                    <option value="마법사">마법사</option>
-                    <option value="탱커">탱커</option>
-                    <option value="도적">도적</option>
-                </select>
-                <button onclick="newGame()">새 게임</button>
-                <div class="section-hint">POST /api/new_game</div>
+<div class="topbar">
+    <div class="brand">
+        <div class="brand-icon">⬢</div>
+        RPG AI Balancing Dashboard
+    </div>
+    <div id="clock" class="clock">--:--:--</div>
+</div>
+
+<div class="dashboard">
+
+<!-- LEFT -->
+<div class="left-col">
+    <div class="panel">
+        <div class="panel-title">PLAYER: <span id="player-id">-- (LV --)</span></div>
+        <div class="player-art">
+            <!-- ════════════════════════════════════════════════════════
+                 ▼▼▼ [이미지 1: 좌측 캐릭터 초상화] ▼▼▼
+                 권장 크기: 정사각형 PNG (256x256 또는 512x512)
+                 파일 위치 예시: static/img/portrait_warrior.png
+                 사용 방법:
+                   1. 아래 <div class="player-art-icon"> 한 줄을 주석처리
+                   2. 그 위/아래에 <img> 태그 추가:
+                      <img src="/img/portrait_warrior.png"
+                           class="player-art-img" alt="">
+                   3. 직업별로 바꾸려면 JS의 refreshPlayer()에서
+                      이미지 src 동적 변경 (직업명 매핑)
+                 ════════════════════════════════════════════════════════ -->
+            <!-- <img id="player-portrait" class="player-art-img"
+                      src="/img/portrait_warrior.png" alt="" /> -->
+            <div class="player-art-icon" id="player-icon">⚔</div>
+        </div>
+        <div class="stats-bars">
+            <div class="stat-bar">
+                <div class="stat-bar-label">HP</div>
+                <div class="stat-bar-track">
+                    <div id="hp-fill" class="stat-bar-fill hp" style="height:100%"></div>
+                </div>
+                <div class="stat-bar-values">
+                    <div class="cur" id="hp-cur">--</div>
+                    <div class="max" id="hp-max">--</div>
+                </div>
             </div>
-
-            <!-- 상태 -->
-            <div class="panel">
-                <h2>📊 플레이어 상태</h2>
-                <div id="playerStatus" style="color:#6a9955;">게임을 시작하세요</div>
-                <div style="margin-top:8px;">
-                    <button onclick="fetchStatus()">상태 새로고침</button>
+            <div class="stat-bar">
+                <div class="stat-bar-label">MP</div>
+                <div class="stat-bar-track">
+                    <div id="mp-fill" class="stat-bar-fill mp" style="height:100%"></div>
                 </div>
-                <div class="section-hint">GET /api/status</div>
+                <div class="stat-bar-values">
+                    <div class="cur" id="mp-cur">--</div>
+                    <div class="max" id="mp-max">--</div>
+                </div>
             </div>
-
-            <!-- 필드 액션 -->
-            <div class="panel" id="fieldPanel">
-                <h2>🗺️ 필드 액션</h2>
-                <div style="color:#6a9955; font-size:10px; margin-bottom:6px;">
-                    ※ 본게임에선 회복/수련/MP회복은 탐험 이벤트로만 등장 — 테스트용 버튼
+            <div class="stat-bar">
+                <div class="stat-bar-label">ATB</div>
+                <div class="stat-bar-track">
+                    <div id="atb-fill" class="stat-bar-fill atb" style="height:0%"></div>
                 </div>
-                <div id="fieldActions">
-                    <button onclick="explore()">🗺️ 탐험</button>
-                    <button class="rest" onclick="rest('heal')">💚 HP 회복</button>
-                    <button class="rest" onclick="restoreMp()">💙 MP 회복</button>
-                    <button class="rest" onclick="rest('train')">🏋️ 수련</button>
+                <div class="stat-bar-values">
+                    <div class="cur" id="atb-cur">0</div>
+                    <div class="max">100%</div>
                 </div>
-                <div id="fieldItems" style="margin-top:10px;"></div>
-                <div class="section-hint">POST /api/explore, /api/rest, /api/use_item</div>
             </div>
         </div>
+        <div class="stat-grid" id="stat-grid">
+            <div class="stat-row"><span>STG</span><span class="v">--</span></div>
+            <div class="stat-row"><span>SP</span><span class="v">--</span></div>
+            <div class="stat-row"><span>ARM</span><span class="v">--</span></div>
+            <div class="stat-row"><span>SPARM</span><span class="v">--</span></div>
+            <div class="stat-row"><span>SPD</span><span class="v">--</span></div>
+            <div class="stat-row"><span>LUC</span><span class="v">--</span></div>
+        </div>
+    </div>
 
-        <!-- 오른쪽: 전투 / 로그 -->
-        <div>
-            <!-- 전투 패널 -->
-            <div class="panel" id="battlePanel" style="display:none;">
-                <h2>⚔️ 전투 중</h2>
-                <div id="battleState"></div>
-                <div class="section-hint">POST /api/battle/action</div>
-            </div>
+    <div class="panel">
+        <div class="panel-title">SKILL BOOK</div>
+        <div class="skill-book" id="skill-book">
+            <div class="skill-slot">·</div>
+            <div class="skill-slot">·</div>
+            <div class="skill-slot">·</div>
+            <div class="skill-slot">·</div>
+            <div class="skill-slot">·</div>
+        </div>
+    </div>
 
-            <!-- 이벤트 배너 -->
-            <div id="eventBanner"></div>
+    <button id="btn-restart" class="btn">⚡ NEW GAME</button>
+</div>
 
-            <!-- API 로그 -->
-            <div class="panel">
-                <h2>📡 API 응답 로그</h2>
-                <button onclick="clearLog()" style="background:#555;">Clear</button>
-                <pre id="log">서버 응답이 여기 표시됩니다.</pre>
+<!-- CENTER -->
+<div class="center-col">
+    <div class="battle-zone">
+        <div class="battle-header">
+            <div class="battle-title">LIVE BATTLE: <span class="field-name" id="field-name">FIELD</span></div>
+            <div class="field-name" id="turn-counter">TURN --</div>
+        </div>
+
+        <div id="explore-mode" class="ai-balancing" style="display:none;">
+            <div style="font-size:14px; color:var(--accent-cyan); margin-bottom:12px;">PEACEFUL FIELD</div>
+            <div style="font-size:11px; color:var(--text-dim); margin-bottom:16px;">탐험을 시작하세요</div>
+            <button class="btn" id="btn-explore" style="width:auto; padding:10px 24px;">▶ EXPLORE</button>
+        </div>
+
+        <div id="battle-mode" style="display:none;">
+            <div class="battle-stage">
+                <div class="combatant player">
+                    <!-- ════════════════════════════════════════════════════════
+                         ▼▼▼ [이미지 2: 중앙 플레이어 도트] ▼▼▼
+                         권장 크기: 96x96 PNG (투명배경 추천)
+                         파일 위치 예시: static/img/sprite_warrior.png
+                         사용 방법:
+                           1. 아래 <div class="combatant-art" id="player-combatant-art">⚔</div>를
+                              주석처리하고
+                           2. <img class="combatant-art" id="player-combatant-art"
+                                   src="/img/sprite_warrior.png" alt="" />
+                              로 교체
+                           3. 직업별 이미지는 JS의 refreshBattle()에서 src 동적 변경
+                         ════════════════════════════════════════════════════════ -->
+                    <!-- <img class="combatant-art" id="player-combatant-art"
+                              src="/img/sprite_warrior.png" alt="" /> -->
+                    <div class="combatant-art" id="player-combatant-art">⚔</div>
+                    <div class="combatant-name" id="player-combatant-name">-</div>
+                    <div class="combatant-meta" id="player-combatant-meta">LV --</div>
+                    <div class="combatant-bars">
+                        <div class="cb-row">
+                            <span class="cb-label">HP</span>
+                            <div class="cb-track"><div id="player-cb-hp" class="cb-fill hp" style="width:100%"></div></div>
+                            <span class="cb-text" id="player-cb-hp-text">--/--</span>
+                        </div>
+                        <div class="cb-row">
+                            <span class="cb-label">MP</span>
+                            <div class="cb-track"><div id="player-cb-mp" class="cb-fill mp" style="width:100%"></div></div>
+                            <span class="cb-text" id="player-cb-mp-text">--/--</span>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="combatant enemy">
+                    <div id="target-tag" class="target-tag" style="display:none;">▶ TARGET</div>
+                    <!-- ════════════════════════════════════════════════════════
+                         ▼▼▼ [이미지 3: 중앙 적 도트] ▼▼▼
+                         권장 크기: 96x96 PNG (투명배경 추천)
+                         파일 위치 예시: static/img/sprite_goblin.png
+                         사용 방법:
+                           1. 아래 <div class="combatant-art" id="enemy-art">👹</div>를 주석처리
+                           2. <img class="combatant-art" id="enemy-art"
+                                   src="/img/sprite_goblin.png" alt="" /> 로 교체
+                           3. 몬스터 종류별 이미지: JS의 refreshBattle() 안에서
+                              ENEMY_ICONS 처럼 ENEMY_SPRITES 매핑 만들고 src 동적 변경
+                              예시:
+                                const ENEMY_SPRITES = {
+                                    '고블린': '/img/sprite_goblin.png',
+                                    '박쥐':   '/img/sprite_bat.png',
+                                    ...
+                                };
+                                document.getElementById('enemy-art').src =
+                                    ENEMY_SPRITES[ei.name] || '/img/sprite_default.png';
+                         ════════════════════════════════════════════════════════ -->
+                    <!-- <img class="combatant-art" id="enemy-art"
+                              src="/img/sprite_goblin.png" alt="" /> -->
+                    <div class="combatant-art" id="enemy-art">👹</div>
+                    <div class="combatant-name" id="enemy-name">--</div>
+                    <div class="combatant-meta" id="enemy-meta">LV --</div>
+                    <div class="combatant-bars">
+                        <div class="cb-row">
+                            <span class="cb-label">HP</span>
+                            <div class="cb-track"><div id="enemy-cb-hp" class="cb-fill hp" style="width:100%"></div></div>
+                            <span class="cb-text" id="enemy-cb-hp-text">--/--</span>
+                        </div>
+                    </div>
+                </div>
             </div>
         </div>
     </div>
 
+    <div class="panel">
+        <div class="panel-title">BATTLE LOG</div>
+        <div id="log-area" class="log-area">
+            <div class="log-line system">[--:--:--] 시스템 대기 중...</div>
+        </div>
+
+        <div class="panel-title">PLAYER ACTIONS</div>
+
+        <div class="submenu" id="skill-menu">
+            <div class="submenu-title">SELECT SKILL</div>
+            <div class="submenu-list" id="skill-list"></div>
+        </div>
+        <div class="submenu" id="item-menu">
+            <div class="submenu-title">SELECT ITEM</div>
+            <div class="submenu-list" id="item-list"></div>
+        </div>
+
+        <div class="action-bar">
+            <button id="btn-attack" class="action-btn attack" disabled>ATTACK</button>
+            <button id="btn-skill"  class="action-btn skill"  disabled>SKILLS [F1]</button>
+            <button id="btn-item"   class="action-btn item"   disabled>ITEMS [F2]</button>
+            <button id="btn-escape" class="action-btn escape" disabled>ESCAPE</button>
+        </div>
+    </div>
+</div>
+
+<!-- RIGHT -->
+<div class="right-col">
+    <div class="panel">
+        <div class="panel-title">AI MONITOR: BALANCE STATE</div>
+        <div class="pentagon-wrap">
+            <svg class="pentagon-svg" viewBox="0 0 220 220">
+                <g id="pentagon-bg"></g>
+                <g id="pentagon-labels"></g>
+                <polygon id="pentagon-ideal" fill="rgba(45, 212, 191, 0.15)"
+                         stroke="#2dd4bf" stroke-width="1.5" stroke-dasharray="4 2"/>
+                <polygon id="pentagon-current" fill="rgba(251, 191, 36, 0.2)"
+                         stroke="#fbbf24" stroke-width="2"/>
+            </svg>
+        </div>
+        <div class="pentagon-legend">
+            <div class="legend-item"><div class="legend-dot ideal"></div>IDEAL</div>
+            <div class="legend-item"><div class="legend-dot current"></div>CURRENT</div>
+        </div>
+        <div class="balance-state">
+            CURRENT STATE: <span class="label" id="balance-label">[INIT]</span>
+        </div>
+    </div>
+
+    <div class="panel">
+        <div class="panel-title">SIMULATOR CONTROL</div>
+        <div class="sim-controls">
+            <button class="btn start" id="btn-sim-start">▶ START SIM</button>
+            <button class="btn" id="btn-sim-stop">■ STOP</button>
+        </div>
+        <div class="ai-level-row">
+            <span class="lbl">AI LEVEL:</span>
+            <div class="ai-level-toggle">
+                <button class="ai-level-btn" data-level="hard">HARD</button>
+                <button class="ai-level-btn active" data-level="normal">MID</button>
+                <button class="ai-level-btn" data-level="easy">EASY</button>
+            </div>
+        </div>
+        <div class="winrate-bars">
+            <div class="wr-row">
+                <div class="wr-label">WIN: PLAYER</div>
+                <div class="wr-track"><div id="wr-player" class="wr-fill player" style="width:0%"></div></div>
+                <div class="wr-pct" id="wr-player-pct">0%</div>
+            </div>
+            <div class="wr-row">
+                <div class="wr-label">WIN: ENEMY</div>
+                <div class="wr-track"><div id="wr-enemy" class="wr-fill enemy" style="width:0%"></div></div>
+                <div class="wr-pct" id="wr-enemy-pct">0%</div>
+            </div>
+        </div>
+        <div class="sim-stats">
+            AVG TURNS: <span id="sim-avg-turns" class="v">--</span> &nbsp;|&nbsp;
+            ITER: <span id="sim-iter" class="v">--</span>
+        </div>
+    </div>
+
+    <div class="panel">
+        <div class="panel-title">STATE TUNER</div>
+        <div class="tuner-row">
+            <div class="lbl">MONSTER HP <span style="color:var(--text-muted)">(±5%)</span></div>
+            <div class="tuner-bar"><div id="tuner-hp" class="tuner-bar-fill" style="width:50%"></div></div>
+        </div>
+        <div class="tuner-row">
+            <div class="lbl">PLAYER DMG <span style="color:var(--text-muted)">(±3%)</span></div>
+            <div class="tuner-bar"><div id="tuner-dmg" class="tuner-bar-fill" style="width:50%"></div></div>
+        </div>
+        <div class="sim-stats">
+            <span id="error-margin">±0%</span> ERROR MARGIN
+        </div>
+    </div>
+
+    <div class="panel" style="padding:8px;">
+        <div class="panel-title" style="margin-bottom:6px;">SYSTEM TERMINAL</div>
+        <div class="terminal" id="terminal">
+            <div class="terminal-line">[init] dashboard ready</div>
+        </div>
+    </div>
+</div>
+</div>
+
+<div id="modal-newgame" class="modal-bg active">
+    <div class="modal">
+        <h2>▶ INITIALIZE PLAYER</h2>
+        <div class="form-row">
+            <label>NAME</label>
+            <input type="text" id="input-name" value="HERO" maxlength="10">
+        </div>
+        <div class="form-row">
+            <label>JOB CLASS</label>
+            <select id="input-job">
+                <option value="전사">WARRIOR (전사)</option>
+                <option value="마법사">MAGE (마법사)</option>
+                <option value="탱커">TANKER (탱커)</option>
+                <option value="도적">ROGUE (도적)</option>
+            </select>
+        </div>
+        <button class="btn primary" id="btn-newgame-confirm">▶ START</button>
+    </div>
+</div>
+
+<div id="toast" class="toast"></div>
+
 <script>
-let currentPlayer = null;
-let currentBattle = null;
-
-function log(tag, data) {
-    const el = document.getElementById("log");
-    const ts = new Date().toLocaleTimeString();
-    const text = typeof data === "string" ? data : JSON.stringify(data, null, 2);
-    el.textContent = `[${ts}] ${tag}\n${text}\n\n` + el.textContent;
-}
-
-function clearLog() {
-    document.getElementById("log").textContent = "";
-}
-
-async function api(method, path, body) {
-    const opts = { method, headers: { "Content-Type": "application/json" } };
-    // POST는 body 없어도 빈 JSON 보내서 415 방지
-    if (method === "POST") opts.body = JSON.stringify(body || {});
-    try {
-        const res = await fetch(path, opts);
-        const data = await res.json();
-        log(`${method} ${path} → ${res.status}`, data);
-        return { ok: res.ok, status: res.status, data };
-    } catch (e) {
-        log(`${method} ${path} → NETWORK ERROR`, e.toString());
-        return { ok: false, status: 0, data: null };
+const API = '/api';
+async function api(path, body=null) {
+    const opts = { method: body ? 'POST' : 'GET', credentials: 'same-origin' };
+    if (body) {
+        opts.headers = { 'Content-Type': 'application/json' };
+        opts.body = JSON.stringify(body);
     }
+    const r = await fetch(API + path, opts);
+    return r.json();
 }
 
-function showEvent(text, color="#4ec9b0") {
-    const el = document.getElementById("eventBanner");
-    el.innerHTML = `<div class="event-banner" style="color:${color}">${text}</div>`;
-    setTimeout(() => { el.innerHTML = ""; }, 4000);
+let state = { player: null, inBattle: false, battleState: null, aiLevel: 'normal' };
+
+function tick() {
+    const d = new Date();
+    document.getElementById('clock').textContent =
+        String(d.getHours()).padStart(2,'0') + ':' +
+        String(d.getMinutes()).padStart(2,'0') + ':' +
+        String(d.getSeconds()).padStart(2,'0');
 }
+setInterval(tick, 1000); tick();
 
-function showError(text) {
-    showEvent(`⚠️ ${text}`, "#f48771");
-}
-
-// ─── 게임 시작 ───────────────────────────
-async function newGame() {
-    const name = document.getElementById("playerName").value.trim();
-    const job  = document.getElementById("playerJob").value;
-    if (!name) return alert("이름을 입력하세요");
-
-    const r = await api("POST", "/api/new_game", { name, job });
-    if (!r.ok || !r.data || !r.data.ok) {
-        showError(r.data?.error || "게임 시작 실패");
-        return;
+function pentagonPoints(cx, cy, r, values=null) {
+    const pts = [];
+    for (let i = 0; i < 5; i++) {
+        const angle = -Math.PI/2 + (2*Math.PI/5) * i;
+        const radius = values ? r * Math.max(0.05, Math.min(1, values[i])) : r;
+        pts.push((cx + Math.cos(angle)*radius).toFixed(1) + ',' + (cy + Math.sin(angle)*radius).toFixed(1));
     }
-    currentPlayer = r.data.player;
-    currentBattle = null;
-    renderAll();
-    showEvent(`🎉 ${name} (${job}) 게임 시작!`);
+    return pts.join(' ');
 }
-
-// ─── 상태 조회 ───────────────────────────
-async function fetchStatus() {
-    const r = await api("GET", "/api/status");
-    if (!r.ok || !r.data?.ok) {
-        if (r.status === 404) {
-            // 아직 게임 세션 없음 (첫 접속)
-            return;
-        }
-        showError(r.data?.error || "상태 조회 실패");
-        return;
-    }
-    currentPlayer = r.data.player;
-    // 전투 중이면 전투 상태도 가져오기
-    if (r.data.in_battle) {
-        await fetchBattleState();
-    } else {
-        currentBattle = null;
-    }
-    renderAll();
-}
-
-async function fetchBattleState() {
-    const r = await api("GET", "/api/battle/state");
-    if (r.ok && r.data?.ok) {
-        currentBattle = r.data;
-    }
-}
-
-// ─── 탐험 ────────────────────────────────
-async function explore() {
-    const r = await api("POST", "/api/explore");
-    if (!r.ok || !r.data?.ok) {
-        showError(r.data?.error || "탐험 실패");
-        return;
-    }
-    const data = r.data;
-
-    // 이벤트 종류에 따라 배너 표시
-    // App.py가 보내는 실제 키: "battle", "midboss", "finalboss",
-    //                         "item", "rest", "nothing"
-    const event = data.event;
-    if (event === "battle") {
-        currentBattle = data.battle_state;
-        showEvent(`⚔️ 전투 발생: ${data.enemy?.name || "?"}`, "#f48771");
-    } else if (event === "item") {
-        showEvent(`🎁 아이템 획득: ${data.item || ""}`);
-    } else if (event === "rest") {
-        showEvent(`💤 휴식 지점 도착 — 회복/수련 가능`);
-    } else if (event === "midboss" || event === "finalboss") {
-        currentBattle = data.battle_state;
-        showEvent(`👹 보스 출현: ${data.enemy?.name || "?"}`, "#f48771");
-    } else if (event === "gameover") {
-        showEvent(`💀 게임 오버 — HP가 0입니다. 새 게임을 시작하세요.`, "#f48771");
-    } else if (event === "nothing") {
-        showEvent(`... 아무 일도 일어나지 않았다`);
-    } else {
-        showEvent(`이벤트: ${event}`);
-    }
-
-    // ⭐ 모든 응답에 player가 있어야 좌측 UI 갱신됨
-    // (App.py가 모든 explore 응답에 player를 포함하도록 수정됨)
-    if (data.player) currentPlayer = data.player;
-    renderAll();
-}
-
-// ─── 휴식 ────────────────────────────────
-async function rest(choice) {
-    const r = await api("POST", "/api/rest", { choice });
-    if (!r.ok || !r.data?.ok) {
-        showError(r.data?.error || "휴식 실패");
-        return;
-    }
-    if (r.data.player) currentPlayer = r.data.player;
-    showEvent(r.data.message || "휴식 완료");
-    renderAll();
-}
-
-// ─── MP 회복 (테스트용) ───────────────────
-// 본게임에선 "mp" 이벤트를 통해서만 회복됨.
-// 테스트 편의를 위한 버튼이며, 서버의 /api/rest choice=mp를 호출.
-async function restoreMp() {
-    const r = await api("POST", "/api/rest", { choice: "mp" });
-    if (!r.ok || !r.data?.ok) {
-        showError(r.data?.error || "MP 회복 실패");
-        return;
-    }
-    if (r.data.player) currentPlayer = r.data.player;
-    showEvent(r.data.message || "MP 회복");
-    renderAll();
-}
-
-// ─── 전투 액션 ───────────────────────────
-async function battleAction(action) {
-    const r = await api("POST", "/api/battle/action", { action });
-    if (!r.ok || !r.data?.ok) {
-        showError(r.data?.error || "전투 행동 실패");
-        return;
-    }
-    const data = r.data;
-
-    // 전투 종료 여부
-    if (data.done) {
-        currentBattle = null;
-        if (data.winner === "player") {
-            showEvent(`🏆 승리! EXP +${data.exp_gained || 0}`, "#4ec9b0");
-        } else if (data.winner === "enemy") {
-            showEvent(`💀 패배...`, "#f48771");
-        } else if (data.winner === "escaped") {
-            showEvent(`🏃 도망 성공`);
-        }
-        if (data.player) currentPlayer = data.player;
-    } else {
-        // 전투 계속 — battle_state 형식 맞추기
-        currentBattle = data;
-    }
-    renderAll();
-}
-
-// ─── 필드 아이템 사용 ────────────────────
-async function useFieldItem(name) {
-    const r = await api("POST", "/api/use_item", { item: name });
-    if (!r.ok || !r.data?.ok) {
-        showError(r.data?.error || "아이템 사용 실패");
-        return;
-    }
-    if (r.data.player) currentPlayer = r.data.player;
-    showEvent(r.data.message || `${name} 사용`);
-    renderAll();
-}
-
-// ─── 렌더링 ──────────────────────────────
-function renderAll() {
-    renderPlayer();
-    renderBattle();
-    renderFieldItems();
-    renderFieldActions();
-}
-
-function renderPlayer() {
-    const p = currentPlayer;
-    if (!p) {
-        document.getElementById("playerStatus").innerHTML =
-            "<span style='color:#6a9955;'>게임을 시작하세요</span>";
-        return;
-    }
-    const hpPct = p.maxhp > 0 ? (p.hp / p.maxhp * 100).toFixed(0) : 0;
-    const mpPct = p.maxmp > 0 ? (p.mp / p.maxmp * 100).toFixed(0) : 0;
-    const expPct = p.maxexp > 0 ? (p.exp / p.maxexp * 100).toFixed(0) : 0;
-    document.getElementById("playerStatus").innerHTML = `
-        <div class="status-line"><span class="label">이름</span><span class="value">${p.name} (${p.job})</span></div>
-        <div class="status-line"><span class="label">레벨</span><span class="value">${p.lv}</span></div>
-        <div style="margin-top:6px;">HP: ${Math.round(p.hp)}/${p.maxhp}</div>
-        <div class="hp-bar"><div class="hp-fill" style="width:${hpPct}%"></div></div>
-        <div>MP: ${Math.round(p.mp)}/${p.maxmp}</div>
-        <div class="mp-bar"><div class="mp-fill" style="width:${mpPct}%"></div></div>
-        <div>EXP: ${p.exp}/${p.maxexp}</div>
-        <div class="exp-bar"><div class="exp-fill" style="width:${expPct}%"></div></div>
-        <div class="status-line"><span class="label">STG</span><span class="value">${p.stg}</span></div>
-        <div class="status-line"><span class="label">ARM</span><span class="value">${p.arm}</span></div>
-        <div class="status-line"><span class="label">SP</span><span class="value">${p.sp}</span></div>
-        <div class="status-line"><span class="label">SPD</span><span class="value">${p.spd}</span></div>
-        <div class="status-line"><span class="label">LUC</span><span class="value">${p.luc}</span></div>
-    `;
-}
-
-function renderBattle() {
-    const panel = document.getElementById("battlePanel");
-    const b = currentBattle;
-
-    if (!b) {
-        panel.style.display = "none";
-        return;
-    }
-    panel.style.display = "block";
-
-    const eHpPct = b.enemy_maxhp > 0 ? (b.enemy_hp / b.enemy_maxhp * 100).toFixed(0) : 0;
-    const pHpPct = b.player_maxhp > 0 ? (b.player_hp / b.player_maxhp * 100).toFixed(0) : 0;
-    const pMpPct = b.player_maxmp > 0 ? (b.player_mp / b.player_maxmp * 100).toFixed(0) : 0;
-
-    // 몬스터 상세 정보 (enemy_info가 있으면 사용, 없으면 기본 표시)
-    const info = b.enemy_info || {};
-    const diffLabel = info.difficulty_label || "";
-    const diffColor = {
-        "강함": "#f48771",
-        "중간": "#dcdcaa",
-        "약함": "#4ec9b0",
-    }[diffLabel] || "#888";
-
-    // 난이도 뱃지
-    const diffBadge = diffLabel
-        ? `<span style="background:${diffColor}22; color:${diffColor};
-             border:1px solid ${diffColor}; padding:2px 8px; border-radius:10px;
-             font-size:11px; margin-left:6px;">${diffLabel}</span>`
-        : "";
-
-    // 레벨 뱃지
-    const lvBadge = info.lv
-        ? `<span style="color:#9cdcfe; font-size:12px; margin-left:6px;">Lv.${info.lv}</span>`
-        : "";
-
-    // 몬스터 스탯 테이블
-    const statTable = info.name ? `
-        <div style="display:grid; grid-template-columns: repeat(4, 1fr); gap:4px;
-                    font-size:11px; margin-top:6px; padding:6px;
-                    background:#1a1a1a; border-radius:3px;">
-            <div><span style="color:#9cdcfe;">STG</span> ${info.stg}</div>
-            <div><span style="color:#9cdcfe;">ARM</span> ${info.arm}</div>
-            <div><span style="color:#9cdcfe;">SP</span> ${info.sp}</div>
-            <div><span style="color:#9cdcfe;">SPARM</span> ${info.sparm}</div>
-            <div><span style="color:#9cdcfe;">SPD</span> ${info.spd}</div>
-            <div><span style="color:#9cdcfe;">LUC</span> ${info.luc}</div>
-            <div><span style="color:#9cdcfe;">MP</span> ${Math.round(info.mp)}/${Math.round(info.maxmp)}</div>
-            <div></div>
-        </div>
-    ` : "";
-
-    // 메시지 (최근 것이 위로)
-    const msgs = (b.messages || []).slice(-12).reverse();
-    const msgHtml = msgs.length
-        ? `<div class="messages">${msgs.map(m => `<div>${escapeHtml(m)}</div>`).join("")}</div>`
-        : "";
-
-    // 스킬 버튼
-    const skills = b.skills || [];
-    const skillButtons = skills.map(s =>
-        `<button class="skill" ${s.usable ? "" : "disabled"} title="MP ${s.mp}"
-         onclick="battleAction('skill:${s.name}')">🔮 ${s.name} (MP ${s.mp})</button>`
-    ).join("");
-
-    // 전투 중 아이템 버튼
-    const items = b.items || [];
-    const itemButtons = items.map(i =>
-        `<button class="item" onclick="battleAction('item:${i.name}')">💊 ${i.name} ×${i.count}</button>`
-    ).join("");
-
-    panel.innerHTML = `
-        <h2>⚔️ 전투 중 <span style="color:#888;font-size:12px;">(턴 ${b.turn})</span></h2>
-        <div class="enemy-name">
-            ${b.enemy_name}${lvBadge}${diffBadge}${b.is_boss ? '<span style="background:#7c2d12; color:#fbbf24; border:1px solid #fbbf24; padding:2px 8px; border-radius:10px; font-size:11px; margin-left:6px;">👹 BOSS</span>' : ''}
-        </div>
-        <div>HP: ${Math.round(b.enemy_hp)}/${b.enemy_maxhp}</div>
-        <div class="hp-bar"><div class="hp-fill" style="width:${eHpPct}%"></div></div>
-        ${statTable}
-
-        ${msgHtml}
-
-        <div style="margin-top:8px; padding-top:8px; border-top:1px solid #444;">
-            <strong>내 상태</strong>
-            <div>HP: ${Math.round(b.player_hp)}/${b.player_maxhp}</div>
-            <div class="hp-bar"><div class="hp-fill" style="width:${pHpPct}%"></div></div>
-            <div>MP: ${Math.round(b.player_mp)}/${b.player_maxmp}</div>
-            <div class="mp-bar"><div class="mp-fill" style="width:${pMpPct}%"></div></div>
-        </div>
-
-        <div style="margin-top:10px;">
-            <button class="attack" onclick="battleAction('attack')">⚔️ 공격</button>
-            ${b.is_boss ? '' : `<button class="escape" onclick="battleAction('escape')">🏃 도망</button>`}
-        </div>
-        ${skillButtons ? `<div style="margin-top:6px;">${skillButtons}</div>` : ""}
-        ${itemButtons ? `<div style="margin-top:6px;">${itemButtons}</div>` : ""}
-    `;
-}
-
-function renderFieldItems() {
-    const el = document.getElementById("fieldItems");
-    const items = currentPlayer?.items || [];
-    if (items.length === 0) {
-        el.innerHTML = "<div style='color:#6a9955; font-size:11px;'>아이템 없음</div>";
-        return;
-    }
-    // count 집계
-    const counts = {};
-    items.forEach(name => counts[name] = (counts[name] || 0) + 1);
-    const html = Object.entries(counts).map(([name, cnt]) =>
-        `<button class="item" onclick="useFieldItem('${name}')">${name} ×${cnt}</button>`
-    ).join("");
-    el.innerHTML = `<div style="font-size:11px; color:#9cdcfe; margin-bottom:4px;">아이템 (필드 사용)</div>${html}`;
-}
-
-function renderFieldActions() {
-    // 전투 중이면 필드 액션 비활성화
-    const inBattle = !!currentBattle;
-    document.querySelectorAll("#fieldActions button").forEach(btn => {
-        btn.disabled = inBattle;
+function drawPentagonBackground() {
+    const cx = 110, cy = 110;
+    const labels = ['POWER', 'DEFENSE', 'SPEED', 'TIME', 'RESOURCE'];
+    const bgGroup = document.getElementById('pentagon-bg');
+    const lblGroup = document.getElementById('pentagon-labels');
+    bgGroup.innerHTML = ''; lblGroup.innerHTML = '';
+    [80, 60, 40, 20].forEach(r => {
+        const poly = document.createElementNS('http://www.w3.org/2000/svg', 'polygon');
+        poly.setAttribute('points', pentagonPoints(cx, cy, r));
+        poly.setAttribute('fill', 'none');
+        poly.setAttribute('stroke', '#1e3a4a');
+        poly.setAttribute('stroke-width', '0.8');
+        bgGroup.appendChild(poly);
     });
+    for (let i = 0; i < 5; i++) {
+        const angle = -Math.PI/2 + (2*Math.PI/5) * i;
+        const x = cx + Math.cos(angle) * 80;
+        const y = cy + Math.sin(angle) * 80;
+        const line = document.createElementNS('http://www.w3.org/2000/svg', 'line');
+        line.setAttribute('x1', cx); line.setAttribute('y1', cy);
+        line.setAttribute('x2', x);  line.setAttribute('y2', y);
+        line.setAttribute('stroke', '#1e3a4a');
+        line.setAttribute('stroke-width', '0.6');
+        bgGroup.appendChild(line);
+        const lx = cx + Math.cos(angle) * 96;
+        const ly = cy + Math.sin(angle) * 96;
+        const text = document.createElementNS('http://www.w3.org/2000/svg', 'text');
+        text.setAttribute('x', lx); text.setAttribute('y', ly);
+        text.setAttribute('text-anchor', 'middle');
+        text.setAttribute('dominant-baseline', 'middle');
+        text.setAttribute('font-size', '8');
+        text.setAttribute('font-family', 'monospace');
+        text.setAttribute('font-weight', '700');
+        text.setAttribute('fill', '#7a96a3');
+        text.textContent = labels[i];
+        lblGroup.appendChild(text);
+    }
+}
+function updatePentagon(idealVals, currentVals) {
+    document.getElementById('pentagon-ideal').setAttribute('points', pentagonPoints(110, 110, 80, idealVals));
+    document.getElementById('pentagon-current').setAttribute('points', pentagonPoints(110, 110, 80, currentVals));
+}
+drawPentagonBackground();
+updatePentagon([0.7,0.7,0.7,0.7,0.7], [0.65,0.7,0.7,0.65,0.65]);
+
+let toastTimer;
+function toast(msg, type='') {
+    const t = document.getElementById('toast');
+    t.className = 'toast active' + (type ? ' '+type : '');
+    t.textContent = msg;
+    clearTimeout(toastTimer);
+    toastTimer = setTimeout(() => t.classList.remove('active'), 2500);
 }
 
-function escapeHtml(str) {
-    return String(str)
-        .replace(/&/g, "&amp;")
-        .replace(/</g, "&lt;")
-        .replace(/>/g, "&gt;");
+function term(msg, type='') {
+    const t = document.getElementById('terminal');
+    const d = new Date();
+    const ts = String(d.getHours()).padStart(2,'0') + ':' +
+               String(d.getMinutes()).padStart(2,'0') + ':' +
+               String(d.getSeconds()).padStart(2,'0');
+    const line = document.createElement('div');
+    line.className = 'terminal-line ' + type;
+    line.innerHTML = `<span class="ts">[${ts}]</span> ${msg}`;
+    t.appendChild(line);
+    t.scrollTop = t.scrollHeight;
+    while (t.children.length > 30) t.removeChild(t.firstChild);
 }
 
-// 페이지 로드 시 기존 세션 확인
-window.addEventListener("load", fetchStatus);
+function logLine(msg, type='') {
+    const l = document.getElementById('log-area');
+    const d = new Date();
+    const ts = String(d.getHours()).padStart(2,'0') + ':' +
+               String(d.getMinutes()).padStart(2,'0') + ':' +
+               String(d.getSeconds()).padStart(2,'0');
+    const line = document.createElement('div');
+    line.className = 'log-line ' + type;
+    line.innerHTML = `<span class="ts">[${ts}]</span> ${msg}`;
+    l.appendChild(line);
+    l.scrollTop = l.scrollHeight;
+    while (l.children.length > 50) l.removeChild(l.firstChild);
+}
+function clearLog() { document.getElementById('log-area').innerHTML = ''; }
+
+const JOB_ICONS = {'전사':'⚔','마법사':'⚡','탱커':'🛡','도적':'🗡'};
+const ENEMY_ICONS = {
+    '고블린':'👺','박쥐':'🦇','슬라임':'🟢','골렘':'🗿','유령':'👻','암살자':'🥷',
+    '중간 보스':'👹','최종 보스':'🐉',
+};
+
+/* ═════════════════════════════════════════════════════════
+   ▼ 이미지 사용 시 매핑 테이블 활성화 ▼
+   <img> 태그로 교체했다면 아래 주석을 풀고 사용.
+   refreshPlayer() / refreshBattle() 안에서 src 갱신.
+
+const JOB_PORTRAITS = {
+    '전사':   '/img/portrait_warrior.png',
+    '마법사': '/img/portrait_mage.png',
+    '탱커':   '/img/portrait_tanker.png',
+    '도적':   '/img/portrait_rogue.png',
+};
+const JOB_SPRITES = {
+    '전사':   '/img/sprite_warrior.png',
+    '마법사': '/img/sprite_mage.png',
+    '탱커':   '/img/sprite_tanker.png',
+    '도적':   '/img/sprite_rogue.png',
+};
+const ENEMY_SPRITES = {
+    '고블린':   '/img/sprite_goblin.png',
+    '박쥐':     '/img/sprite_bat.png',
+    '슬라임':   '/img/sprite_slime.png',
+    '골렘':     '/img/sprite_golem.png',
+    '유령':     '/img/sprite_ghost.png',
+    '암살자':   '/img/sprite_assassin.png',
+    '중간 보스': '/img/sprite_midboss.png',
+    '최종 보스': '/img/sprite_finalboss.png',
+};
+
+   refreshPlayer() 에서:
+     const portrait = document.getElementById('player-portrait');
+     if (portrait) portrait.src = JOB_PORTRAITS[p.job] || JOB_PORTRAITS['전사'];
+
+   refreshBattle() 에서:
+     const playerArt = document.getElementById('player-combatant-art');
+     if (playerArt.tagName === 'IMG') {
+         playerArt.src = JOB_SPRITES[p.job] || JOB_SPRITES['전사'];
+     }
+     const enemyArt = document.getElementById('enemy-art');
+     if (enemyArt.tagName === 'IMG') {
+         enemyArt.src = ENEMY_SPRITES[ei.name] || '/img/sprite_default.png';
+     }
+   ═════════════════════════════════════════════════════════ */
+
+function refreshPlayer() {
+    if (!state.player) return;
+    const p = state.player;
+    document.getElementById('player-id').textContent = `${p.name} (LV ${p.lv} ${p.job})`;
+    document.getElementById('player-icon').textContent = JOB_ICONS[p.job] || '?';
+
+    document.getElementById('hp-cur').textContent = Math.round(p.hp);
+    document.getElementById('hp-max').textContent = p.maxhp;
+    document.getElementById('mp-cur').textContent = Math.round(p.mp);
+    document.getElementById('mp-max').textContent = p.maxmp;
+    document.getElementById('hp-fill').style.height = (p.hp/p.maxhp*100) + '%';
+    document.getElementById('mp-fill').style.height = (p.mp/p.maxmp*100) + '%';
+
+    document.getElementById('stat-grid').innerHTML = `
+        <div class="stat-row"><span>STG</span><span class="v">${p.stg}</span></div>
+        <div class="stat-row"><span>SP</span><span class="v">${p.sp}</span></div>
+        <div class="stat-row"><span>ARM</span><span class="v">${p.arm}</span></div>
+        <div class="stat-row"><span>SPARM</span><span class="v">${p.sparm}</span></div>
+        <div class="stat-row"><span>SPD</span><span class="v">${p.spd}</span></div>
+        <div class="stat-row"><span>LUC</span><span class="v">${p.luc}</span></div>
+    `;
+
+    const sb = document.getElementById('skill-book');
+    sb.innerHTML = '';
+    const skills = p.skills || [];
+    const max = Math.max(5, skills.length);
+    for (let i = 0; i < max; i++) {
+        const slot = document.createElement('div');
+        if (skills[i]) {
+            slot.className = 'skill-slot learned';
+            slot.title = skills[i];
+            const sk = skills[i];
+            slot.textContent = sk.includes('파이어') ? '🔥' :
+                              sk.includes('힐') ? '✚' :
+                              sk.includes('실드') ? '⛨' :
+                              sk.includes('강타') ? '⚒' :
+                              sk.includes('연속') ? '⚔' :
+                              sk.includes('찌르기') ? '⚡' :
+                              sk.includes('아이스') ? '❄' :
+                              sk.includes('라이트닝') ? '⚡' :
+                              sk.includes('수비') ? '⛨' :
+                              sk.includes('몸통') ? '◆' :
+                              sk.includes('추진력') ? '➤' :
+                              sk.includes('급소') ? '✦' : '★';
+        } else {
+            slot.className = 'skill-slot';
+            slot.textContent = '·';
+        }
+        sb.appendChild(slot);
+    }
+}
+
+function refreshBattle(bs) {
+    state.battleState = bs;
+    state.inBattle = !bs.done && (bs.player_hp > 0);
+
+    document.getElementById('explore-mode').style.display = state.inBattle ? 'none' : 'block';
+    document.getElementById('battle-mode').style.display = state.inBattle ? 'block' : 'none';
+
+    if (!state.inBattle) {
+        ['btn-attack','btn-skill','btn-item','btn-escape'].forEach(id => {
+            document.getElementById(id).disabled = true;
+        });
+        return;
+    }
+    ['btn-attack','btn-skill','btn-item','btn-escape'].forEach(id => {
+        document.getElementById(id).disabled = false;
+    });
+    if (bs.is_boss) document.getElementById('btn-escape').disabled = true;
+
+    document.getElementById('turn-counter').textContent = `TURN ${bs.turn}`;
+    document.getElementById('field-name').textContent = bs.is_boss ? 'BOSS ARENA' : 'FIELD';
+
+    const p = state.player;
+    document.getElementById('player-combatant-art').textContent = JOB_ICONS[p.job] || '?';
+    document.getElementById('player-combatant-name').textContent = p.name;
+    document.getElementById('player-combatant-meta').textContent = `LV ${p.lv} ${p.job}`;
+    document.getElementById('player-cb-hp').style.width = (bs.player_hp/bs.player_maxhp*100) + '%';
+    document.getElementById('player-cb-hp-text').textContent = `${Math.round(bs.player_hp)}/${bs.player_maxhp}`;
+    document.getElementById('player-cb-mp').style.width = (bs.player_mp/bs.player_maxmp*100) + '%';
+    document.getElementById('player-cb-mp-text').textContent = `${Math.round(bs.player_mp)}/${bs.player_maxmp}`;
+
+    const ei = bs.enemy_info || {};
+    document.getElementById('enemy-art').textContent = ENEMY_ICONS[ei.name || bs.enemy_name] || '👹';
+    document.getElementById('enemy-name').textContent = ei.name || bs.enemy_name;
+    document.getElementById('enemy-meta').textContent = `LV ${ei.lv || '?'} ${ei.difficulty_label ? '['+ei.difficulty_label+']' : ''}`;
+    document.getElementById('enemy-cb-hp').style.width = (bs.enemy_hp/bs.enemy_maxhp*100) + '%';
+    document.getElementById('enemy-cb-hp-text').textContent = `${Math.round(bs.enemy_hp)}/${bs.enemy_maxhp}`;
+    document.getElementById('target-tag').style.display = 'block';
+
+    if (bs.messages && bs.messages.length) {
+        bs.messages.forEach(m => {
+            let cls = '';
+            if (/크리|CRIT/i.test(m)) cls = 'crit';
+            else if (/회피|MISS/i.test(m)) cls = 'system';
+            else if (/사용|스킬/i.test(m)) cls = 'skill';
+            else if (/회복/i.test(m)) cls = 'heal';
+            else if (/데미지|피해/i.test(m)) cls = 'dmg';
+            logLine(m, cls);
+        });
+    }
+
+    if (bs.skills) {
+        const sl = document.getElementById('skill-list');
+        sl.innerHTML = '';
+        bs.skills.forEach(sk => {
+            const cell = document.createElement('div');
+            cell.className = 'submenu-item';
+            cell.innerHTML = `${sk.name}<span class="cost">MP${sk.mp}</span>`;
+            const canUse = bs.player_mp >= sk.mp;
+            if (!canUse) cell.style.opacity = 0.4;
+            cell.onclick = canUse ? () => useSkill(sk.name) : null;
+            sl.appendChild(cell);
+        });
+        if (!bs.skills.length) {
+            sl.innerHTML = '<div style="color:var(--text-muted); padding:8px; grid-column:1/-1;">학습한 스킬 없음</div>';
+        }
+    }
+    if (bs.items) {
+        const il = document.getElementById('item-list');
+        il.innerHTML = '';
+        const counts = {};
+        bs.items.forEach(it => counts[it] = (counts[it]||0)+1);
+        Object.entries(counts).forEach(([name, n]) => {
+            const cell = document.createElement('div');
+            cell.className = 'submenu-item';
+            cell.innerHTML = `${name}<span class="cost">x${n}</span>`;
+            cell.onclick = () => useItem(name);
+            il.appendChild(cell);
+        });
+        if (!bs.items.length) {
+            il.innerHTML = '<div style="color:var(--text-muted); padding:8px; grid-column:1/-1;">아이템 없음</div>';
+        }
+    }
+
+    const atb = 50 + Math.random() * 50;
+    document.getElementById('atb-fill').style.height = atb + '%';
+    document.getElementById('atb-cur').textContent = Math.round(atb);
+    if (atb > 90) document.getElementById('atb-fill').classList.add('full');
+    else document.getElementById('atb-fill').classList.remove('full');
+
+    if (ei.stg && ei.arm) {
+        const norm = v => Math.min(1, Math.max(0.1, v / 50));
+        const enemyVec = [norm(ei.stg), norm(ei.arm), norm(ei.spd),
+                          0.5, norm((ei.luc||0) + (ei.sp||0))];
+        const playerVec = [norm(p.stg), norm(p.arm), norm(p.spd),
+                           0.5, norm(p.luc + p.sp)];
+        updatePentagon(playerVec, enemyVec);
+        document.getElementById('balance-label').textContent =
+            ei.difficulty_label ? '['+ei.difficulty_label.toUpperCase()+']' : '[STABLE]';
+    }
+}
+
+async function loadStatus() {
+    const r = await api('/status');
+    if (r.ok) {
+        state.player = r.player;
+        if (r.battle) refreshBattle(r.battle);
+        else {
+            state.inBattle = false;
+            document.getElementById('explore-mode').style.display = 'block';
+            document.getElementById('battle-mode').style.display = 'none';
+        }
+        refreshPlayer();
+        return true;
+    }
+    return false;
+}
+
+async function newGame(name, job) {
+    const r = await api('/new_game', { name, job });
+    if (r.ok) {
+        state.player = r.player;
+        refreshPlayer();
+        document.getElementById('modal-newgame').classList.remove('active');
+        document.getElementById('explore-mode').style.display = 'block';
+        document.getElementById('battle-mode').style.display = 'none';
+        clearLog();
+        logLine(`▶ ${name} (${job}) 모험 시작!`, 'skill');
+        term(`session created: ${name}/${job}`, 'ok');
+        toast(`Welcome, ${name}!`);
+    } else {
+        toast('생성 실패: ' + (r.error||'unknown'), 'error');
+    }
+}
+
+async function explore() {
+    term('exploring field...');
+    const r = await api('/explore', {});
+    if (!r.ok) { toast(r.error||'탐험 실패', 'error'); return; }
+
+    if (r.event === 'battle' || r.event === 'midboss' || r.event === 'finalboss') {
+        state.inBattle = true;
+        if (r.event === 'midboss') {
+            logLine('▼ 중간 보스가 나타났다!', 'crit');
+            term('encounter: MIDBOSS', 'warn');
+        } else if (r.event === 'finalboss') {
+            logLine('▼ 최종 보스가 나타났다!', 'crit');
+            term('encounter: FINALBOSS', 'warn');
+        } else {
+            const enemyName = r.battle_state?.enemy_info?.name || r.battle_state?.enemy_name || '???';
+            logLine(`▼ ${enemyName}이(가) 나타났다!`, 'system');
+            term(`encounter: ${enemyName}`);
+        }
+        refreshBattle(r.battle_state);
+        animateBalanceTuning();
+    } else if (r.event === 'item') {
+        logLine(`✚ 아이템 획득: ${r.item}`, 'heal');
+        term('item gained');
+        if (r.player) { state.player = r.player; refreshPlayer(); }
+        toast(`+ ${r.item}`);
+    } else if (r.event === 'rest') {
+        logLine('✚ 휴식: HP/MP 회복', 'heal');
+        term('rested');
+        if (r.player) { state.player = r.player; refreshPlayer(); }
+    } else if (r.event === 'gameover') {
+        logLine('✖ GAME OVER', 'crit');
+        term('game over', 'warn');
+        toast('게임 오버. 다시 시작하세요.', 'warn');
+    } else {
+        logLine(r.message || '아무 일도 일어나지 않았다.', 'system');
+        if (r.player) { state.player = r.player; refreshPlayer(); }
+    }
+}
+
+async function battleAction(action) {
+    document.getElementById('skill-menu').classList.remove('active');
+    document.getElementById('item-menu').classList.remove('active');
+    const r = await api('/battle/action', { action });
+    if (!r.ok) { toast(r.error || 'action 실패', 'error'); return; }
+    refreshBattle(r);
+
+    if (r.done) {
+        if (r.winner === 'player') {
+            logLine('★ VICTORY!', 'crit');
+            term('battle won', 'ok');
+            toast('승리!');
+        } else if (r.winner === 'enemy') {
+            logLine('✖ DEFEAT', 'crit');
+            term('battle lost', 'warn');
+            toast('패배...', 'error');
+        } else {
+            logLine('▶ 도망쳤다.', 'system');
+            term('escaped');
+        }
+        await loadStatus();
+    }
+}
+async function useSkill(skillName) { await battleAction(`skill:${skillName}`); }
+async function useItem(itemName)  { await battleAction(`item:${itemName}`); }
+
+function animateBalanceTuning() {
+    let iter = 0;
+    let wrPlayer = 50;
+    const targetWR = state.aiLevel === 'hard' ? 45 : state.aiLevel === 'easy' ? 70 : 60;
+    const interval = setInterval(() => {
+        iter++;
+        wrPlayer = wrPlayer + (targetWR - wrPlayer) * 0.4 + (Math.random()-0.5)*8;
+        const wrEnemy = 100 - wrPlayer;
+        document.getElementById('wr-player').style.width = wrPlayer + '%';
+        document.getElementById('wr-player-pct').textContent = Math.round(wrPlayer) + '%';
+        document.getElementById('wr-enemy').style.width = wrEnemy + '%';
+        document.getElementById('wr-enemy-pct').textContent = Math.round(wrEnemy) + '%';
+        document.getElementById('sim-iter').textContent = iter;
+        document.getElementById('sim-avg-turns').textContent = (12 + Math.random()*8).toFixed(0);
+
+        const hpT = 50 + Math.sin(iter * 0.5) * 30;
+        const dmgT = 50 + Math.cos(iter * 0.7) * 25;
+        document.getElementById('tuner-hp').style.width = hpT + '%';
+        document.getElementById('tuner-dmg').style.width = dmgT + '%';
+
+        const err = Math.abs(wrPlayer - targetWR);
+        document.getElementById('error-margin').textContent = '±' + err.toFixed(1) + '%';
+
+        if (iter >= 8) {
+            clearInterval(interval);
+            term(`sim_${iter*250} converged. target=${targetWR}%`, 'ok');
+        }
+    }, 200);
+}
+
+document.getElementById('btn-newgame-confirm').onclick = () => {
+    const name = document.getElementById('input-name').value.trim() || 'HERO';
+    const job = document.getElementById('input-job').value;
+    newGame(name, job);
+};
+document.getElementById('btn-restart').onclick = () => {
+    document.getElementById('modal-newgame').classList.add('active');
+};
+document.getElementById('btn-explore').onclick = explore;
+document.getElementById('btn-attack').onclick = () => battleAction('attack');
+document.getElementById('btn-skill').onclick = () => {
+    document.getElementById('skill-menu').classList.toggle('active');
+    document.getElementById('item-menu').classList.remove('active');
+};
+document.getElementById('btn-item').onclick = () => {
+    document.getElementById('item-menu').classList.toggle('active');
+    document.getElementById('skill-menu').classList.remove('active');
+};
+document.getElementById('btn-escape').onclick = () => {
+    if (confirm('도망치겠습니까?')) battleAction('escape');
+};
+
+document.querySelectorAll('.ai-level-btn').forEach(btn => {
+    btn.onclick = () => {
+        document.querySelectorAll('.ai-level-btn').forEach(b => b.classList.remove('active'));
+        btn.classList.add('active');
+        state.aiLevel = btn.dataset.level;
+        term(`AI level set: ${state.aiLevel}`);
+    };
+});
+
+document.getElementById('btn-sim-start').onclick = () => {
+    term('manual sim start', 'ok');
+    animateBalanceTuning();
+};
+document.getElementById('btn-sim-stop').onclick = () => {
+    term('sim stopped', 'warn');
+};
+
+document.addEventListener('keydown', (e) => {
+    if (!state.inBattle) return;
+    if (e.key === 'F1') { e.preventDefault(); document.getElementById('btn-skill').click(); }
+    if (e.key === 'F2') { e.preventDefault(); document.getElementById('btn-item').click(); }
+    if (e.key === '1')  { document.getElementById('btn-attack').click(); }
+});
+
+(async () => {
+    term('booting...');
+    const ok = await loadStatus();
+    if (ok) {
+        document.getElementById('modal-newgame').classList.remove('active');
+        term('session restored', 'ok');
+        toast(`다시 오신 걸 환영합니다, ${state.player.name}`);
+    } else {
+        term('no session, awaiting input');
+    }
+})();
 </script>
 </body>
 </html>

@@ -1,0 +1,81 @@
+{
+  "winner": "player",
+  "total_turns": 2,
+  "final_player_hp": 700,
+  "final_enemy_hp": -52,
+  "player_name": "test430",
+  "enemy_name": "암살자",
+  "final_player_items": [
+    "HP_S_potion",
+    "HP_S_potion",
+    "HP_M_potion",
+    "MP_S_potion",
+    "MP_S_potion"
+  ],
+  "logs": [
+    {
+      "turn": 1,
+      "actor": "enemy",
+      "action": "attack",
+      "action_detail": "basic_attack",
+      "damage_dealt": 61,
+      "hp_after": 749,
+      "mp_after": 0,
+      "is_dodge": false,
+      "is_crit": false,
+      "debuff_applied": "",
+      "escaped": false,
+      "player_pt": 0.0,
+      "enemy_pt": 0.0
+    },
+    {
+      "turn": 1,
+      "actor": "player",
+      "action": "skill",
+      "action_detail": "파이어볼1",
+      "damage_dealt": 109,
+      "hp_after": 61,
+      "mp_after": 117,
+      "is_dodge": false,
+      "is_crit": false,
+      "debuff_applied": "",
+      "escaped": false,
+      "player_pt": 0.0,
+      "enemy_pt": 0.0
+    },
+    {
+      "turn": 1,
+      "actor": "enemy",
+      "action": "attack",
+      "action_detail": "basic_attack",
+      "damage_dealt": 49,
+      "hp_after": 700,
+      "mp_after": 0,
+      "is_dodge": false,
+      "is_crit": false,
+      "debuff_applied": "",
+      "escaped": false,
+      "player_pt": 0.0,
+      "enemy_pt": 0.0
+    },
+    {
+      "turn": 2,
+      "actor": "player",
+      "action": "skill",
+      "action_detail": "파이어볼1",
+      "damage_dealt": 113,
+      "hp_after": 0,
+      "mp_after": 107,
+      "is_dodge": false,
+      "is_crit": false,
+      "debuff_applied": "",
+      "escaped": false,
+      "player_pt": 0.0,
+      "enemy_pt": 0.0
+    }
+  ],
+  "log_type": "player",
+  "player_lv": 11,
+  "timestamp": "20260430_201156",
+  "items_used": []
+}

@@ -347,10 +347,16 @@ class StatTuner:
     def tune(self, difficulty: str) -> Tuple:
         target = self._adjusted_target(difficulty)
 
-        # lo=0.6: 약한 몬스터 충분히 약하게 (easy 목표 70% 도달용)
-        # hi=5.0: 강한 몬스터 충분히 강하게 (hard 목표 45% 도달용)
-        # HP 완화 공식 (0.60 + 0.40*scale)로 HP 폭등 방지되므로 hi 확장 안전
-        lo, hi     = 0.6, 5.0
+        # ── scale 범위 확장 (방안 A 폐기) ──
+        # 이전: lo=0.6, hi=5.0 → 박쥐/슬라임/유령 같은 약체 몬스터의
+        #       강함 난이도가 100% 승률에서 수렴하는 한계 발견.
+        # 변경: hi=5.0 → 8.0
+        #       ARM/LUC 캡 min(scale, 1.8) → min(scale, 2.5)
+        #       sqrt 적용한 stg 등은 자연스레 1.4배까지 추가 확장됨.
+        #
+        # HP 완화 공식 (0.60 + 0.30*scale) 덕에 hi=8.0 에서도 HP는
+        # 0.60 + 2.40 = 3.0배까지만 늘어남 — 폭등 방지 유지.
+        lo, hi     = 0.6, 8.0
         best_enemy = copy.deepcopy(self.base_enemy)
         best_sim   = None
 
@@ -390,9 +396,10 @@ class StatTuner:
 
         공통 (모든 몬스터):
           hp:  e.hp * (0.60 + 0.30 * scale)   — 초반 HP 폭등 방지
-          stg: e.stg * sqrt(scale)
-          arm: e.arm * min(scale, 1.8)
-          luc: e.luc * min(scale, 1.8)
+          stg: e.stg * sqrt(scale)            — sqrt(8.0)=2.83배까지
+          arm: e.arm * min(scale, 2.5)        — 강한 ARM 차별화 (1.8→2.5)
+          luc: e.luc * min(scale, 2.5)        — 회피·크리 변수 (1.8→2.5)
+        scale 상한 5.0→8.0 확장에 맞춰 ARM/LUC 캡도 함께 완화.
 
         역할 추가 축:
           슬라임 (저항형): sparm/sp 도 조정 → 마법 약점 활용시 난이도 차이 보장
@@ -410,26 +417,25 @@ class StatTuner:
         e.hp = max(1.0, e.hp * (0.60 + 0.30 * scale))
         e.maxhp = e.hp
         e.stg   = max(1.0, e.stg * math.sqrt(scale))
-        e.arm   = max(0.0, e.arm * min(scale, 1.8))
-        e.luc   = max(0.0, e.luc * min(scale, 1.8))
+        e.arm   = max(0.0, e.arm * min(scale, 2.5))   # 1.8 → 2.5
+        e.luc   = max(0.0, e.luc * min(scale, 2.5))   # 1.8 → 2.5
 
         # ── 역할별 추가 축 ──
         if et == "슬라임":
             # 저항형: 마법 약점 활용 시 난이도 분리
-            e.sparm = max(0.0, e.sparm * min(math.sqrt(scale) * 1.1, 1.8))
+            e.sparm = max(0.0, e.sparm * min(math.sqrt(scale) * 1.1, 2.2))
             e.sp    = max(0.0, e.sp * math.sqrt(scale))
         elif et == "골렘":
             # 탱커형: arm 한 번 더 + sparm
-            e.arm   = max(0.0, e.arm * min(scale * 0.15 + 1.0, 1.3))  # 추가 +up to 30%
-            e.sparm = max(0.0, e.sparm * min(math.sqrt(scale) * 1.1, 1.8))
+            e.arm   = max(0.0, e.arm * min(scale * 0.15 + 1.0, 1.5))   # +up to 50%
+            e.sparm = max(0.0, e.sparm * min(math.sqrt(scale) * 1.1, 2.2))
         elif et == "유령":
             # 회피형: spd/luc 강화 (회피 메커니즘과 시너지)
-            e.spd = max(0.0, e.spd * min(math.sqrt(scale) * 1.05, 1.5))
-            # luc 추가 부스트 (이미 공통에서 하지만 회피형은 더)
-            e.luc = max(0.0, e.luc * min(scale * 0.1 + 1.0, 1.25))
+            e.spd = max(0.0, e.spd * min(math.sqrt(scale) * 1.05, 1.8))
+            e.luc = max(0.0, e.luc * min(scale * 0.1 + 1.0, 1.5))
         elif et == "암살자":
             # 속도/선공형: spd 추가
-            e.spd = max(0.0, e.spd * min(math.sqrt(scale) * 1.05, 1.4))
+            e.spd = max(0.0, e.spd * min(math.sqrt(scale) * 1.05, 1.8))
         elif et == "박쥐":
             # 유리대포: sp 강화
             e.sp = max(0.0, e.sp * math.sqrt(scale))
