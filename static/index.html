@@ -156,7 +156,7 @@ img.combatant-art {
     letter-spacing: 0.1em;
 }
 .stat-bar-track {
-    width: 14px; height: 110px;
+    width: 12px; height: 110px;
     background: var(--bg-darkest);
     border: 1px solid var(--border);
     border-radius: 2px;
@@ -169,6 +169,7 @@ img.combatant-art {
 }
 .stat-bar-fill.hp  { background: linear-gradient(180deg, #f87171, var(--hp-red)); box-shadow: 0 0 8px rgba(239, 68, 68, 0.4); }
 .stat-bar-fill.mp  { background: linear-gradient(180deg, #60a5fa, var(--mp-blue)); box-shadow: 0 0 8px rgba(59, 130, 246, 0.4); }
+.stat-bar-fill.exp { background: linear-gradient(180deg, #fde047, var(--skill-yellow)); box-shadow: 0 0 8px rgba(250, 204, 21, 0.4); }
 .stat-bar-fill.atb { background: linear-gradient(180deg, #67e8f9, var(--atb-cyan)); box-shadow: 0 0 10px rgba(34, 211, 238, 0.5); }
 
 @keyframes atb-pulse {
@@ -262,18 +263,51 @@ img.combatant-art {
 .field-name { font-size: 10px; color: var(--text-dim); }
 
 .battle-stage {
-    display: flex; justify-content: space-around; align-items: flex-end;
-    min-height: 200px;
-    padding: 20px 10px;
-    background: linear-gradient(180deg, transparent 0%, rgba(45, 212, 191, 0.03) 100%);
+    display: grid;
+    grid-template-columns: 1fr 1fr 1fr 1fr 1fr;
+    gap: 4px;
+    align-items: end;
+    min-height: 320px;
+    padding: 20px 8px 28px 8px;
     border-radius: 3px;
     position: relative;
+
+    /* ═══════════════════════════════════════════════════════════════
+       ▼ 배틀 필드 배경 이미지 자리 ▼
+       권장: 가로형 PNG, 1280x500 정도 (2.5:1 비율 권장 — 필드 높이 320px에 맞춤)
+       파일: static/img/bg_field.png
+       사용 방법: 아래 background-image 한 줄을 활성화
+       ═══════════════════════════════════════════════════════════════ */
+    /* background-image: url('/img/bg_field.png');
+       background-size: cover;
+       background-position: center bottom; */
+
+    /* 기본 배경 (배경 이미지 없을 때) */
+    background:
+        linear-gradient(180deg, transparent 0%, rgba(45, 212, 191, 0.04) 100%),
+        repeating-linear-gradient(90deg,
+            transparent 0px,
+            transparent 19.8%,
+            rgba(45, 212, 191, 0.04) 19.8%,
+            rgba(45, 212, 191, 0.04) 20%);
 }
 .battle-stage::after {
     content: '';
-    position: absolute; bottom: 30px; left: 10%; right: 10%;
+    position: absolute;
+    bottom: 32px; left: 6%; right: 6%;
     height: 1px;
     background: linear-gradient(90deg, transparent, rgba(45, 212, 191, 0.3), transparent);
+}
+
+.battle-slot {
+    display: flex;
+    align-items: end;
+    justify-content: center;
+    min-height: 290px;
+    position: relative;
+}
+.battle-slot.slot-gap {
+    /* 거리감 슬롯 — 비워둠 */
 }
 
 .combatant {
@@ -281,56 +315,78 @@ img.combatant-art {
     gap: 6px;
     position: relative;
 }
+
+/* ═══════════════════════════════════════════════════════════════
+   캐릭터/몬스터 이미지 슬롯 — 투명 배경 직사각형
+   - 배경 / 테두리 / 그림자 모두 제거 (배틀 배경 위에 캐릭터만 떠있는 느낌)
+   - 도트 PNG (투명배경) 그대로 보이도록 background: transparent
+   - 가로보다 세로 살짝 긴 직사각형 (캐릭터 비율)
+   ═══════════════════════════════════════════════════════════════ */
 .combatant-art {
-    width: 92px; height: 92px;
-    border-radius: 50%;
-    background: linear-gradient(135deg, var(--bg-panel-2), var(--bg-darkest));
-    border: 2px solid var(--border);
+    width: 100px;
+    height: 130px;
+    background: transparent;     /* 직사각형 — 동그라미/배경 제거 */
+    border: none;
+    border-radius: 0;
     display: flex; align-items: center; justify-content: center;
-    font-size: 50px;
+    font-size: 60px;
+    /* image-rendering: pixelated; ← img 태그에 직접 적용. 도트 이미지 선명하게 */
 }
+img.combatant-art {
+    object-fit: contain;
+    padding: 0;
+    background: transparent;
+    image-rendering: pixelated;
+}
+
+/* 활성 표시 (내 차례/적 차례 펄스) — 배경/테두리 제거하면서 발광만 남김 */
 .combatant.player .combatant-art {
-    border-color: var(--accent-cyan);
-    box-shadow: 0 0 20px rgba(45, 212, 191, 0.3);
+    filter: drop-shadow(0 0 12px rgba(45, 212, 191, 0.5));
 }
 .combatant.enemy .combatant-art {
-    border-color: var(--enemy-orange);
-    box-shadow: 0 0 16px rgba(251, 146, 60, 0.3);
+    filter: drop-shadow(0 0 10px rgba(251, 146, 60, 0.5));
 }
-.combatant-name { font-size: 11px; font-weight: 700; letter-spacing: 0.04em; }
+.combatant.acting .combatant-art {
+    animation: combatant-pulse 0.8s ease-in-out infinite alternate;
+}
+
+.combatant-name { font-size: 12px; font-weight: 700; letter-spacing: 0.04em; }
 .combatant-meta { font-size: 9px; color: var(--text-dim); }
 
+/* HP/MP 바 — 크게 (가독성 강화) */
 .combatant-bars {
     display: flex; flex-direction: column;
-    gap: 3px;
-    width: 110px;
-    margin-top: 4px;
+    gap: 4px;
+    width: 130px;
+    margin-top: 6px;
 }
 .cb-row {
     display: flex; align-items: center;
-    gap: 4px; font-size: 8px;
+    gap: 5px; font-size: 10px;
 }
 .cb-label {
-    width: 22px;
+    width: 24px;
     color: var(--text-dim);
     font-weight: 700;
+    font-size: 9px;
 }
 .cb-track {
     flex: 1;
-    height: 6px;
+    height: 11px;
     background: var(--bg-darkest);
     border: 1px solid var(--border);
     border-radius: 2px;
     overflow: hidden;
 }
 .cb-fill { height: 100%; transition: width 0.4s; }
-.cb-fill.hp { background: linear-gradient(90deg, #f87171, var(--hp-red)); }
-.cb-fill.mp { background: linear-gradient(90deg, #60a5fa, var(--mp-blue)); }
+.cb-fill.hp { background: linear-gradient(90deg, #f87171, var(--hp-red)); box-shadow: inset 0 0 4px rgba(255,255,255,0.15); }
+.cb-fill.mp { background: linear-gradient(90deg, #60a5fa, var(--mp-blue)); box-shadow: inset 0 0 4px rgba(255,255,255,0.15); }
 .cb-text {
-    width: 50px;
+    width: 56px;
     text-align: right;
-    font-size: 8px;
+    font-size: 9px;
     font-weight: 700;
+    color: var(--text-main);
 }
 
 .target-tag {
@@ -399,6 +455,13 @@ img.combatant-art {
 .action-btn.item:hover:not(:disabled) { background: rgba(250, 204, 21, 0.16); border-color: var(--skill-yellow); }
 .action-btn.escape{ border-color: var(--border); color: var(--text-dim); }
 .action-btn.escape:hover:not(:disabled) { background: var(--bg-panel-2); color: var(--text-main); }
+.action-btn.escape-blocked {
+    background: rgba(239, 68, 68, 0.06) !important;
+    border-color: rgba(239, 68, 68, 0.3) !important;
+    color: rgba(239, 68, 68, 0.6) !important;
+    cursor: not-allowed;
+    opacity: 0.55;
+}
 
 .submenu {
     background: var(--bg-darkest);
@@ -677,6 +740,336 @@ img.combatant-art {
     padding: 30px;
     color: var(--accent-cyan);
 }
+
+/* ═══════════════════════════════════════════════════════════
+   탐험 모드 — 인벤토리/스탯/스킬 카드 그리드
+   필드 높이는 battle-stage와 동일 (320px) — 모드 전환 시 흔들림 없음
+   ═══════════════════════════════════════════════════════════ */
+#explore-mode {
+    min-height: 320px;
+    display: flex;
+    flex-direction: column;
+    padding: 4px;
+}
+.explore-hero {
+    text-align: center;
+    padding: 18px 0 12px 0;
+    border-bottom: 1px dashed var(--border);
+    margin-bottom: 14px;
+}
+.explore-title {
+    font-size: 14px;
+    color: var(--accent-cyan);
+    margin-bottom: 8px;
+    letter-spacing: 0.15em;
+}
+.explore-sub {
+    font-size: 11px;
+    color: var(--text-dim);
+    margin-bottom: 14px;
+}
+.explore-btn {
+    width: auto;
+    display: inline-block;
+    padding: 9px 28px;
+    border-color: var(--accent-cyan);
+    color: var(--accent-cyan);
+    background: rgba(45, 212, 191, 0.1);
+    font-weight: 700;
+}
+.explore-btn:hover:not(:disabled) {
+    background: rgba(45, 212, 191, 0.2);
+}
+
+/* 진행 턴 표시 — 중간/최종 보스까지 진행 상황 시각화 */
+.explore-progress {
+    margin-top: 14px;
+    padding: 10px 16px;
+    max-width: 380px;
+    margin-left: auto;
+    margin-right: auto;
+}
+.ep-row {
+    display: flex;
+    align-items: baseline;
+    justify-content: center;
+    gap: 4px;
+    font-size: 11px;
+    margin-bottom: 6px;
+    letter-spacing: 0.05em;
+}
+.ep-label { color: var(--text-dim); margin-right: 6px; }
+.ep-value {
+    color: var(--accent-cyan);
+    font-weight: 700;
+    font-size: 16px;
+}
+.ep-sep { color: var(--text-muted); }
+.ep-target { color: var(--text-dim); font-size: 12px; }
+
+.ep-bar {
+    position: relative;
+    height: 8px;
+    background: var(--bg-darkest);
+    border: 1px solid var(--border);
+    border-radius: 2px;
+    overflow: visible;
+    margin-bottom: 6px;
+}
+.ep-bar-fill {
+    height: 100%;
+    background: linear-gradient(90deg, var(--accent-cyan), var(--accent-blue));
+    transition: width 0.5s ease;
+    box-shadow: 0 0 6px rgba(45, 212, 191, 0.4);
+}
+.ep-marker {
+    position: absolute;
+    top: -3px;
+    width: 2px;
+    height: 14px;
+    background: var(--accent-warn);
+    transform: translateX(-50%);
+    box-shadow: 0 0 4px rgba(251, 191, 36, 0.6);
+}
+.ep-marker.midboss::after {
+    content: '◆';
+    position: absolute;
+    top: -10px;
+    left: 50%;
+    transform: translateX(-50%);
+    color: var(--accent-warn);
+    font-size: 8px;
+}
+.ep-hint {
+    text-align: center;
+    font-size: 9px;
+    color: var(--text-muted);
+    letter-spacing: 0.1em;
+}
+
+.explore-info-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr 1fr;
+    gap: 10px;
+    flex: 1;
+}
+.explore-card {
+    background: var(--bg-darkest);
+    border: 1px solid var(--border);
+    border-radius: 3px;
+    padding: 10px 12px;
+    min-height: 100px;
+}
+.explore-card-title {
+    font-size: 10px;
+    color: var(--accent-cyan);
+    letter-spacing: 0.1em;
+    font-weight: 700;
+    margin-bottom: 8px;
+    padding-bottom: 4px;
+    border-bottom: 1px dashed var(--border);
+}
+.explore-card-body {
+    font-size: 10px;
+    line-height: 1.6;
+}
+.explore-empty {
+    color: var(--text-muted);
+    font-style: italic;
+    text-align: center;
+    padding: 12px 0;
+}
+.explore-stat-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 4px 10px;
+}
+.explore-stat-row {
+    display: flex; justify-content: space-between;
+    color: var(--text-dim);
+}
+.explore-stat-row .v { color: var(--text-main); font-weight: 700; }
+
+.inv-item {
+    display: flex;
+    justify-content: space-between;
+    padding: 3px 0;
+    color: var(--text-main);
+}
+.inv-item.clickable {
+    padding: 6px 8px;
+    margin: 2px 0;
+    border-radius: 2px;
+    cursor: pointer;
+    border: 1px solid transparent;
+    transition: all 0.15s;
+}
+.inv-item.clickable:hover {
+    background: rgba(250, 204, 21, 0.10);
+    border-color: rgba(250, 204, 21, 0.4);
+    transform: translateX(2px);
+}
+.inv-item.clickable::after {
+    content: '▶';
+    color: var(--accent-cyan);
+    margin-left: 8px;
+    font-size: 8px;
+    opacity: 0;
+    transition: opacity 0.15s;
+}
+.inv-item.clickable:hover::after { opacity: 1; }
+.inv-item .qty { color: var(--accent-warn); font-weight: 700; }
+
+/* ═════════════════════════════════════════════════════════
+   휴식 모달
+   ═════════════════════════════════════════════════════════ */
+.modal-rest {
+    width: 460px;
+}
+.rest-desc {
+    color: var(--text-dim);
+    font-size: 11px;
+    line-height: 1.6;
+    margin-bottom: 18px;
+    text-align: center;
+    padding: 10px 0;
+    border-top: 1px dashed var(--border);
+    border-bottom: 1px dashed var(--border);
+}
+.rest-options {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 12px;
+}
+.rest-option {
+    background: var(--bg-darkest);
+    border: 1px solid var(--border);
+    color: var(--text-main);
+    font-family: inherit;
+    cursor: pointer;
+    border-radius: 4px;
+    padding: 18px 14px;
+    transition: all 0.2s;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 6px;
+}
+.rest-option:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 6px 16px rgba(0, 0, 0, 0.4);
+}
+.rest-option .rest-icon {
+    font-size: 32px;
+    margin-bottom: 4px;
+}
+.rest-option .rest-label {
+    font-size: 14px;
+    font-weight: 700;
+    letter-spacing: 0.15em;
+}
+.rest-option .rest-sub {
+    font-size: 10px;
+    color: var(--text-dim);
+}
+.rest-option.heal {
+    border-color: rgba(34, 197, 94, 0.4);
+}
+.rest-option.heal:hover {
+    background: rgba(34, 197, 94, 0.1);
+    border-color: #22c55e;
+}
+.rest-option.heal .rest-icon { color: #22c55e; }
+.rest-option.heal .rest-label { color: #a7f3d0; }
+.rest-option.train {
+    border-color: rgba(250, 204, 21, 0.4);
+}
+.rest-option.train:hover {
+    background: rgba(250, 204, 21, 0.1);
+    border-color: var(--skill-yellow);
+}
+.rest-option.train .rest-icon { color: var(--skill-yellow); }
+.rest-option.train .rest-label { color: var(--skill-yellow); }
+
+/* 도망 모달용 */
+.rest-option.escape-yes {
+    border-color: rgba(251, 146, 60, 0.4);
+}
+.rest-option.escape-yes:hover {
+    background: rgba(251, 146, 60, 0.1);
+    border-color: var(--enemy-orange);
+}
+.rest-option.escape-yes .rest-icon { color: var(--enemy-orange); }
+.rest-option.escape-yes .rest-label { color: var(--enemy-orange); }
+
+.rest-option.escape-no {
+    border-color: rgba(45, 212, 191, 0.4);
+}
+.rest-option.escape-no:hover {
+    background: rgba(45, 212, 191, 0.1);
+    border-color: var(--accent-cyan);
+}
+.rest-option.escape-no .rest-icon { color: var(--accent-cyan); }
+.rest-option.escape-no .rest-label { color: var(--accent-cyan); }
+
+.sk-chip {
+    display: inline-block;
+    padding: 3px 8px;
+    margin: 2px 3px 2px 0;
+    background: rgba(250, 204, 21, 0.12);
+    border: 1px solid rgba(250, 204, 21, 0.4);
+    color: var(--skill-yellow);
+    border-radius: 2px;
+    font-size: 9px;
+}
+
+/* ═══════════════════════════════════════════════════════════
+   ATB 차례 시각화 — 내 차례 알림
+   ═══════════════════════════════════════════════════════════ */
+.action-bar.your-turn {
+    animation: turn-pulse 1.4s ease-in-out infinite;
+}
+@keyframes turn-pulse {
+    0%, 100% { box-shadow: 0 0 0 1px transparent; }
+    50%      { box-shadow: 0 0 12px 2px rgba(45, 212, 191, 0.35); }
+}
+
+.turn-indicator {
+    display: none;
+    text-align: center;
+    padding: 6px 12px;
+    margin-bottom: 8px;
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: 0.15em;
+    border-radius: 3px;
+    transition: all 0.3s;
+}
+.turn-indicator.player-turn {
+    display: block;
+    color: var(--bg-darkest);
+    background: var(--accent-cyan);
+    box-shadow: 0 0 16px rgba(45, 212, 191, 0.5);
+    animation: indicator-glow 1s ease-in-out infinite alternate;
+}
+.turn-indicator.enemy-turn {
+    display: block;
+    color: var(--enemy-orange);
+    background: rgba(251, 146, 60, 0.1);
+    border: 1px solid rgba(251, 146, 60, 0.4);
+}
+@keyframes indicator-glow {
+    from { box-shadow: 0 0 8px rgba(45, 212, 191, 0.4); }
+    to   { box-shadow: 0 0 20px rgba(45, 212, 191, 0.7); }
+}
+
+.combatant.acting .combatant-art {
+    animation: combatant-pulse 0.8s ease-in-out infinite alternate;
+}
+@keyframes combatant-pulse {
+    from { transform: scale(1); }
+    to   { transform: scale(1.06); }
+}
 </style>
 </head>
 <body>
@@ -734,6 +1127,16 @@ img.combatant-art {
                 </div>
             </div>
             <div class="stat-bar">
+                <div class="stat-bar-label">EXP</div>
+                <div class="stat-bar-track">
+                    <div id="exp-fill" class="stat-bar-fill exp" style="height:0%"></div>
+                </div>
+                <div class="stat-bar-values">
+                    <div class="cur" id="exp-cur">0</div>
+                    <div class="max" id="exp-max">--</div>
+                </div>
+            </div>
+            <div class="stat-bar">
                 <div class="stat-bar-label">ATB</div>
                 <div class="stat-bar-track">
                     <div id="atb-fill" class="stat-bar-fill atb" style="height:0%"></div>
@@ -776,79 +1179,170 @@ img.combatant-art {
             <div class="field-name" id="turn-counter">TURN --</div>
         </div>
 
-        <div id="explore-mode" class="ai-balancing" style="display:none;">
-            <div style="font-size:14px; color:var(--accent-cyan); margin-bottom:12px;">PEACEFUL FIELD</div>
-            <div style="font-size:11px; color:var(--text-dim); margin-bottom:16px;">탐험을 시작하세요</div>
-            <button class="btn" id="btn-explore" style="width:auto; padding:10px 24px;">▶ EXPLORE</button>
+        <div id="explore-mode" style="display:none;">
+            <div class="explore-hero">
+                <div class="explore-title">PEACEFUL FIELD</div>
+                <div class="explore-sub">탐험을 시작하세요</div>
+                <button class="btn explore-btn" id="btn-explore">▶ EXPLORE</button>
+                <div class="explore-progress" id="explore-progress">
+                    <div class="ep-row">
+                        <span class="ep-label">진행 턴</span>
+                        <span class="ep-value" id="explore-turn-value">0</span>
+                        <span class="ep-sep">/</span>
+                        <span class="ep-target" id="explore-turn-target">50</span>
+                    </div>
+                    <div class="ep-bar">
+                        <div class="ep-bar-fill" id="explore-turn-fill" style="width:0%"></div>
+                        <!-- 중간 보스 마커 (turn 25) -->
+                        <div class="ep-marker midboss" style="left:50%;" title="중간 보스 (Turn 25)"></div>
+                    </div>
+                    <div class="ep-hint" id="explore-turn-hint">최종 보스까지 50턴</div>
+                </div>
+            </div>
+
+            <!-- 탐험 모드에서도 캐릭터 정보 한눈에 보이도록 -->
+            <div class="explore-info-grid">
+                <div class="explore-card">
+                    <div class="explore-card-title">🎒 INVENTORY</div>
+                    <div id="explore-inventory" class="explore-card-body">
+                        <div class="explore-empty">아이템이 없습니다</div>
+                    </div>
+                </div>
+                <div class="explore-card">
+                    <div class="explore-card-title">⚔ STATS</div>
+                    <div id="explore-stats" class="explore-card-body explore-stat-grid">
+                        <!-- JS로 채움 -->
+                    </div>
+                </div>
+                <div class="explore-card">
+                    <div class="explore-card-title">✦ SKILLS</div>
+                    <div id="explore-skills" class="explore-card-body">
+                        <div class="explore-empty">학습한 스킬 없음</div>
+                    </div>
+                </div>
+            </div>
         </div>
 
         <div id="battle-mode" style="display:none;">
+            <!-- ════════════════════════════════════════════════════════
+                 배틀 필드 — 5분할 그리드 구조
+                   슬롯1: 플레이어
+                   슬롯2: 공백 (거리감)
+                   슬롯3~5: 몬스터 (다대일 전투용)
+
+                 ▼▼▼ [배경 이미지: 배틀 필드 배경] ▼▼▼
+                 권장 크기: 가로형 PNG (1280x400 정도, 가로:세로 비율 약 3.2:1)
+                 파일 위치: static/img/bg_field.png
+                 사용 방법:
+                   아래 .battle-stage 의 background를 활성화하면 됨.
+                   기본은 다크 그라데이션이 들어가 있고, 그 위에 이미지 덮어쓰기 가능.
+                 ════════════════════════════════════════════════════════ -->
             <div class="battle-stage">
-                <div class="combatant player">
-                    <!-- ════════════════════════════════════════════════════════
-                         ▼▼▼ [이미지 2: 중앙 플레이어 도트] ▼▼▼
-                         권장 크기: 96x96 PNG (투명배경 추천)
-                         파일 위치 예시: static/img/sprite_warrior.png
-                         사용 방법:
-                           1. 아래 <div class="combatant-art" id="player-combatant-art">⚔</div>를
-                              주석처리하고
-                           2. <img class="combatant-art" id="player-combatant-art"
-                                   src="/img/sprite_warrior.png" alt="" />
-                              로 교체
-                           3. 직업별 이미지는 JS의 refreshBattle()에서 src 동적 변경
-                         ════════════════════════════════════════════════════════ -->
-                    <!-- <img class="combatant-art" id="player-combatant-art"
-                              src="/img/sprite_warrior.png" alt="" /> -->
-                    <div class="combatant-art" id="player-combatant-art">⚔</div>
-                    <div class="combatant-name" id="player-combatant-name">-</div>
-                    <div class="combatant-meta" id="player-combatant-meta">LV --</div>
-                    <div class="combatant-bars">
-                        <div class="cb-row">
-                            <span class="cb-label">HP</span>
-                            <div class="cb-track"><div id="player-cb-hp" class="cb-fill hp" style="width:100%"></div></div>
-                            <span class="cb-text" id="player-cb-hp-text">--/--</span>
-                        </div>
-                        <div class="cb-row">
-                            <span class="cb-label">MP</span>
-                            <div class="cb-track"><div id="player-cb-mp" class="cb-fill mp" style="width:100%"></div></div>
-                            <span class="cb-text" id="player-cb-mp-text">--/--</span>
+                <!-- ─── 슬롯 1: 플레이어 ─── -->
+                <div class="battle-slot slot-player">
+                    <div class="combatant player">
+                        <!-- ════════════════════════════════════════════════════════
+                             ▼ [이미지: 플레이어 도트 (투명 배경)] ▼
+                             권장 크기: 96x96 PNG (투명배경)
+                             파일 위치: static/img/sprite_warrior.png 등
+                             사용 방법: <img>로 교체. 직업별 이미지는 JS에서 src 동적 변경
+                             ════════════════════════════════════════════════════════ -->
+                        <!-- <img class="combatant-art" id="player-combatant-art"
+                                  src="/img/sprite_warrior.png" alt="" /> -->
+                        <div class="combatant-art" id="player-combatant-art">⚔</div>
+                        <div class="combatant-name" id="player-combatant-name">-</div>
+                        <div class="combatant-meta" id="player-combatant-meta">LV --</div>
+                        <div class="combatant-bars">
+                            <div class="cb-row">
+                                <span class="cb-label">HP</span>
+                                <div class="cb-track"><div id="player-cb-hp" class="cb-fill hp" style="width:100%"></div></div>
+                                <span class="cb-text" id="player-cb-hp-text">--/--</span>
+                            </div>
+                            <div class="cb-row">
+                                <span class="cb-label">MP</span>
+                                <div class="cb-track"><div id="player-cb-mp" class="cb-fill mp" style="width:100%"></div></div>
+                                <span class="cb-text" id="player-cb-mp-text">--/--</span>
+                            </div>
                         </div>
                     </div>
                 </div>
 
-                <div class="combatant enemy">
-                    <div id="target-tag" class="target-tag" style="display:none;">▶ TARGET</div>
-                    <!-- ════════════════════════════════════════════════════════
-                         ▼▼▼ [이미지 3: 중앙 적 도트] ▼▼▼
-                         권장 크기: 96x96 PNG (투명배경 추천)
-                         파일 위치 예시: static/img/sprite_goblin.png
-                         사용 방법:
-                           1. 아래 <div class="combatant-art" id="enemy-art">👹</div>를 주석처리
-                           2. <img class="combatant-art" id="enemy-art"
-                                   src="/img/sprite_goblin.png" alt="" /> 로 교체
-                           3. 몬스터 종류별 이미지: JS의 refreshBattle() 안에서
-                              ENEMY_ICONS 처럼 ENEMY_SPRITES 매핑 만들고 src 동적 변경
-                              예시:
-                                const ENEMY_SPRITES = {
-                                    '고블린': '/img/sprite_goblin.png',
-                                    '박쥐':   '/img/sprite_bat.png',
-                                    ...
-                                };
-                                document.getElementById('enemy-art').src =
-                                    ENEMY_SPRITES[ei.name] || '/img/sprite_default.png';
-                         ════════════════════════════════════════════════════════ -->
-                    <!-- <img class="combatant-art" id="enemy-art"
-                              src="/img/sprite_goblin.png" alt="" /> -->
-                    <div class="combatant-art" id="enemy-art">👹</div>
-                    <div class="combatant-name" id="enemy-name">--</div>
-                    <div class="combatant-meta" id="enemy-meta">LV --</div>
-                    <div class="combatant-bars">
-                        <div class="cb-row">
-                            <span class="cb-label">HP</span>
-                            <div class="cb-track"><div id="enemy-cb-hp" class="cb-fill hp" style="width:100%"></div></div>
-                            <span class="cb-text" id="enemy-cb-hp-text">--/--</span>
+                <!-- ─── 슬롯 2: 공백 (거리감) ─── -->
+                <div class="battle-slot slot-gap">
+                    <!-- 거리감을 위한 빈 슬롯 — 비워둠 -->
+                </div>
+
+                <!-- ─── 슬롯 3: 몬스터 (단일전 시 메인 위치) ─── -->
+                <div class="battle-slot slot-enemy">
+                    <div class="combatant enemy" id="enemy-slot-1">
+                        <div id="target-tag" class="target-tag" style="display:none;">▶ TARGET</div>
+                        <!-- ════════════════════════════════════════════════════════
+                             ▼ [이미지: 몬스터 도트 - 슬롯 3] ▼
+                             권장 크기: 96x96 PNG (투명배경)
+                             ENEMY_SPRITES 매핑으로 종류별 이미지 자동 변경
+                             ════════════════════════════════════════════════════════ -->
+                        <!-- <img class="combatant-art" id="enemy-art"
+                                  src="/img/sprite_goblin.png" alt="" /> -->
+                        <div class="combatant-art" id="enemy-art">👹</div>
+                        <div class="combatant-name" id="enemy-name">--</div>
+                        <div class="combatant-meta" id="enemy-meta">LV --</div>
+                        <div class="combatant-bars">
+                            <div class="cb-row">
+                                <span class="cb-label">HP</span>
+                                <div class="cb-track"><div id="enemy-cb-hp" class="cb-fill hp" style="width:100%"></div></div>
+                                <span class="cb-text" id="enemy-cb-hp-text">--/--</span>
+                            </div>
                         </div>
                     </div>
+                </div>
+
+                <!-- ─── 슬롯 4: 추가 몬스터 (Phase 2 다대일 대비) ─── -->
+                <div class="battle-slot slot-enemy">
+                    <!-- ════════════════════════════════════════════════════════
+                         ▼ [이미지: 몬스터 도트 - 슬롯 4 (Phase 2 다대일 전투용)] ▼
+                         현재는 비어있음. Phase 2에서 사용.
+                         사용 방법:
+                           아래 주석 풀고 enemy-art-2 컨트롤 활성화.
+                           JS의 refreshBattle()이 enemies 배열 받으면 채울 예정.
+                         ════════════════════════════════════════════════════════ -->
+                    <!--
+                    <div class="combatant enemy" id="enemy-slot-2">
+                        <img class="combatant-art" id="enemy-art-2"
+                             src="/img/sprite_goblin.png" alt="" />
+                        <div class="combatant-name" id="enemy-name-2">--</div>
+                        <div class="combatant-meta" id="enemy-meta-2">LV --</div>
+                        <div class="combatant-bars">
+                            <div class="cb-row">
+                                <span class="cb-label">HP</span>
+                                <div class="cb-track"><div id="enemy-cb-hp-2" class="cb-fill hp" style="width:100%"></div></div>
+                                <span class="cb-text" id="enemy-cb-hp-text-2">--/--</span>
+                            </div>
+                        </div>
+                    </div>
+                    -->
+                </div>
+
+                <!-- ─── 슬롯 5: 추가 몬스터 (Phase 2 다대일 대비) ─── -->
+                <div class="battle-slot slot-enemy">
+                    <!-- ════════════════════════════════════════════════════════
+                         ▼ [이미지: 몬스터 도트 - 슬롯 5 (Phase 2 다대일 전투용)] ▼
+                         슬롯 4와 동일한 패턴. enemy-slot-3 / enemy-art-3 등으로 분리 사용.
+                         ════════════════════════════════════════════════════════ -->
+                    <!--
+                    <div class="combatant enemy" id="enemy-slot-3">
+                        <img class="combatant-art" id="enemy-art-3"
+                             src="/img/sprite_goblin.png" alt="" />
+                        <div class="combatant-name" id="enemy-name-3">--</div>
+                        <div class="combatant-meta" id="enemy-meta-3">LV --</div>
+                        <div class="combatant-bars">
+                            <div class="cb-row">
+                                <span class="cb-label">HP</span>
+                                <div class="cb-track"><div id="enemy-cb-hp-3" class="cb-fill hp" style="width:100%"></div></div>
+                                <span class="cb-text" id="enemy-cb-hp-text-3">--/--</span>
+                            </div>
+                        </div>
+                    </div>
+                    -->
                 </div>
             </div>
         </div>
@@ -860,22 +1354,30 @@ img.combatant-art {
             <div class="log-line system">[--:--:--] 시스템 대기 중...</div>
         </div>
 
-        <div class="panel-title">PLAYER ACTIONS</div>
+        <!-- ════════════════════════════════════════════════════════
+             PLAYER ACTIONS — 배틀 시에만 표시 (탐험 모드에선 숨김)
+             refreshBattle() / state.inBattle 변경 시 display 토글
+             ════════════════════════════════════════════════════════ -->
+        <div id="actions-panel" style="display:none;">
+            <div class="panel-title">PLAYER ACTIONS</div>
 
-        <div class="submenu" id="skill-menu">
-            <div class="submenu-title">SELECT SKILL</div>
-            <div class="submenu-list" id="skill-list"></div>
-        </div>
-        <div class="submenu" id="item-menu">
-            <div class="submenu-title">SELECT ITEM</div>
-            <div class="submenu-list" id="item-list"></div>
-        </div>
+            <div class="turn-indicator" id="turn-indicator">▶ YOUR TURN</div>
 
-        <div class="action-bar">
-            <button id="btn-attack" class="action-btn attack" disabled>ATTACK</button>
-            <button id="btn-skill"  class="action-btn skill"  disabled>SKILLS [F1]</button>
-            <button id="btn-item"   class="action-btn item"   disabled>ITEMS [F2]</button>
-            <button id="btn-escape" class="action-btn escape" disabled>ESCAPE</button>
+            <div class="submenu" id="skill-menu">
+                <div class="submenu-title">SELECT SKILL</div>
+                <div class="submenu-list" id="skill-list"></div>
+            </div>
+            <div class="submenu" id="item-menu">
+                <div class="submenu-title">SELECT ITEM</div>
+                <div class="submenu-list" id="item-list"></div>
+            </div>
+
+            <div class="action-bar" id="action-bar">
+                <button id="btn-attack" class="action-btn attack" disabled>ATTACK</button>
+                <button id="btn-skill"  class="action-btn skill"  disabled>SKILLS [F1]</button>
+                <button id="btn-item"   class="action-btn item"   disabled>ITEMS [F2]</button>
+                <button id="btn-escape" class="action-btn escape" disabled>ESCAPE</button>
+            </div>
         </div>
     </div>
 </div>
@@ -979,6 +1481,59 @@ img.combatant-art {
     </div>
 </div>
 
+<!-- ═════════════════════════════════════════════════════════
+     휴식 이벤트 모달 — 탐험 중 'rest' 이벤트 발생 시 표시
+     사용자가 회복(heal) 또는 수련(train) 선택
+     ═════════════════════════════════════════════════════════ -->
+<div id="modal-rest" class="modal-bg">
+    <div class="modal modal-rest">
+        <h2>🌙 REST AREA</h2>
+        <div class="rest-desc">
+            모닥불을 발견했다. 잠시 쉬어가는 게 좋을 것 같다.
+        </div>
+        <div class="rest-options">
+            <button class="rest-option heal" id="btn-rest-heal">
+                <div class="rest-icon">✚</div>
+                <div class="rest-label">HEAL</div>
+                <div class="rest-sub">체력 회복</div>
+            </button>
+            <button class="rest-option train" id="btn-rest-train">
+                <div class="rest-icon">⚡</div>
+                <div class="rest-label">TRAIN</div>
+                <div class="rest-sub">경험치 획득</div>
+            </button>
+        </div>
+    </div>
+</div>
+
+<!-- ═════════════════════════════════════════════════════════
+     도망 확인 모달 — 도망치기 버튼 클릭 시 Y/N 선택
+     "아니오" 시 turn 안 깎임 (battleAction 호출 자체 안 함)
+     ═════════════════════════════════════════════════════════ -->
+<div id="modal-escape" class="modal-bg">
+    <div class="modal modal-rest">
+        <h2>▶ ESCAPE?</h2>
+        <div class="rest-desc">
+            도망치겠습니까?<br>
+            <span style="color:var(--text-muted); font-size:10px;">
+                속도 차이에 따라 성공률이 달라집니다.
+            </span>
+        </div>
+        <div class="rest-options">
+            <button class="rest-option escape-yes" id="btn-escape-yes">
+                <div class="rest-icon">▶</div>
+                <div class="rest-label">YES</div>
+                <div class="rest-sub">도망친다</div>
+            </button>
+            <button class="rest-option escape-no" id="btn-escape-no">
+                <div class="rest-icon">✖</div>
+                <div class="rest-label">NO</div>
+                <div class="rest-sub">전투 계속</div>
+            </button>
+        </div>
+    </div>
+</div>
+
 <div id="toast" class="toast"></div>
 
 <script>
@@ -993,7 +1548,7 @@ async function api(path, body=null) {
     return r.json();
 }
 
-let state = { player: null, inBattle: false, battleState: null, aiLevel: 'normal' };
+let state = { player: null, inBattle: false, battleState: null, aiLevel: 'normal', exploreTurn: 0 };
 
 function tick() {
     const d = new Date();
@@ -1151,6 +1706,7 @@ function refreshPlayer() {
     document.getElementById('player-id').textContent = `${p.name} (LV ${p.lv} ${p.job})`;
     document.getElementById('player-icon').textContent = JOB_ICONS[p.job] || '?';
 
+    // ── 좌측 게이지: HP/MP/EXP ──
     document.getElementById('hp-cur').textContent = Math.round(p.hp);
     document.getElementById('hp-max').textContent = p.maxhp;
     document.getElementById('mp-cur').textContent = Math.round(p.mp);
@@ -1158,6 +1714,16 @@ function refreshPlayer() {
     document.getElementById('hp-fill').style.height = (p.hp/p.maxhp*100) + '%';
     document.getElementById('mp-fill').style.height = (p.mp/p.maxmp*100) + '%';
 
+    // EXP 게이지 (노란색)
+    const expEl = document.getElementById('exp-fill');
+    if (expEl) {
+        const expRatio = p.maxexp > 0 ? (p.exp / p.maxexp * 100) : 0;
+        expEl.style.height = expRatio + '%';
+        document.getElementById('exp-cur').textContent = Math.round(p.exp || 0);
+        document.getElementById('exp-max').textContent = p.maxexp || 0;
+    }
+
+    // ── 능력치 표 (좌측 패널) ──
     document.getElementById('stat-grid').innerHTML = `
         <div class="stat-row"><span>STG</span><span class="v">${p.stg}</span></div>
         <div class="stat-row"><span>SP</span><span class="v">${p.sp}</span></div>
@@ -1167,6 +1733,7 @@ function refreshPlayer() {
         <div class="stat-row"><span>LUC</span><span class="v">${p.luc}</span></div>
     `;
 
+    // ── 좌측 스킬북 ──
     const sb = document.getElementById('skill-book');
     sb.innerHTML = '';
     const skills = p.skills || [];
@@ -1195,6 +1762,104 @@ function refreshPlayer() {
         }
         sb.appendChild(slot);
     }
+
+    // ── 탐험 모드 정보 카드 (인벤토리/스탯/스킬) ──
+    refreshExploreInfo();
+}
+
+// 탐험 모드 카드 갱신
+function refreshExploreInfo() {
+    if (!state.player) return;
+    const p = state.player;
+
+    // 인벤토리 (player.items) — 탐험 중 클릭으로 사용 가능
+    // 백엔드 형식:
+    //  - player_dict: 단순 문자열 배열 ['HP_S_potion', 'HP_S_potion', ...]
+    //  - 전투 state.items: [{name, count}, ...]
+    const invEl = document.getElementById('explore-inventory');
+    if (invEl) {
+        const items = p.items || [];
+        let entries = [];
+        if (items.length > 0) {
+            if (typeof items[0] === 'object' && items[0].name !== undefined) {
+                entries = items.map(it => [it.name, it.count]);
+            } else {
+                const counts = {};
+                items.forEach(it => counts[it] = (counts[it]||0)+1);
+                entries = Object.entries(counts);
+            }
+        }
+        if (entries.length === 0) {
+            invEl.innerHTML = '<div class="explore-empty">아이템이 없습니다</div>';
+        } else {
+            invEl.innerHTML = '';
+            entries.forEach(([name, n]) => {
+                const row = document.createElement('div');
+                row.className = 'inv-item clickable';
+                row.title = '클릭해서 사용';
+                row.innerHTML = `<span>${name}</span><span class="qty">×${n}</span>`;
+                row.onclick = () => useItemInField(name);
+                invEl.appendChild(row);
+            });
+        }
+    }
+
+    // 스탯 (간단 요약)
+    const statEl = document.getElementById('explore-stats');
+    if (statEl) {
+        statEl.innerHTML = `
+            <div class="explore-stat-row"><span>STG</span><span class="v">${p.stg}</span></div>
+            <div class="explore-stat-row"><span>SP</span><span class="v">${p.sp}</span></div>
+            <div class="explore-stat-row"><span>ARM</span><span class="v">${p.arm}</span></div>
+            <div class="explore-stat-row"><span>SPARM</span><span class="v">${p.sparm}</span></div>
+            <div class="explore-stat-row"><span>SPD</span><span class="v">${p.spd}</span></div>
+            <div class="explore-stat-row"><span>LUC</span><span class="v">${p.luc}</span></div>
+        `;
+    }
+
+    // 스킬
+    const skEl = document.getElementById('explore-skills');
+    if (skEl) {
+        const skills = p.skills || [];
+        if (skills.length === 0) {
+            skEl.innerHTML = '<div class="explore-empty">학습한 스킬 없음</div>';
+        } else {
+            skEl.innerHTML = skills.map(sk =>
+                `<span class="sk-chip">${sk}</span>`
+            ).join('');
+        }
+    }
+}
+
+// 탐험 진행 턴 표시 갱신 (state.exploreTurn 기반)
+//   백엔드 흐름:
+//     turn=25 → 중간 보스 발생
+//     turn>=50 → 최종 보스 발생
+//   따라서 진행률은 turn / 50 으로 계산
+function refreshExploreTurn() {
+    const turn = state.exploreTurn || 0;
+    const tv = document.getElementById('explore-turn-value');
+    const fill = document.getElementById('explore-turn-fill');
+    const hint = document.getElementById('explore-turn-hint');
+    if (!tv || !fill) return;
+
+    tv.textContent = turn;
+    const pct = Math.min(100, (turn / 50) * 100);
+    fill.style.width = pct + '%';
+
+    if (hint) {
+        if (turn >= 50) {
+            hint.textContent = '⚠ 최종 보스 출현!';
+            hint.style.color = 'var(--accent-warn)';
+        } else if (turn >= 25) {
+            hint.textContent = `최종 보스까지 ${50 - turn}턴`;
+            hint.style.color = '';
+        } else {
+            const toMid = 25 - turn;
+            hint.textContent = `중간 보스까지 ${toMid}턴 / 최종 보스까지 ${50 - turn}턴`;
+            hint.style.color = '';
+        }
+    }
 }
 
 function refreshBattle(bs) {
@@ -1203,6 +1868,8 @@ function refreshBattle(bs) {
 
     document.getElementById('explore-mode').style.display = state.inBattle ? 'none' : 'block';
     document.getElementById('battle-mode').style.display = state.inBattle ? 'block' : 'none';
+    // 배틀 시에만 액션 패널 표시
+    document.getElementById('actions-panel').style.display = state.inBattle ? 'block' : 'none';
 
     if (!state.inBattle) {
         ['btn-attack','btn-skill','btn-item','btn-escape'].forEach(id => {
@@ -1210,10 +1877,20 @@ function refreshBattle(bs) {
         });
         return;
     }
-    ['btn-attack','btn-skill','btn-item','btn-escape'].forEach(id => {
-        document.getElementById(id).disabled = false;
-    });
-    if (bs.is_boss) document.getElementById('btn-escape').disabled = true;
+
+    // ── 핵심: 좌측 게이지도 전투 중 HP/MP 변동 반영 ──
+    // _state()는 player_hp/player_mp 만 주므로 player 객체의 현재값을 갱신.
+    if (state.player) {
+        state.player.hp = bs.player_hp;
+        state.player.mp = bs.player_mp;
+        // 전투 중 받은 items 리스트도 동기화 (아이템 사용 후 줄어듬)
+        if (bs.items) state.player.items = bs.items;
+        // 좌측 게이지 즉시 갱신
+        document.getElementById('hp-cur').textContent = Math.round(bs.player_hp);
+        document.getElementById('mp-cur').textContent = Math.round(bs.player_mp);
+        document.getElementById('hp-fill').style.height = (bs.player_hp/bs.player_maxhp*100) + '%';
+        document.getElementById('mp-fill').style.height = (bs.player_mp/bs.player_maxmp*100) + '%';
+    }
 
     document.getElementById('turn-counter').textContent = `TURN ${bs.turn}`;
     document.getElementById('field-name').textContent = bs.is_boss ? 'BOSS ARENA' : 'FIELD';
@@ -1247,6 +1924,7 @@ function refreshBattle(bs) {
         });
     }
 
+    // ── 스킬 메뉴 ──
     if (bs.skills) {
         const sl = document.getElementById('skill-list');
         sl.innerHTML = '';
@@ -1263,29 +1941,46 @@ function refreshBattle(bs) {
             sl.innerHTML = '<div style="color:var(--text-muted); padding:8px; grid-column:1/-1;">학습한 스킬 없음</div>';
         }
     }
-    if (bs.items) {
-        const il = document.getElementById('item-list');
-        il.innerHTML = '';
-        const counts = {};
-        bs.items.forEach(it => counts[it] = (counts[it]||0)+1);
-        Object.entries(counts).forEach(([name, n]) => {
+
+    // ── 아이템 메뉴 (배틀 _state는 items를 줌) ──
+    // 백엔드 형식 두 가지 지원:
+    //  - 객체 배열: [{name:'HP_S_potion', count:2}, ...]  (전투 _state 형식)
+    //  - 문자열 배열: ['HP_S_potion', 'HP_S_potion', ...]  (player_dict 형식)
+    const il = document.getElementById('item-list');
+    il.innerHTML = '';
+    const battleItems = bs.items || [];
+    let itemEntries = [];  // [[name, count], ...]
+    if (battleItems.length > 0) {
+        if (typeof battleItems[0] === 'object' && battleItems[0].name !== undefined) {
+            // 객체 배열 형식
+            itemEntries = battleItems.map(it => [it.name, it.count]);
+        } else {
+            // 문자열 배열 형식
+            const counts = {};
+            battleItems.forEach(it => counts[it] = (counts[it]||0)+1);
+            itemEntries = Object.entries(counts);
+        }
+    }
+    if (itemEntries.length === 0) {
+        il.innerHTML = '<div style="color:var(--text-muted); padding:8px; grid-column:1/-1;">아이템 없음</div>';
+    } else {
+        itemEntries.forEach(([name, n]) => {
             const cell = document.createElement('div');
             cell.className = 'submenu-item';
-            cell.innerHTML = `${name}<span class="cost">x${n}</span>`;
+            cell.innerHTML = `${name}<span class="cost">×${n}</span>`;
             cell.onclick = () => useItem(name);
             il.appendChild(cell);
         });
-        if (!bs.items.length) {
-            il.innerHTML = '<div style="color:var(--text-muted); padding:8px; grid-column:1/-1;">아이템 없음</div>';
-        }
     }
 
-    const atb = 50 + Math.random() * 50;
-    document.getElementById('atb-fill').style.height = atb + '%';
-    document.getElementById('atb-cur').textContent = Math.round(atb);
-    if (atb > 90) document.getElementById('atb-fill').classList.add('full');
-    else document.getElementById('atb-fill').classList.remove('full');
+    // ── ATB 시뮬 (시각적 효과) ──
+    // 실제 ATB 시스템은 백엔드에 있지만 매 액션마다 player turn으로 가정.
+    // 시각화: 액션 버튼 활성 상태일 때 ATB 게이지 100% (player turn).
+    document.getElementById('atb-fill').style.height = '100%';
+    document.getElementById('atb-cur').textContent = '100';
+    document.getElementById('atb-fill').classList.add('full');
 
+    // ── 펜타곤 차트 ──
     if (ei.stg && ei.arm) {
         const norm = v => Math.min(1, Math.max(0.1, v / 50));
         const enemyVec = [norm(ei.stg), norm(ei.arm), norm(ei.spd),
@@ -1296,22 +1991,95 @@ function refreshBattle(bs) {
         document.getElementById('balance-label').textContent =
             ei.difficulty_label ? '['+ei.difficulty_label.toUpperCase()+']' : '[STABLE]';
     }
+
+    // ── 행동 버튼 활성 + 차례 시각화 ──
+    showPlayerTurn();
+}
+
+// ATB 시각화: 플레이어 차례 (행동 가능 상태)
+function showPlayerTurn() {
+    ['btn-attack','btn-skill','btn-item','btn-escape'].forEach(id => {
+        document.getElementById(id).disabled = false;
+    });
+    if (state.battleState && state.battleState.is_boss) {
+        const escBtn = document.getElementById('btn-escape');
+        escBtn.disabled = true;
+        escBtn.textContent = '✖ NO ESCAPE';
+        escBtn.title = '보스전에서는 도망칠 수 없습니다';
+        escBtn.classList.add('escape-blocked');
+    } else {
+        const escBtn = document.getElementById('btn-escape');
+        escBtn.textContent = 'ESCAPE';
+        escBtn.title = '';
+        escBtn.classList.remove('escape-blocked');
+    }
+    const ind = document.getElementById('turn-indicator');
+    ind.className = 'turn-indicator player-turn';
+    ind.textContent = '▶ YOUR TURN';
+    document.getElementById('action-bar').classList.add('your-turn');
+    // 플레이어 도트에 활성 효과
+    document.querySelector('.combatant.player')?.classList.add('acting');
+    document.querySelector('.combatant.enemy')?.classList.remove('acting');
+}
+
+// ATB 시각화: 적 차례 (행동 불가)
+function showEnemyTurn() {
+    ['btn-attack','btn-skill','btn-item','btn-escape'].forEach(id => {
+        document.getElementById(id).disabled = true;
+    });
+    const ind = document.getElementById('turn-indicator');
+    ind.className = 'turn-indicator enemy-turn';
+    ind.textContent = '◀ ENEMY TURN';
+    document.getElementById('action-bar').classList.remove('your-turn');
+    document.querySelector('.combatant.player')?.classList.remove('acting');
+    document.querySelector('.combatant.enemy')?.classList.add('acting');
+    // ATB 게이지 0으로
+    document.getElementById('atb-fill').style.height = '20%';
+    document.getElementById('atb-cur').textContent = '20';
+    document.getElementById('atb-fill').classList.remove('full');
 }
 
 async function loadStatus() {
     const r = await api('/status');
-    if (r.ok) {
-        state.player = r.player;
-        if (r.battle) refreshBattle(r.battle);
-        else {
-            state.inBattle = false;
-            document.getElementById('explore-mode').style.display = 'block';
-            document.getElementById('battle-mode').style.display = 'none';
+    if (!r.ok) return false;
+
+    state.player = r.player;
+    state.exploreTurn = r.turn || 0;
+    refreshPlayer();
+
+    // 서버 세션이 전투 중이면 전투 상태 복구.
+    // 1차: /api/status 응답에 battle 페이로드가 포함되었는지 확인 (백엔드가 합쳐서 줌)
+    // 2차 폴백: in_battle만 true면 /api/battle/state 별도 호출
+    if (r.in_battle) {
+        let bs = r.battle;
+        if (!bs) {
+            // 폴백: status 응답에 battle 없으면 별도 호출
+            const fetched = await api('/battle/state');
+            // /api/battle/state는 _state() dict 통째로 옴 — turn 필드로 유효성 판단
+            if (fetched && fetched.turn !== undefined && fetched.player_hp !== undefined) {
+                bs = fetched;
+            }
         }
-        refreshPlayer();
-        return true;
+        if (bs) {
+            refreshBattle(bs);
+            term('battle session restored', 'ok');
+            return true;
+        }
+        term('battle restore failed, fallback to peace', 'warn');
     }
-    return false;
+
+    state.inBattle = false;
+    setExploreMode();
+    return true;
+}
+
+// 평시 모드로 UI 전환 — 탐험 보이기 + 배틀/액션 패널 숨김
+function setExploreMode() {
+    document.getElementById('explore-mode').style.display = 'block';
+    document.getElementById('battle-mode').style.display = 'none';
+    document.getElementById('actions-panel').style.display = 'none';
+    // 탐험 진행 턴 수 표시 갱신
+    refreshExploreTurn();
 }
 
 async function newGame(name, job) {
@@ -1320,8 +2088,7 @@ async function newGame(name, job) {
         state.player = r.player;
         refreshPlayer();
         document.getElementById('modal-newgame').classList.remove('active');
-        document.getElementById('explore-mode').style.display = 'block';
-        document.getElementById('battle-mode').style.display = 'none';
+        setExploreMode();
         clearLog();
         logLine(`▶ ${name} (${job}) 모험 시작!`, 'skill');
         term(`session created: ${name}/${job}`, 'ok');
@@ -1357,9 +2124,10 @@ async function explore() {
         if (r.player) { state.player = r.player; refreshPlayer(); }
         toast(`+ ${r.item}`);
     } else if (r.event === 'rest') {
-        logLine('✚ 휴식: HP/MP 회복', 'heal');
-        term('rested');
-        if (r.player) { state.player = r.player; refreshPlayer(); }
+        // 휴식 이벤트 — 사용자가 heal/train 선택
+        logLine('🌙 휴식 장소를 발견했다.', 'heal');
+        term('rest event');
+        showRestModal();
     } else if (r.event === 'gameover') {
         logLine('✖ GAME OVER', 'crit');
         term('game over', 'warn');
@@ -1368,11 +2136,25 @@ async function explore() {
         logLine(r.message || '아무 일도 일어나지 않았다.', 'system');
         if (r.player) { state.player = r.player; refreshPlayer(); }
     }
+
+    // 진행 턴 동기화 — explore가 turn을 안 주므로 status로 한 번 더 받아서 갱신
+    // (전투 이벤트는 battle 모드라 표시 안 됨, 평시 이벤트는 표시 갱신)
+    if (!state.inBattle) {
+        const st = await api('/status');
+        if (st.ok) {
+            state.exploreTurn = st.turn || 0;
+            refreshExploreTurn();
+        }
+    }
 }
 
 async function battleAction(action) {
     document.getElementById('skill-menu').classList.remove('active');
     document.getElementById('item-menu').classList.remove('active');
+
+    // ATB 시각화: 액션 즉시 적 차례로 전환
+    showEnemyTurn();
+
     const r = await api('/battle/action', { action });
     if (!r.ok) { toast(r.error || 'action 실패', 'error'); return; }
     refreshBattle(r);
@@ -1390,11 +2172,58 @@ async function battleAction(action) {
             logLine('▶ 도망쳤다.', 'system');
             term('escaped');
         }
+        // 차례 표시 정리
+        document.getElementById('turn-indicator').className = 'turn-indicator';
+        document.getElementById('action-bar').classList.remove('your-turn');
         await loadStatus();
     }
 }
 async function useSkill(skillName) { await battleAction(`skill:${skillName}`); }
 async function useItem(itemName)  { await battleAction(`item:${itemName}`); }
+
+// 탐험 중 아이템 사용 (전투 외 — /api/use_item 호출)
+async function useItemInField(itemName) {
+    if (state.inBattle) {
+        toast('전투 중에는 전투 메뉴에서 사용하세요', 'warn');
+        return;
+    }
+    const r = await api('/use_item', { item: itemName });
+    if (!r.ok) {
+        toast(r.error || '아이템 사용 실패', 'error');
+        return;
+    }
+    // 갱신
+    if (r.player) { state.player = r.player; refreshPlayer(); }
+    if (r.message) {
+        logLine('✚ ' + r.message, 'heal');
+        term(`item used: ${itemName}`, 'ok');
+        toast(r.message);
+    }
+}
+
+// 휴식 이벤트 모달 표시
+function showRestModal() {
+    const modal = document.getElementById('modal-rest');
+    if (modal) modal.classList.add('active');
+}
+
+// 휴식 선택 (heal | train)
+async function performRest(choice) {
+    const r = await api('/rest', { choice });
+    if (!r.ok) {
+        toast(r.error || '휴식 실패', 'error');
+        return;
+    }
+    if (r.player) { state.player = r.player; refreshPlayer(); }
+    const icon = choice === 'heal' ? '✚' : '⚡';
+    if (r.message) {
+        logLine(`${icon} ${r.message}`, 'heal');
+        term(`rest: ${choice}`, 'ok');
+        toast(r.message);
+    }
+    // 모달 닫기
+    document.getElementById('modal-rest').classList.remove('active');
+}
 
 function animateBalanceTuning() {
     let iter = 0;
@@ -1435,6 +2264,10 @@ document.getElementById('btn-restart').onclick = () => {
     document.getElementById('modal-newgame').classList.add('active');
 };
 document.getElementById('btn-explore').onclick = explore;
+
+// 휴식 모달 버튼
+document.getElementById('btn-rest-heal').onclick  = () => performRest('heal');
+document.getElementById('btn-rest-train').onclick = () => performRest('train');
 document.getElementById('btn-attack').onclick = () => battleAction('attack');
 document.getElementById('btn-skill').onclick = () => {
     document.getElementById('skill-menu').classList.toggle('active');
@@ -1445,7 +2278,21 @@ document.getElementById('btn-item').onclick = () => {
     document.getElementById('skill-menu').classList.remove('active');
 };
 document.getElementById('btn-escape').onclick = () => {
-    if (confirm('도망치겠습니까?')) battleAction('escape');
+    // 보스전이면 무시 (이미 disabled지만 안전장치)
+    if (state.battleState && state.battleState.is_boss) return;
+    // 휴식 모달과 동일 스타일의 도망 확인 모달 표시
+    document.getElementById('modal-escape').classList.add('active');
+};
+
+// 도망 모달 - YES: 실제 도망 시도 (battleAction이 턴 진행)
+document.getElementById('btn-escape-yes').onclick = () => {
+    document.getElementById('modal-escape').classList.remove('active');
+    battleAction('escape');
+};
+// 도망 모달 - NO: 모달만 닫음 (battleAction 호출 안 됨 → 턴 안 깎임)
+document.getElementById('btn-escape-no').onclick = () => {
+    document.getElementById('modal-escape').classList.remove('active');
+    term('escape canceled', 'warn');
 };
 
 document.querySelectorAll('.ai-level-btn').forEach(btn => {

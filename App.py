@@ -7,13 +7,13 @@ BattleSession.py가 전투 상태를 들고 있고,
 
 엔드포인트:
   POST /api/new_game          — 게임 시작 (이름, 직업)
-  GET  /api/status            — 현재 플레이어 상태 (스킬/아이템 목록 포함)
+  GET  /api/status            — 현재 플레이어 상태
   POST /api/explore           — 탐험 (다음 이벤트 결정)
   GET  /api/battle/state      — 현재 전투 상태
   POST /api/battle/action     — 전투 행동 (공격/스킬/아이템/도망)
   POST /api/use_item          — 필드에서 아이템 사용
-  POST /api/rest              — 휴식 (heal/mp/train)
-  GET  /                      — 테스트용 웹 UI (static/index.html)
+  GET  /api/skills            — 스킬 목록
+  GET  /api/items             — 아이템 목록
 
 세션:
   Flask session 쿠키로 user_id 관리.
@@ -51,7 +51,15 @@ from ai.Battlesession import BattleSession   # Flask용 전투 세션
 
 
 # ── Flask 앱 ─────────────────────────────────
-app = Flask(__name__, static_folder="static", static_url_path="")
+# Flask 앱 초기화.
+# static_folder를 절대경로로 지정해서 작업 디렉토리(cwd)와 무관하게 동작하도록 함.
+# 이 파일이 있는 폴더 기준 'static/' 을 정적 파일 디렉토리로 사용.
+_THIS_DIR = os.path.dirname(os.path.abspath(__file__))
+app = Flask(
+    __name__,
+    static_folder=os.path.join(_THIS_DIR, "static"),
+    static_url_path=""
+)
 app.secret_key = os.environ.get("SECRET_KEY", "dev-secret-change-in-prod")
 
 # ── 게임 세션 저장소 (메모리) ─────────────────
@@ -168,12 +176,24 @@ def status():
     if not gs:
         return jsonify({"ok": False, "error": "게임 세션이 없습니다."}), 404
 
-    return jsonify({
+    payload = {
         "ok":     True,
         "player": _player_dict(gs["player"], gs["items"]),
         "turn":   gs["turn"],
         "in_battle": gs["battle"] is not None,
-    })
+    }
+
+    # 진행 중인 전투가 있으면 전투 상태 페이로드도 포함.
+    # UI가 새로고침 시 한 번의 호출로 전투 화면 복구 가능하게.
+    # (UI는 /api/battle/state를 별도 호출하는 폴백 로직도 함께 갖고 있음)
+    if gs["battle"] is not None:
+        try:
+            payload["battle"] = gs["battle"]._state()
+        except Exception:
+            # 전투 상태 직렬화 실패 시 in_battle 플래그만 유지
+            pass
+
+    return jsonify(payload)
 
 
 # ─────────────────────────────────────────────
@@ -205,8 +225,7 @@ def explore():
 
     # HP 0 체크
     if player.hp <= 0:
-        return jsonify({"ok": True, "event": "gameover",
-                        "player": _player_dict(player, gs["items"])})
+        return jsonify({"ok": True, "event": "gameover"})
 
     # 전투 중이면 먼저 끝내야 함
     if gs["battle"] is not None:
@@ -218,18 +237,17 @@ def explore():
         state = _start_battle(gs, boss, is_boss=True)
         return jsonify({"ok": True, "event": "finalboss",
                         "enemy": {"name": boss.name, "hp": boss.hp},
-                        "battle_state": state,
-                        "player": _player_dict(player, gs["items"])})
+                        "battle_state": state})
 
     if turn == 25 and not gs["mid_boss_cleared"]:
         cached = gs["hook"]._get_cached_monsters("고블린")
         base   = cached.get("normal", (None, None))[0] if cached else None
         boss   = Make_MidBoss(player.lv, base)
+        # is_boss=True: 중간보스도 도망 불가 (Battlesession에서 escape 차단)
         state  = _start_battle(gs, boss, is_boss=True)
         return jsonify({"ok": True, "event": "midboss",
                         "enemy": {"name": boss.name, "hp": boss.hp},
-                        "battle_state": state,
-                        "player": _player_dict(player, gs["items"])})
+                        "battle_state": state})
 
     # ── 일반 이벤트 ──
     gs["turn"] += 1
@@ -237,9 +255,7 @@ def explore():
 
     if 1 <= rd <= 12:
         # 전투 이벤트
-        # Phase 1: 레벨대별 등장 풀에서 랜덤 선택
-        # (Lv1~2: 고블린/박쥐만, Lv3+: 슬라임 추가, Lv6+: 골렘, Lv7+: 유령, Lv10+: 암살자)
-        enemy_type = gs["hook"].pick_random_enemy_type()
+        enemy_type = "고블린" if random() < 0.5 else "박쥐"
         enemy_snap = gs["hook"].get_enemy(enemy_type)
         enemy      = gs["hook"].make_battle_unit(enemy_snap)
         state      = _start_battle(gs, enemy)
@@ -248,7 +264,6 @@ def explore():
             "event":       "battle",
             "enemy":       {"name": enemy.name, "hp": enemy.hp},
             "battle_state": state,
-            "player":      _player_dict(player, gs["items"]),
         })
 
     elif 13 <= rd <= 15:
@@ -256,8 +271,7 @@ def explore():
         gained = items[randint(0, len(items) - 1)]
         items.append(gained)
         return jsonify({"ok": True, "event": "item", "item": gained,
-                        "message": f"[아이템 획득] {gained}을(를) 발견했다!",
-                        "player": _player_dict(player, gs["items"])})
+                        "message": f"[아이템 획득] {gained}을(를) 발견했다!"})
 
     elif 16 <= rd <= 17:
         # 휴식
@@ -266,13 +280,11 @@ def explore():
                         "options": [
                             {"key": "heal",  "label": "체력 회복 (maxHP의 1/3)"},
                             {"key": "train", "label": "수련 (경험치 60~80%)"},
-                        ],
-                        "player": _player_dict(player, gs["items"])})
+                        ]})
 
     else:
         return jsonify({"ok": True, "event": "nothing",
-                        "message": "조용하다... 아무 일도 일어나지 않았다.",
-                        "player": _player_dict(player, gs["items"])})
+                        "message": "조용하다... 아무 일도 일어나지 않았다."})
 
 
 def _start_battle(gs: dict, enemy, is_boss: bool = False) -> dict:
@@ -321,12 +333,6 @@ def battle_action():
     battle = gs["battle"]
     result = battle.step(action)
 
-    # ── [요청 1] 세션 재고 동기화 ─────────────────────
-    # BattleSession.__init__에서 self.items = list(items)로 별개 리스트를
-    # 만들기 때문에, 전투 중 아이템 사용 결과를 매 step마다 세션에 반영해야
-    # 전투 종료 후에도 인벤토리 수량이 맞게 유지됨.
-    gs["items"] = list(battle.items)
-
     # 전투 종료 처리
     if result["done"]:
         player = gs["player"]
@@ -356,18 +362,6 @@ def battle_action():
             gs["mid_boss_cleared"] = True
             gs["items"].append("HP_L_potion")
             result["messages"].append("보상: HP_L_potion 획득!")
-
-        # ── [요청 2] 전투 로그 저장 — 분석 파이프라인 연결 ──
-        # BalanceHook.after_battle()을 호출하면:
-        #   1) LOG_Manager.save_player_log() — data/Player_LOG/에 JSON 저장
-        #   2) 패배 시 FeedbackEngine 실행 (AI 복기 분석)
-        # 이로써 2학기 BehaviorAnalyzer/FeedbackEngine이
-        # Flask 경로로 플레이한 데이터도 분석할 수 있게 됨.
-        try:
-            battle_result = battle.to_battle_result()
-            gs["hook"].after_battle(battle_result)
-        except Exception as e:
-            print(f"[WARN] after_battle 호출 실패: {e}")
 
         gs["battle"] = None  # 전투 세션 초기화
         result["player"] = _player_dict(player, gs["items"])
@@ -404,22 +398,22 @@ def use_item():
     if not meta:
         return jsonify({"ok": False, "error": "알 수 없는 아이템입니다."})
 
+    # ITEM_META["amount"]는 (user) -> int 람다. Digital Twin 원칙:
+    # game/Item.py의 회복 공식과 동일한 결과를 내도록 호출해서 값 얻음.
+    amount = meta["amount"](player) if callable(meta["amount"]) else meta["amount"]
+
     if meta["stat"] == "hp":
         before     = int(player.hp)
-        amount     = meta["amount"](player)  # 동적 계산
         player.hp  = min(player.maxhp, player.hp + amount)
         items.remove(item_name)
-        return jsonify({"ok": True,
-                        "message": f"{item_name} 사용 → HP {before} → {int(player.hp)} (+{amount})",
+        return jsonify({"ok": True, "message": f"{item_name} 사용 → HP {before} → {int(player.hp)}",
                         "player": _player_dict(player, items)})
 
     elif meta["stat"] == "mp":
         before     = int(player.mp)
-        amount     = meta["amount"](player)  # 동적 계산
         player.mp  = min(player.maxmp, player.mp + amount)
         items.remove(item_name)
-        return jsonify({"ok": True,
-                        "message": f"{item_name} 사용 → MP {before} → {int(player.mp)} (+{amount})",
+        return jsonify({"ok": True, "message": f"{item_name} 사용 → MP {before} → {int(player.mp)}",
                         "player": _player_dict(player, items)})
 
     return jsonify({"ok": False, "error": "사용할 수 없는 아이템입니다."})
@@ -432,11 +426,7 @@ def use_item():
 @app.route("/api/rest", methods=["POST"])
 def rest():
     """
-    요청: { "choice": "heal" | "mp" | "train" }
-
-    heal:  HP 최대치의 1/3 회복
-    mp:    MP 최대치의 1/3 회복 (테스트용 — 본게임에선 탐험 이벤트로만)
-    train: 랜덤 경험치 획득 (maxexp의 60~80%)
+    요청: { "choice": "heal" | "train" }
     """
     gs = _get_session()
     if not gs:
@@ -456,16 +446,6 @@ def rest():
                         "message": f"체력 {heal} 회복! ({int(player.hp)}/{int(player.maxhp)})",
                         "player": _player_dict(player, gs["items"])})
 
-    elif choice == "mp":
-        if player.mp >= player.maxmp:
-            return jsonify({"ok": True, "message": "이미 마나가 가득 찼습니다.",
-                            "player": _player_dict(player, gs["items"])})
-        mp_gain   = min(int(player.maxmp / 3), int(player.maxmp - player.mp))
-        player.mp = min(player.maxmp, player.mp + mp_gain)
-        return jsonify({"ok": True,
-                        "message": f"마나 {mp_gain} 회복! ({int(player.mp)}/{int(player.maxmp)})",
-                        "player": _player_dict(player, gs["items"])})
-
     elif choice == "train":
         ratio   = 0.60 + random() * 0.20
         exp_gain = int(player.maxexp * ratio)
@@ -476,7 +456,7 @@ def rest():
                         "message": f"수련으로 {exp_gain} 경험치 획득!",
                         "player": _player_dict(player, gs["items"])})
 
-    return jsonify({"ok": False, "error": "choice는 heal, mp, train 중 하나여야 합니다."})
+    return jsonify({"ok": False, "error": "choice는 heal 또는 train이어야 합니다."})
 
 
 # ─────────────────────────────────────────────
@@ -485,7 +465,16 @@ def rest():
 
 @app.route("/")
 def index():
-    return send_from_directory("static", "index.html")
+    """
+    UI 진입점.
+    static_folder("static") 기준으로 'index.html' 서빙.
+    파일 시스템 대소문자 구분 환경 (Linux 등)에서도 안전하게 동작하도록
+    명시적으로 소문자 파일명 사용. 실제 파일도 반드시 소문자 'index.html'.
+
+    Flask의 app.static_folder를 명시적으로 사용해 작업 디렉토리 의존성 제거.
+    """
+    static_dir = app.static_folder or "static"
+    return send_from_directory(static_dir, "index.html")
 
 
 # ─────────────────────────────────────────────
