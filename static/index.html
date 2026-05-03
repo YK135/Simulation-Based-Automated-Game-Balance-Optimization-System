@@ -8,13 +8,13 @@
      CSS 모듈
      기능별 분할 — 수정 시 해당 파일만 보면 됨
      ═══════════════════════════════════════════════════════════ -->
-<link rel="stylesheet" href="/css/base.css">          <!-- 변수, 리셋, btn, toast -->
-<link rel="stylesheet" href="/css/layout.css">        <!-- 상단바, 3컬럼 그리드, .panel -->
-<link rel="stylesheet" href="/css/player-panel.css">  <!-- 좌측: 캐릭터/게이지/스킬북 -->
-<link rel="stylesheet" href="/css/battle.css">        <!-- 중앙 배틀 + 액션 + 로그 -->
-<link rel="stylesheet" href="/css/explore.css">       <!-- 탐험 모드 + 진행 턴 -->
-<link rel="stylesheet" href="/css/modal.css">         <!-- 모달 3종 -->
-<link rel="stylesheet" href="/css/ai-monitor.css">    <!-- 우측 AI 패널 -->
+<link rel="stylesheet" href="css/Base.css">          <!-- 변수, 리셋, btn, toast -->
+<link rel="stylesheet" href="css/Layout.css">        <!-- 상단바, 3컬럼 그리드, .panel -->
+<link rel="stylesheet" href="css/Player_Panel.css">  <!-- 좌측: 캐릭터/게이지/스킬북 -->
+<link rel="stylesheet" href="css/Battle.css">        <!-- 중앙 배틀 + 액션 + 로그 -->
+<link rel="stylesheet" href="css/Explore.css">       <!-- 탐험 모드 + 진행 턴 -->
+<link rel="stylesheet" href="css/Modal.css">         <!-- 모달 3종 -->
+<link rel="stylesheet" href="css/AI_Monitor.css">    <!-- 우측 AI 패널 -->
 </head>
 <body>
 
@@ -491,16 +491,15 @@
      JS 모듈 — 의존성 순서 중요
      기반 → 상태 → 유틸 → UI → 액션 → 이벤트 바인딩 순
      ═══════════════════════════════════════════════════════════ -->
-<script src="/js/api.js"></script>          <!-- fetch wrapper -->
-<script src="/js/state.js"></script>        <!-- 전역 state + 매핑 -->
-<script src="/js/utils.js"></script>        <!-- 시계, 토스트, 로그 -->
-<script src="/js/pentagon.js"></script>     <!-- 펜타곤 차트 -->
-<script src="/js/ui-player.js"></script>    <!-- 좌측 패널 -->
-<script src="/js/ui-explore.js"></script>   <!-- 탐험 모드 -->
-<script src="/js/ui-battle.js"></script>    <!-- 배틀 모드 -->
-<script src="/js/modals.js"></script>       <!-- 휴식/도망 + 시뮬 가시화 -->
-<script src="/js/actions.js"></script>      <!-- API 호출 액션 -->
-<script src="/js/main.js"></script>         <!-- 부팅 + 이벤트 바인딩 -->
-
+<script src="js/Api.js"></script>          <!-- fetch wrapper -->
+<script src="js/State.js"></script>        <!-- 전역 state + 매핑 -->
+<script src="js/Utils.js"></script>        <!-- 시계, 토스트, 로그 -->
+<script src="js/Pentagon.js"></script>     <!-- 펜타곤 차트 -->
+<script src="js/UI_Player.js"></script>    <!-- 좌측 패널 -->
+<script src="js/UI_Explore.js"></script>   <!-- 탐험 모드 -->
+<script src="js/UI_Battle.js"></script>    <!-- 배틀 모드 -->
+<script src="js/Modals.js"></script>       <!-- 휴식/도망 + 시뮬 가시화 -->
+<script src="js/Actions.js"></script>      <!-- API 호출 액션 -->
+<script src="js/Main.js"></script>         <!-- 부팅 + 이벤트 바인딩 -->
 </body>
 </html>
