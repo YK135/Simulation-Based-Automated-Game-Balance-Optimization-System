@@ -1,0 +1,152 @@
+/* ═══════════════════════════════════════════════════════════
+   modal.css
+   - 공통 모달 배경/컨테이너
+   - 새 게임 모달 (form)
+   - 휴식 모달 (heal/train)
+   - 도망 모달 (yes/no, 휴식 모달과 동일 스타일)
+   ═══════════════════════════════════════════════════════════ */
+
+.modal-bg {
+    position: fixed; inset: 0;
+    background: rgba(5, 10, 13, 0.85);
+    display: none;
+    align-items: center;
+    justify-content: center;
+    z-index: 1000;
+    backdrop-filter: blur(4px);
+}
+.modal-bg.active { display: flex; }
+.modal {
+    background: var(--bg-panel);
+    border: 1px solid var(--accent-cyan);
+    border-radius: 4px;
+    padding: 24px;
+    width: 360px;
+    max-width: 90vw;
+}
+.modal h2 {
+    font-size: 13px;
+    color: var(--accent-cyan);
+    margin-bottom: 16px;
+    letter-spacing: 0.15em;
+}
+
+/* ── 새 게임 모달 폼 ── */
+.form-row { margin-bottom: 12px; }
+.form-row label {
+    font-size: 10px;
+    color: var(--text-dim);
+    display: block;
+    margin-bottom: 4px;
+    letter-spacing: 0.1em;
+}
+.form-row input,
+.form-row select {
+    width: 100%;
+    padding: 8px 10px;
+    background: var(--bg-darkest);
+    border: 1px solid var(--border);
+    color: var(--text-main);
+    font-family: inherit;
+    font-size: 11px;
+    border-radius: 3px;
+}
+.form-row input:focus, .form-row select:focus {
+    border-color: var(--accent-cyan);
+    outline: none;
+}
+.modal .btn.primary {
+    background: var(--accent-cyan);
+    color: var(--bg-darkest);
+    border-color: var(--accent-cyan);
+    font-weight: 700;
+    margin-top: 8px;
+}
+.modal .btn.primary:hover { background: #5eead4; }
+
+/* ── 휴식/도망 모달 (동일 스타일) ── */
+.modal-rest {
+    width: 460px;
+}
+.rest-desc {
+    color: var(--text-dim);
+    font-size: 11px;
+    line-height: 1.6;
+    margin-bottom: 18px;
+    text-align: center;
+    padding: 10px 0;
+    border-top: 1px dashed var(--border);
+    border-bottom: 1px dashed var(--border);
+}
+.rest-options {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 12px;
+}
+.rest-option {
+    background: var(--bg-darkest);
+    border: 1px solid var(--border);
+    color: var(--text-main);
+    font-family: inherit;
+    cursor: pointer;
+    border-radius: 4px;
+    padding: 18px 14px;
+    transition: all 0.2s;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 6px;
+}
+.rest-option:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 6px 16px rgba(0, 0, 0, 0.4);
+}
+.rest-option .rest-icon {
+    font-size: 32px;
+    margin-bottom: 4px;
+}
+.rest-option .rest-label {
+    font-size: 14px;
+    font-weight: 700;
+    letter-spacing: 0.15em;
+}
+.rest-option .rest-sub {
+    font-size: 10px;
+    color: var(--text-dim);
+}
+
+/* ── 휴식: HEAL (회복) ── */
+.rest-option.heal { border-color: rgba(34, 197, 94, 0.4); }
+.rest-option.heal:hover {
+    background: rgba(34, 197, 94, 0.1);
+    border-color: #22c55e;
+}
+.rest-option.heal .rest-icon { color: #22c55e; }
+.rest-option.heal .rest-label { color: #a7f3d0; }
+
+/* ── 휴식: TRAIN (수련) ── */
+.rest-option.train { border-color: rgba(250, 204, 21, 0.4); }
+.rest-option.train:hover {
+    background: rgba(250, 204, 21, 0.1);
+    border-color: var(--skill-yellow);
+}
+.rest-option.train .rest-icon { color: var(--skill-yellow); }
+.rest-option.train .rest-label { color: var(--skill-yellow); }
+
+/* ── 도망 모달: YES (도망친다) ── */
+.rest-option.escape-yes { border-color: rgba(251, 146, 60, 0.4); }
+.rest-option.escape-yes:hover {
+    background: rgba(251, 146, 60, 0.1);
+    border-color: var(--enemy-orange);
+}
+.rest-option.escape-yes .rest-icon { color: var(--enemy-orange); }
+.rest-option.escape-yes .rest-label { color: var(--enemy-orange); }
+
+/* ── 도망 모달: NO (전투 계속) ── */
+.rest-option.escape-no { border-color: rgba(45, 212, 191, 0.4); }
+.rest-option.escape-no:hover {
+    background: rgba(45, 212, 191, 0.1);
+    border-color: var(--accent-cyan);
+}
+.rest-option.escape-no .rest-icon { color: var(--accent-cyan); }
+.rest-option.escape-no .rest-label { color: var(--accent-cyan); }

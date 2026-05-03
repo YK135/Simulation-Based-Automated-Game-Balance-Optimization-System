@@ -1,0 +1,196 @@
+/* ═══════════════════════════════════════════════════════════
+   explore.css
+   - 탐험 모드 (배틀 안 할 때)
+   - 진행 턴 progress 바
+   - 인벤토리/스탯/스킬 카드 그리드
+   - 인벤토리 클릭 가능 항목
+   ═══════════════════════════════════════════════════════════ */
+
+#explore-mode {
+    min-height: 320px;
+    display: flex;
+    flex-direction: column;
+    padding: 4px;
+}
+.explore-hero {
+    text-align: center;
+    padding: 18px 0 12px 0;
+    border-bottom: 1px dashed var(--border);
+    margin-bottom: 14px;
+}
+.explore-title {
+    font-size: 14px;
+    color: var(--accent-cyan);
+    margin-bottom: 8px;
+    letter-spacing: 0.15em;
+}
+.explore-sub {
+    font-size: 11px;
+    color: var(--text-dim);
+    margin-bottom: 14px;
+}
+.explore-btn {
+    width: auto;
+    display: inline-block;
+    padding: 9px 28px;
+    border-color: var(--accent-cyan);
+    color: var(--accent-cyan);
+    background: rgba(45, 212, 191, 0.1);
+    font-weight: 700;
+}
+.explore-btn:hover:not(:disabled) {
+    background: rgba(45, 212, 191, 0.2);
+}
+
+/* ── 진행 턴 표시 (중간/최종 보스까지 진행 상황) ── */
+.explore-progress {
+    margin-top: 14px;
+    padding: 10px 16px;
+    max-width: 380px;
+    margin-left: auto;
+    margin-right: auto;
+}
+.ep-row {
+    display: flex;
+    align-items: baseline;
+    justify-content: center;
+    gap: 4px;
+    font-size: 11px;
+    margin-bottom: 6px;
+    letter-spacing: 0.05em;
+}
+.ep-label { color: var(--text-dim); margin-right: 6px; }
+.ep-value {
+    color: var(--accent-cyan);
+    font-weight: 700;
+    font-size: 16px;
+}
+.ep-sep { color: var(--text-muted); }
+.ep-target { color: var(--text-dim); font-size: 12px; }
+
+.ep-bar {
+    position: relative;
+    height: 8px;
+    background: var(--bg-darkest);
+    border: 1px solid var(--border);
+    border-radius: 2px;
+    overflow: visible;
+    margin-bottom: 6px;
+}
+.ep-bar-fill {
+    height: 100%;
+    background: linear-gradient(90deg, var(--accent-cyan), var(--accent-blue));
+    transition: width 0.5s ease;
+    box-shadow: 0 0 6px rgba(45, 212, 191, 0.4);
+}
+.ep-marker {
+    position: absolute;
+    top: -3px;
+    width: 2px;
+    height: 14px;
+    background: var(--accent-warn);
+    transform: translateX(-50%);
+    box-shadow: 0 0 4px rgba(251, 191, 36, 0.6);
+}
+.ep-marker.midboss::after {
+    content: '◆';
+    position: absolute;
+    top: -10px;
+    left: 50%;
+    transform: translateX(-50%);
+    color: var(--accent-warn);
+    font-size: 8px;
+}
+.ep-hint {
+    text-align: center;
+    font-size: 9px;
+    color: var(--text-muted);
+    letter-spacing: 0.1em;
+}
+
+/* ── 인벤토리/스탯/스킬 카드 3개 ── */
+.explore-info-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr 1fr;
+    gap: 10px;
+    flex: 1;
+}
+.explore-card {
+    background: var(--bg-darkest);
+    border: 1px solid var(--border);
+    border-radius: 3px;
+    padding: 10px 12px;
+    min-height: 100px;
+}
+.explore-card-title {
+    font-size: 10px;
+    color: var(--accent-cyan);
+    letter-spacing: 0.1em;
+    font-weight: 700;
+    margin-bottom: 8px;
+    padding-bottom: 4px;
+    border-bottom: 1px dashed var(--border);
+}
+.explore-card-body {
+    font-size: 10px;
+    line-height: 1.6;
+}
+.explore-empty {
+    color: var(--text-muted);
+    font-style: italic;
+    text-align: center;
+    padding: 12px 0;
+}
+.explore-stat-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 4px 10px;
+}
+.explore-stat-row {
+    display: flex; justify-content: space-between;
+    color: var(--text-dim);
+}
+.explore-stat-row .v { color: var(--text-main); font-weight: 700; }
+
+/* ── 인벤토리 항목 (클릭 가능) ── */
+.inv-item {
+    display: flex;
+    justify-content: space-between;
+    padding: 3px 0;
+    color: var(--text-main);
+}
+.inv-item.clickable {
+    padding: 6px 8px;
+    margin: 2px 0;
+    border-radius: 2px;
+    cursor: pointer;
+    border: 1px solid transparent;
+    transition: all 0.15s;
+}
+.inv-item.clickable:hover {
+    background: rgba(250, 204, 21, 0.10);
+    border-color: rgba(250, 204, 21, 0.4);
+    transform: translateX(2px);
+}
+.inv-item.clickable::after {
+    content: '▶';
+    color: var(--accent-cyan);
+    margin-left: 8px;
+    font-size: 8px;
+    opacity: 0;
+    transition: opacity 0.15s;
+}
+.inv-item.clickable:hover::after { opacity: 1; }
+.inv-item .qty { color: var(--accent-warn); font-weight: 700; }
+
+/* ── 스킬 칩 ── */
+.sk-chip {
+    display: inline-block;
+    padding: 3px 8px;
+    margin: 2px 3px 2px 0;
+    background: rgba(250, 204, 21, 0.12);
+    border: 1px solid rgba(250, 204, 21, 0.4);
+    color: var(--skill-yellow);
+    border-radius: 2px;
+    font-size: 9px;
+}

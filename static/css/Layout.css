@@ -1,0 +1,58 @@
+/* ═══════════════════════════════════════════════════════════
+   layout.css
+   - 상단 브랜드 바
+   - 3컬럼 대시보드 그리드
+   - 공통 .panel 컨테이너
+   ═══════════════════════════════════════════════════════════ */
+
+.topbar {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 8px 14px;
+    margin-bottom: 12px;
+    background: var(--bg-panel);
+    border: 1px solid var(--border);
+    border-radius: 4px;
+}
+.brand {
+    display: flex; align-items: center; gap: 10px;
+    font-size: 14px; font-weight: 700;
+    letter-spacing: 0.04em;
+    color: var(--accent-cyan);
+}
+.brand-icon {
+    width: 26px; height: 26px;
+    border: 2px solid var(--accent-cyan);
+    border-radius: 3px;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 14px;
+}
+.clock {
+    font-size: 13px;
+    color: var(--text-dim);
+    letter-spacing: 0.08em;
+}
+
+.dashboard {
+    display: grid;
+    grid-template-columns: 280px 1fr 320px;
+    gap: 12px;
+}
+
+.panel {
+    background: var(--bg-panel);
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    padding: 12px;
+    margin-bottom: 12px;
+}
+.panel-title {
+    font-size: 10px;
+    font-weight: 700;
+    letter-spacing: 0.15em;
+    color: var(--accent-cyan);
+    margin-bottom: 10px;
+    padding-bottom: 6px;
+    border-bottom: 1px dashed var(--border);
+}

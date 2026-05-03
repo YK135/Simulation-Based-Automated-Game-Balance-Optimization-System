@@ -3,1077 +3,24 @@
 <head>
 <meta charset="UTF-8">
 <title>RPG AI Balancing Dashboard</title>
-<style>
-:root {
-    --bg-darkest:    #0a1419;
-    --bg-dark:       #0f1d24;
-    --bg-panel:      #142632;
-    --bg-panel-2:    #1a3140;
-    --border:        #1e3a4a;
-    --border-active: #2dd4bf;
-    --text-main:     #d6e7ed;
-    --text-dim:      #7a96a3;
-    --text-muted:    #4f6976;
-    --accent-cyan:   #2dd4bf;
-    --accent-blue:   #38bdf8;
-    --accent-warn:   #fbbf24;
-    --hp-red:        #ef4444;
-    --mp-blue:       #3b82f6;
-    --atb-cyan:      #22d3ee;
-    --skill-yellow:  #facc15;
-    --enemy-orange:  #fb923c;
-}
 
-* { box-sizing: border-box; margin: 0; padding: 0; }
-
-body {
-    background: var(--bg-darkest);
-    color: var(--text-main);
-    font-family: 'JetBrains Mono', 'D2Coding', 'Menlo', 'Consolas', monospace;
-    font-size: 12px;
-    min-height: 100vh;
-    padding: 12px;
-    background-image:
-        linear-gradient(rgba(45, 212, 191, 0.02) 1px, transparent 1px),
-        linear-gradient(90deg, rgba(45, 212, 191, 0.02) 1px, transparent 1px);
-    background-size: 24px 24px;
-}
-
-.topbar {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    padding: 8px 14px;
-    margin-bottom: 12px;
-    background: var(--bg-panel);
-    border: 1px solid var(--border);
-    border-radius: 4px;
-}
-.brand {
-    display: flex; align-items: center; gap: 10px;
-    font-size: 14px; font-weight: 700;
-    letter-spacing: 0.04em;
-    color: var(--accent-cyan);
-}
-.brand-icon {
-    width: 26px; height: 26px;
-    border: 2px solid var(--accent-cyan);
-    border-radius: 3px;
-    display: flex; align-items: center; justify-content: center;
-    font-size: 14px;
-}
-.clock {
-    font-size: 13px;
-    color: var(--text-dim);
-    letter-spacing: 0.08em;
-}
-
-.dashboard {
-    display: grid;
-    grid-template-columns: 280px 1fr 320px;
-    gap: 12px;
-}
-
-.panel {
-    background: var(--bg-panel);
-    border: 1px solid var(--border);
-    border-radius: 4px;
-    padding: 12px;
-    margin-bottom: 12px;
-}
-.panel-title {
-    font-size: 10px;
-    font-weight: 700;
-    letter-spacing: 0.15em;
-    color: var(--accent-cyan);
-    margin-bottom: 10px;
-    padding-bottom: 6px;
-    border-bottom: 1px dashed var(--border);
-}
-
-/* PLAYER */
-.player-art {
-    width: 100%;
-    aspect-ratio: 1.1 / 1;
-    background: linear-gradient(135deg, #1a3140, #0f1d24);
-    border: 1px solid var(--border);
-    border-radius: 3px;
-    display: flex; align-items: center; justify-content: center;
-    margin-bottom: 12px;
-    position: relative;
-    overflow: hidden;
-}
-.player-art::before {
-    content: '';
-    position: absolute; inset: 0;
-    background:
-        radial-gradient(circle at 30% 20%, rgba(45, 212, 191, 0.08), transparent 60%),
-        radial-gradient(circle at 70% 80%, rgba(56, 189, 248, 0.06), transparent 60%);
-}
-.player-art-icon {
-    font-size: 80px;
-    color: var(--accent-cyan);
-    text-shadow: 0 0 20px rgba(45, 212, 191, 0.4);
-    z-index: 1;
-}
-
-/* ═════════════════════════════════════════════════════════
-   IMAGE SLOTS — 이미지 넣을 자리 전용 스타일
-   - 좌측 초상화: .player-art-img (정사각형 이미지를 영역 가득 채움)
-   - 중앙 도트:   img.combatant-art (96x96 동그라미 안에 도트)
-   ═════════════════════════════════════════════════════════ */
-.player-art-img {
-    width: 100%;
-    height: 100%;
-    object-fit: cover;       /* 영역 가득 (cover) — 비율 잘림 가능 */
-    /* object-fit: contain;  ← 비율 유지 + 여백 두려면 이걸로 변경 */
-    border-radius: 3px;
-    z-index: 1;
-    position: relative;
-    image-rendering: pixelated;  /* 도트 이미지일 경우 선명하게 */
-}
-
-img.combatant-art {
-    /* combatant-art 클래스 그대로 적용 (96x96 + 동그라미) */
-    object-fit: contain;
-    padding: 6px;
-    background: linear-gradient(135deg, var(--bg-panel-2), var(--bg-darkest));
-    image-rendering: pixelated;  /* 도트 PNG 선명하게 */
-}
-
-.stats-bars {
-    display: flex; gap: 8px;
-    margin-bottom: 12px;
-}
-.stat-bar {
-    flex: 1;
-    display: flex; flex-direction: column; align-items: center;
-}
-.stat-bar-label {
-    font-size: 9px; font-weight: 700;
-    color: var(--text-dim);
-    margin-bottom: 4px;
-    letter-spacing: 0.1em;
-}
-.stat-bar-track {
-    width: 12px; height: 110px;
-    background: var(--bg-darkest);
-    border: 1px solid var(--border);
-    border-radius: 2px;
-    overflow: hidden;
-    display: flex; flex-direction: column-reverse;
-}
-.stat-bar-fill {
-    width: 100%;
-    transition: height 0.4s cubic-bezier(0.4, 0, 0.2, 1);
-}
-.stat-bar-fill.hp  { background: linear-gradient(180deg, #f87171, var(--hp-red)); box-shadow: 0 0 8px rgba(239, 68, 68, 0.4); }
-.stat-bar-fill.mp  { background: linear-gradient(180deg, #60a5fa, var(--mp-blue)); box-shadow: 0 0 8px rgba(59, 130, 246, 0.4); }
-.stat-bar-fill.exp { background: linear-gradient(180deg, #fde047, var(--skill-yellow)); box-shadow: 0 0 8px rgba(250, 204, 21, 0.4); }
-.stat-bar-fill.atb { background: linear-gradient(180deg, #67e8f9, var(--atb-cyan)); box-shadow: 0 0 10px rgba(34, 211, 238, 0.5); }
-
-@keyframes atb-pulse {
-    0%, 100% { box-shadow: 0 0 10px rgba(34, 211, 238, 0.5); }
-    50%      { box-shadow: 0 0 16px rgba(34, 211, 238, 0.8); }
-}
-.stat-bar-fill.atb.full { animation: atb-pulse 1s ease-in-out infinite; }
-
-.stat-bar-values {
-    text-align: center;
-    margin-top: 4px;
-    font-size: 10px;
-    line-height: 1.3;
-}
-.stat-bar-values .cur { color: var(--text-main); font-weight: 700; }
-.stat-bar-values .max { color: var(--text-muted); font-size: 9px; }
-
-.stat-grid {
-    display: grid;
-    grid-template-columns: 1fr 1fr;
-    gap: 4px 10px;
-    font-size: 10px;
-    margin-top: 8px;
-}
-.stat-row {
-    display: flex; justify-content: space-between;
-    color: var(--text-dim);
-}
-.stat-row .v { color: var(--text-main); font-weight: 700; }
-
-.skill-book {
-    display: grid;
-    grid-template-columns: repeat(5, 1fr);
-    gap: 6px;
-    margin-top: 8px;
-}
-.skill-slot {
-    aspect-ratio: 1;
-    background: var(--bg-darkest);
-    border: 1px solid var(--border);
-    border-radius: 3px;
-    display: flex; align-items: center; justify-content: center;
-    font-size: 16px;
-    color: var(--text-muted);
-    position: relative;
-}
-.skill-slot.learned {
-    color: var(--skill-yellow);
-    border-color: rgba(250, 204, 21, 0.4);
-    background: linear-gradient(135deg, rgba(250, 204, 21, 0.08), transparent);
-}
-
-.btn {
-    width: 100%;
-    padding: 8px 12px;
-    background: var(--bg-darkest);
-    border: 1px solid var(--border);
-    color: var(--text-dim);
-    font-family: inherit;
-    font-size: 11px;
-    letter-spacing: 0.08em;
-    cursor: pointer;
-    transition: all 0.15s;
-    border-radius: 3px;
-}
-.btn:hover:not(:disabled) {
-    border-color: var(--accent-cyan);
-    color: var(--accent-cyan);
-    background: rgba(45, 212, 191, 0.08);
-}
-.btn:disabled { opacity: 0.4; cursor: not-allowed; }
-
-/* CENTER */
-.battle-zone {
-    background: var(--bg-panel);
-    border: 1px solid var(--border);
-    border-radius: 4px;
-    padding: 14px;
-    margin-bottom: 12px;
-    min-height: 280px;
-}
-.battle-header {
-    display: flex; justify-content: space-between; align-items: center;
-    margin-bottom: 14px;
-}
-.battle-title {
-    font-size: 11px; font-weight: 700;
-    letter-spacing: 0.15em;
-    color: var(--accent-cyan);
-}
-.field-name { font-size: 10px; color: var(--text-dim); }
-
-.battle-stage {
-    display: grid;
-    grid-template-columns: 1fr 1fr 1fr 1fr 1fr;
-    gap: 4px;
-    align-items: end;
-    min-height: 320px;
-    padding: 20px 8px 28px 8px;
-    border-radius: 3px;
-    position: relative;
-
-    /* ═══════════════════════════════════════════════════════════════
-       ▼ 배틀 필드 배경 이미지 자리 ▼
-       권장: 가로형 PNG, 1280x500 정도 (2.5:1 비율 권장 — 필드 높이 320px에 맞춤)
-       파일: static/img/bg_field.png
-       사용 방법: 아래 background-image 한 줄을 활성화
-       ═══════════════════════════════════════════════════════════════ */
-    /* background-image: url('/img/bg_field.png');
-       background-size: cover;
-       background-position: center bottom; */
-
-    /* 기본 배경 (배경 이미지 없을 때) */
-    background:
-        linear-gradient(180deg, transparent 0%, rgba(45, 212, 191, 0.04) 100%),
-        repeating-linear-gradient(90deg,
-            transparent 0px,
-            transparent 19.8%,
-            rgba(45, 212, 191, 0.04) 19.8%,
-            rgba(45, 212, 191, 0.04) 20%);
-}
-.battle-stage::after {
-    content: '';
-    position: absolute;
-    bottom: 32px; left: 6%; right: 6%;
-    height: 1px;
-    background: linear-gradient(90deg, transparent, rgba(45, 212, 191, 0.3), transparent);
-}
-
-.battle-slot {
-    display: flex;
-    align-items: end;
-    justify-content: center;
-    min-height: 290px;
-    position: relative;
-}
-.battle-slot.slot-gap {
-    /* 거리감 슬롯 — 비워둠 */
-}
-
-.combatant {
-    display: flex; flex-direction: column; align-items: center;
-    gap: 6px;
-    position: relative;
-}
-
-/* ═══════════════════════════════════════════════════════════════
-   캐릭터/몬스터 이미지 슬롯 — 투명 배경 직사각형
-   - 배경 / 테두리 / 그림자 모두 제거 (배틀 배경 위에 캐릭터만 떠있는 느낌)
-   - 도트 PNG (투명배경) 그대로 보이도록 background: transparent
-   - 가로보다 세로 살짝 긴 직사각형 (캐릭터 비율)
-   ═══════════════════════════════════════════════════════════════ */
-.combatant-art {
-    width: 100px;
-    height: 130px;
-    background: transparent;     /* 직사각형 — 동그라미/배경 제거 */
-    border: none;
-    border-radius: 0;
-    display: flex; align-items: center; justify-content: center;
-    font-size: 60px;
-    /* image-rendering: pixelated; ← img 태그에 직접 적용. 도트 이미지 선명하게 */
-}
-img.combatant-art {
-    object-fit: contain;
-    padding: 0;
-    background: transparent;
-    image-rendering: pixelated;
-}
-
-/* 활성 표시 (내 차례/적 차례 펄스) — 배경/테두리 제거하면서 발광만 남김 */
-.combatant.player .combatant-art {
-    filter: drop-shadow(0 0 12px rgba(45, 212, 191, 0.5));
-}
-.combatant.enemy .combatant-art {
-    filter: drop-shadow(0 0 10px rgba(251, 146, 60, 0.5));
-}
-.combatant.acting .combatant-art {
-    animation: combatant-pulse 0.8s ease-in-out infinite alternate;
-}
-
-.combatant-name { font-size: 12px; font-weight: 700; letter-spacing: 0.04em; }
-.combatant-meta { font-size: 9px; color: var(--text-dim); }
-
-/* HP/MP 바 — 크게 (가독성 강화) */
-.combatant-bars {
-    display: flex; flex-direction: column;
-    gap: 4px;
-    width: 130px;
-    margin-top: 6px;
-}
-.cb-row {
-    display: flex; align-items: center;
-    gap: 5px; font-size: 10px;
-}
-.cb-label {
-    width: 24px;
-    color: var(--text-dim);
-    font-weight: 700;
-    font-size: 9px;
-}
-.cb-track {
-    flex: 1;
-    height: 11px;
-    background: var(--bg-darkest);
-    border: 1px solid var(--border);
-    border-radius: 2px;
-    overflow: hidden;
-}
-.cb-fill { height: 100%; transition: width 0.4s; }
-.cb-fill.hp { background: linear-gradient(90deg, #f87171, var(--hp-red)); box-shadow: inset 0 0 4px rgba(255,255,255,0.15); }
-.cb-fill.mp { background: linear-gradient(90deg, #60a5fa, var(--mp-blue)); box-shadow: inset 0 0 4px rgba(255,255,255,0.15); }
-.cb-text {
-    width: 56px;
-    text-align: right;
-    font-size: 9px;
-    font-weight: 700;
-    color: var(--text-main);
-}
-
-.target-tag {
-    position: absolute;
-    top: -10px;
-    background: var(--accent-cyan);
-    color: var(--bg-darkest);
-    font-size: 8px; font-weight: 700;
-    padding: 2px 6px;
-    border-radius: 2px;
-    box-shadow: 0 0 8px rgba(45, 212, 191, 0.6);
-}
-
-.log-area {
-    background: var(--bg-darkest);
-    border: 1px solid var(--border);
-    border-radius: 3px;
-    padding: 10px 12px;
-    height: 130px;
-    overflow-y: auto;
-    font-size: 10px;
-    line-height: 1.6;
-    margin-bottom: 12px;
-}
-.log-area::-webkit-scrollbar { width: 6px; }
-.log-area::-webkit-scrollbar-track { background: var(--bg-darkest); }
-.log-area::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
-
-.log-line { color: var(--text-dim); }
-.log-line .ts { color: var(--text-muted); margin-right: 6px; }
-.log-line.crit  { color: var(--accent-warn); }
-.log-line.dmg   { color: #fcd5d5; }
-.log-line.heal  { color: #a7f3d0; }
-.log-line.skill { color: var(--accent-cyan); }
-.log-line.system { color: var(--text-muted); font-style: italic; }
-
-.action-bar {
-    display: grid;
-    grid-template-columns: repeat(4, 1fr);
-    gap: 8px;
-    margin-bottom: 8px;
-}
-.action-btn {
-    padding: 11px;
-    border: 1px solid var(--border);
-    background: var(--bg-darkest);
-    color: var(--text-main);
-    font-family: inherit;
-    font-size: 11px; font-weight: 700;
-    letter-spacing: 0.08em;
-    cursor: pointer;
-    border-radius: 3px;
-    transition: all 0.15s;
-}
-.action-btn:hover:not(:disabled) {
-    transform: translateY(-1px);
-    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
-}
-.action-btn:disabled { opacity: 0.4; cursor: not-allowed; transform: none; }
-
-.action-btn.attack { border-color: rgba(239, 68, 68, 0.4); color: #fca5a5; background: rgba(239, 68, 68, 0.08); }
-.action-btn.attack:hover:not(:disabled) { background: rgba(239, 68, 68, 0.18); border-color: var(--hp-red); }
-.action-btn.skill { border-color: rgba(34, 211, 238, 0.4); color: var(--atb-cyan); background: rgba(34, 211, 238, 0.06); }
-.action-btn.skill:hover:not(:disabled) { background: rgba(34, 211, 238, 0.16); border-color: var(--atb-cyan); }
-.action-btn.item  { border-color: rgba(250, 204, 21, 0.4); color: var(--skill-yellow); background: rgba(250, 204, 21, 0.06); }
-.action-btn.item:hover:not(:disabled) { background: rgba(250, 204, 21, 0.16); border-color: var(--skill-yellow); }
-.action-btn.escape{ border-color: var(--border); color: var(--text-dim); }
-.action-btn.escape:hover:not(:disabled) { background: var(--bg-panel-2); color: var(--text-main); }
-.action-btn.escape-blocked {
-    background: rgba(239, 68, 68, 0.06) !important;
-    border-color: rgba(239, 68, 68, 0.3) !important;
-    color: rgba(239, 68, 68, 0.6) !important;
-    cursor: not-allowed;
-    opacity: 0.55;
-}
-
-.submenu {
-    background: var(--bg-darkest);
-    border: 1px solid var(--accent-cyan);
-    border-radius: 3px;
-    padding: 8px;
-    margin-bottom: 8px;
-    display: none;
-}
-.submenu.active { display: block; }
-.submenu-title {
-    font-size: 9px;
-    color: var(--accent-cyan);
-    margin-bottom: 6px;
-    letter-spacing: 0.1em;
-    font-weight: 700;
-}
-.submenu-list {
-    display: grid;
-    grid-template-columns: repeat(3, 1fr);
-    gap: 6px;
-}
-.submenu-item {
-    padding: 6px 8px;
-    background: var(--bg-panel);
-    border: 1px solid var(--border);
-    border-radius: 2px;
-    font-size: 10px;
-    cursor: pointer;
-    color: var(--text-main);
-    text-align: center;
-    transition: all 0.1s;
-}
-.submenu-item:hover {
-    background: var(--bg-panel-2);
-    border-color: var(--accent-cyan);
-    color: var(--accent-cyan);
-}
-.submenu-item .cost {
-    font-size: 8px;
-    color: var(--text-muted);
-    margin-left: 4px;
-}
-
-/* RIGHT */
-.pentagon-wrap {
-    position: relative;
-    aspect-ratio: 1;
-    width: 100%;
-    margin: 6px 0;
-}
-.pentagon-svg { width: 100%; height: 100%; }
-.pentagon-legend {
-    display: flex; justify-content: space-around;
-    font-size: 9px;
-    margin-top: 6px;
-}
-.legend-item {
-    display: flex; align-items: center;
-    gap: 4px;
-    color: var(--text-dim);
-}
-.legend-dot { width: 8px; height: 8px; border-radius: 50%; }
-.legend-dot.ideal   { background: var(--accent-cyan); }
-.legend-dot.current { background: var(--accent-warn); }
-
-.balance-state {
-    margin-top: 8px;
-    font-size: 10px;
-    color: var(--text-dim);
-    text-align: center;
-}
-.balance-state .label {
-    color: var(--accent-cyan);
-    font-weight: 700;
-    letter-spacing: 0.1em;
-}
-
-.sim-controls {
-    display: flex;
-    gap: 6px;
-    margin-bottom: 10px;
-}
-.sim-controls .btn {
-    flex: 1;
-    padding: 6px;
-    font-size: 10px;
-}
-.sim-controls .btn.start {
-    border-color: var(--accent-cyan);
-    color: var(--accent-cyan);
-    background: rgba(45, 212, 191, 0.1);
-}
-
-.ai-level-row {
-    display: flex; align-items: center;
-    gap: 8px;
-    font-size: 10px;
-    margin-bottom: 8px;
-}
-.ai-level-row .lbl { color: var(--text-dim); }
-.ai-level-toggle {
-    display: flex; gap: 4px;
-    margin-left: auto;
-}
-.ai-level-btn {
-    padding: 3px 8px;
-    background: var(--bg-darkest);
-    border: 1px solid var(--border);
-    color: var(--text-dim);
-    font-family: inherit;
-    font-size: 9px;
-    cursor: pointer;
-    border-radius: 2px;
-}
-.ai-level-btn.active {
-    background: rgba(45, 212, 191, 0.15);
-    border-color: var(--accent-cyan);
-    color: var(--accent-cyan);
-}
-
-.winrate-bars {
-    display: flex; flex-direction: column;
-    gap: 4px;
-    margin: 8px 0 6px 0;
-}
-.wr-row {
-    display: flex; align-items: center;
-    gap: 6px; font-size: 9px;
-}
-.wr-label { width: 60px; color: var(--text-dim); }
-.wr-track {
-    flex: 1; height: 10px;
-    background: var(--bg-darkest);
-    border: 1px solid var(--border);
-    border-radius: 2px;
-    overflow: hidden;
-}
-.wr-fill { height: 100%; transition: width 0.5s ease; }
-.wr-fill.player { background: linear-gradient(90deg, #67e8f9, var(--accent-cyan)); }
-.wr-fill.enemy  { background: linear-gradient(90deg, #fca5a5, var(--hp-red)); }
-.wr-pct {
-    width: 36px;
-    text-align: right;
-    font-size: 9px;
-    font-weight: 700;
-}
-
-.sim-stats {
-    font-size: 9px;
-    color: var(--text-dim);
-    text-align: center;
-    margin-top: 4px;
-    border-top: 1px dashed var(--border);
-    padding-top: 6px;
-}
-.sim-stats .v { color: var(--accent-cyan); font-weight: 700; }
-
-.tuner-row {
-    display: flex; flex-direction: column;
-    gap: 4px;
-    margin-bottom: 8px;
-    font-size: 9px;
-}
-.tuner-row .lbl { color: var(--text-dim); }
-.tuner-bar {
-    height: 6px;
-    background: var(--bg-darkest);
-    border: 1px solid var(--border);
-    border-radius: 2px;
-    overflow: hidden;
-}
-.tuner-bar-fill {
-    height: 100%;
-    background: linear-gradient(90deg, var(--accent-cyan), var(--accent-blue));
-    transition: width 0.3s;
-}
-
-.terminal {
-    background: #050a0d;
-    border: 1px solid var(--border);
-    border-radius: 3px;
-    padding: 8px;
-    max-height: 100px;
-    overflow-y: auto;
-    font-size: 9px;
-    line-height: 1.5;
-}
-.terminal-line {
-    color: var(--text-dim);
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
-}
-.terminal-line .ts { color: var(--text-muted); }
-.terminal-line.ok   { color: #a7f3d0; }
-.terminal-line.warn { color: var(--accent-warn); }
-
-/* MODAL */
-.modal-bg {
-    position: fixed; inset: 0;
-    background: rgba(5, 10, 13, 0.85);
-    display: none;
-    align-items: center;
-    justify-content: center;
-    z-index: 1000;
-    backdrop-filter: blur(4px);
-}
-.modal-bg.active { display: flex; }
-.modal {
-    background: var(--bg-panel);
-    border: 1px solid var(--accent-cyan);
-    border-radius: 4px;
-    padding: 24px;
-    width: 360px;
-    max-width: 90vw;
-}
-.modal h2 {
-    font-size: 13px;
-    color: var(--accent-cyan);
-    margin-bottom: 16px;
-    letter-spacing: 0.15em;
-}
-.form-row { margin-bottom: 12px; }
-.form-row label {
-    font-size: 10px;
-    color: var(--text-dim);
-    display: block;
-    margin-bottom: 4px;
-    letter-spacing: 0.1em;
-}
-.form-row input,
-.form-row select {
-    width: 100%;
-    padding: 8px 10px;
-    background: var(--bg-darkest);
-    border: 1px solid var(--border);
-    color: var(--text-main);
-    font-family: inherit;
-    font-size: 11px;
-    border-radius: 3px;
-}
-.form-row input:focus, .form-row select:focus {
-    border-color: var(--accent-cyan);
-    outline: none;
-}
-.modal .btn.primary {
-    background: var(--accent-cyan);
-    color: var(--bg-darkest);
-    border-color: var(--accent-cyan);
-    font-weight: 700;
-    margin-top: 8px;
-}
-.modal .btn.primary:hover { background: #5eead4; }
-
-.toast {
-    position: fixed;
-    top: 20px; right: 20px;
-    background: var(--bg-panel);
-    border: 1px solid var(--accent-cyan);
-    border-left: 3px solid var(--accent-cyan);
-    padding: 10px 16px;
-    border-radius: 3px;
-    font-size: 11px;
-    z-index: 2000;
-    transform: translateX(110%);
-    transition: transform 0.3s;
-    max-width: 300px;
-}
-.toast.active { transform: translateX(0); }
-.toast.warn   { border-color: var(--accent-warn); border-left-color: var(--accent-warn); }
-.toast.error  { border-color: var(--hp-red); border-left-color: var(--hp-red); }
-
-.ai-balancing {
-    text-align: center;
-    padding: 30px;
-    color: var(--accent-cyan);
-}
-
-/* ═══════════════════════════════════════════════════════════
-   탐험 모드 — 인벤토리/스탯/스킬 카드 그리드
-   필드 높이는 battle-stage와 동일 (320px) — 모드 전환 시 흔들림 없음
-   ═══════════════════════════════════════════════════════════ */
-#explore-mode {
-    min-height: 320px;
-    display: flex;
-    flex-direction: column;
-    padding: 4px;
-}
-.explore-hero {
-    text-align: center;
-    padding: 18px 0 12px 0;
-    border-bottom: 1px dashed var(--border);
-    margin-bottom: 14px;
-}
-.explore-title {
-    font-size: 14px;
-    color: var(--accent-cyan);
-    margin-bottom: 8px;
-    letter-spacing: 0.15em;
-}
-.explore-sub {
-    font-size: 11px;
-    color: var(--text-dim);
-    margin-bottom: 14px;
-}
-.explore-btn {
-    width: auto;
-    display: inline-block;
-    padding: 9px 28px;
-    border-color: var(--accent-cyan);
-    color: var(--accent-cyan);
-    background: rgba(45, 212, 191, 0.1);
-    font-weight: 700;
-}
-.explore-btn:hover:not(:disabled) {
-    background: rgba(45, 212, 191, 0.2);
-}
-
-/* 진행 턴 표시 — 중간/최종 보스까지 진행 상황 시각화 */
-.explore-progress {
-    margin-top: 14px;
-    padding: 10px 16px;
-    max-width: 380px;
-    margin-left: auto;
-    margin-right: auto;
-}
-.ep-row {
-    display: flex;
-    align-items: baseline;
-    justify-content: center;
-    gap: 4px;
-    font-size: 11px;
-    margin-bottom: 6px;
-    letter-spacing: 0.05em;
-}
-.ep-label { color: var(--text-dim); margin-right: 6px; }
-.ep-value {
-    color: var(--accent-cyan);
-    font-weight: 700;
-    font-size: 16px;
-}
-.ep-sep { color: var(--text-muted); }
-.ep-target { color: var(--text-dim); font-size: 12px; }
-
-.ep-bar {
-    position: relative;
-    height: 8px;
-    background: var(--bg-darkest);
-    border: 1px solid var(--border);
-    border-radius: 2px;
-    overflow: visible;
-    margin-bottom: 6px;
-}
-.ep-bar-fill {
-    height: 100%;
-    background: linear-gradient(90deg, var(--accent-cyan), var(--accent-blue));
-    transition: width 0.5s ease;
-    box-shadow: 0 0 6px rgba(45, 212, 191, 0.4);
-}
-.ep-marker {
-    position: absolute;
-    top: -3px;
-    width: 2px;
-    height: 14px;
-    background: var(--accent-warn);
-    transform: translateX(-50%);
-    box-shadow: 0 0 4px rgba(251, 191, 36, 0.6);
-}
-.ep-marker.midboss::after {
-    content: '◆';
-    position: absolute;
-    top: -10px;
-    left: 50%;
-    transform: translateX(-50%);
-    color: var(--accent-warn);
-    font-size: 8px;
-}
-.ep-hint {
-    text-align: center;
-    font-size: 9px;
-    color: var(--text-muted);
-    letter-spacing: 0.1em;
-}
-
-.explore-info-grid {
-    display: grid;
-    grid-template-columns: 1fr 1fr 1fr;
-    gap: 10px;
-    flex: 1;
-}
-.explore-card {
-    background: var(--bg-darkest);
-    border: 1px solid var(--border);
-    border-radius: 3px;
-    padding: 10px 12px;
-    min-height: 100px;
-}
-.explore-card-title {
-    font-size: 10px;
-    color: var(--accent-cyan);
-    letter-spacing: 0.1em;
-    font-weight: 700;
-    margin-bottom: 8px;
-    padding-bottom: 4px;
-    border-bottom: 1px dashed var(--border);
-}
-.explore-card-body {
-    font-size: 10px;
-    line-height: 1.6;
-}
-.explore-empty {
-    color: var(--text-muted);
-    font-style: italic;
-    text-align: center;
-    padding: 12px 0;
-}
-.explore-stat-grid {
-    display: grid;
-    grid-template-columns: 1fr 1fr;
-    gap: 4px 10px;
-}
-.explore-stat-row {
-    display: flex; justify-content: space-between;
-    color: var(--text-dim);
-}
-.explore-stat-row .v { color: var(--text-main); font-weight: 700; }
-
-.inv-item {
-    display: flex;
-    justify-content: space-between;
-    padding: 3px 0;
-    color: var(--text-main);
-}
-.inv-item.clickable {
-    padding: 6px 8px;
-    margin: 2px 0;
-    border-radius: 2px;
-    cursor: pointer;
-    border: 1px solid transparent;
-    transition: all 0.15s;
-}
-.inv-item.clickable:hover {
-    background: rgba(250, 204, 21, 0.10);
-    border-color: rgba(250, 204, 21, 0.4);
-    transform: translateX(2px);
-}
-.inv-item.clickable::after {
-    content: '▶';
-    color: var(--accent-cyan);
-    margin-left: 8px;
-    font-size: 8px;
-    opacity: 0;
-    transition: opacity 0.15s;
-}
-.inv-item.clickable:hover::after { opacity: 1; }
-.inv-item .qty { color: var(--accent-warn); font-weight: 700; }
-
-/* ═════════════════════════════════════════════════════════
-   휴식 모달
-   ═════════════════════════════════════════════════════════ */
-.modal-rest {
-    width: 460px;
-}
-.rest-desc {
-    color: var(--text-dim);
-    font-size: 11px;
-    line-height: 1.6;
-    margin-bottom: 18px;
-    text-align: center;
-    padding: 10px 0;
-    border-top: 1px dashed var(--border);
-    border-bottom: 1px dashed var(--border);
-}
-.rest-options {
-    display: grid;
-    grid-template-columns: 1fr 1fr;
-    gap: 12px;
-}
-.rest-option {
-    background: var(--bg-darkest);
-    border: 1px solid var(--border);
-    color: var(--text-main);
-    font-family: inherit;
-    cursor: pointer;
-    border-radius: 4px;
-    padding: 18px 14px;
-    transition: all 0.2s;
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    gap: 6px;
-}
-.rest-option:hover {
-    transform: translateY(-2px);
-    box-shadow: 0 6px 16px rgba(0, 0, 0, 0.4);
-}
-.rest-option .rest-icon {
-    font-size: 32px;
-    margin-bottom: 4px;
-}
-.rest-option .rest-label {
-    font-size: 14px;
-    font-weight: 700;
-    letter-spacing: 0.15em;
-}
-.rest-option .rest-sub {
-    font-size: 10px;
-    color: var(--text-dim);
-}
-.rest-option.heal {
-    border-color: rgba(34, 197, 94, 0.4);
-}
-.rest-option.heal:hover {
-    background: rgba(34, 197, 94, 0.1);
-    border-color: #22c55e;
-}
-.rest-option.heal .rest-icon { color: #22c55e; }
-.rest-option.heal .rest-label { color: #a7f3d0; }
-.rest-option.train {
-    border-color: rgba(250, 204, 21, 0.4);
-}
-.rest-option.train:hover {
-    background: rgba(250, 204, 21, 0.1);
-    border-color: var(--skill-yellow);
-}
-.rest-option.train .rest-icon { color: var(--skill-yellow); }
-.rest-option.train .rest-label { color: var(--skill-yellow); }
-
-/* 도망 모달용 */
-.rest-option.escape-yes {
-    border-color: rgba(251, 146, 60, 0.4);
-}
-.rest-option.escape-yes:hover {
-    background: rgba(251, 146, 60, 0.1);
-    border-color: var(--enemy-orange);
-}
-.rest-option.escape-yes .rest-icon { color: var(--enemy-orange); }
-.rest-option.escape-yes .rest-label { color: var(--enemy-orange); }
-
-.rest-option.escape-no {
-    border-color: rgba(45, 212, 191, 0.4);
-}
-.rest-option.escape-no:hover {
-    background: rgba(45, 212, 191, 0.1);
-    border-color: var(--accent-cyan);
-}
-.rest-option.escape-no .rest-icon { color: var(--accent-cyan); }
-.rest-option.escape-no .rest-label { color: var(--accent-cyan); }
-
-.sk-chip {
-    display: inline-block;
-    padding: 3px 8px;
-    margin: 2px 3px 2px 0;
-    background: rgba(250, 204, 21, 0.12);
-    border: 1px solid rgba(250, 204, 21, 0.4);
-    color: var(--skill-yellow);
-    border-radius: 2px;
-    font-size: 9px;
-}
-
-/* ═══════════════════════════════════════════════════════════
-   ATB 차례 시각화 — 내 차례 알림
-   ═══════════════════════════════════════════════════════════ */
-.action-bar.your-turn {
-    animation: turn-pulse 1.4s ease-in-out infinite;
-}
-@keyframes turn-pulse {
-    0%, 100% { box-shadow: 0 0 0 1px transparent; }
-    50%      { box-shadow: 0 0 12px 2px rgba(45, 212, 191, 0.35); }
-}
-
-.turn-indicator {
-    display: none;
-    text-align: center;
-    padding: 6px 12px;
-    margin-bottom: 8px;
-    font-size: 11px;
-    font-weight: 700;
-    letter-spacing: 0.15em;
-    border-radius: 3px;
-    transition: all 0.3s;
-}
-.turn-indicator.player-turn {
-    display: block;
-    color: var(--bg-darkest);
-    background: var(--accent-cyan);
-    box-shadow: 0 0 16px rgba(45, 212, 191, 0.5);
-    animation: indicator-glow 1s ease-in-out infinite alternate;
-}
-.turn-indicator.enemy-turn {
-    display: block;
-    color: var(--enemy-orange);
-    background: rgba(251, 146, 60, 0.1);
-    border: 1px solid rgba(251, 146, 60, 0.4);
-}
-@keyframes indicator-glow {
-    from { box-shadow: 0 0 8px rgba(45, 212, 191, 0.4); }
-    to   { box-shadow: 0 0 20px rgba(45, 212, 191, 0.7); }
-}
-
-.combatant.acting .combatant-art {
-    animation: combatant-pulse 0.8s ease-in-out infinite alternate;
-}
-@keyframes combatant-pulse {
-    from { transform: scale(1); }
-    to   { transform: scale(1.06); }
-}
-</style>
+<!-- ═══════════════════════════════════════════════════════════
+     CSS 모듈
+     기능별 분할 — 수정 시 해당 파일만 보면 됨
+     ═══════════════════════════════════════════════════════════ -->
+<link rel="stylesheet" href="/css/base.css">          <!-- 변수, 리셋, btn, toast -->
+<link rel="stylesheet" href="/css/layout.css">        <!-- 상단바, 3컬럼 그리드, .panel -->
+<link rel="stylesheet" href="/css/player-panel.css">  <!-- 좌측: 캐릭터/게이지/스킬북 -->
+<link rel="stylesheet" href="/css/battle.css">        <!-- 중앙 배틀 + 액션 + 로그 -->
+<link rel="stylesheet" href="/css/explore.css">       <!-- 탐험 모드 + 진행 턴 -->
+<link rel="stylesheet" href="/css/modal.css">         <!-- 모달 3종 -->
+<link rel="stylesheet" href="/css/ai-monitor.css">    <!-- 우측 AI 패널 -->
 </head>
 <body>
 
+<!-- ═══════════════════════════════════════════════════════════
+     상단 브랜드 바
+     ═══════════════════════════════════════════════════════════ -->
 <div class="topbar">
     <div class="brand">
         <div class="brand-icon">⬢</div>
@@ -1082,29 +29,35 @@ img.combatant-art {
     <div id="clock" class="clock">--:--:--</div>
 </div>
 
+<!-- ═══════════════════════════════════════════════════════════
+     3컬럼 대시보드
+     ═══════════════════════════════════════════════════════════ -->
 <div class="dashboard">
 
-<!-- LEFT -->
+<!-- ──────────────────────────────────────────────────────
+     LEFT: PLAYER 패널
+     ────────────────────────────────────────────────────── -->
 <div class="left-col">
     <div class="panel">
         <div class="panel-title">PLAYER: <span id="player-id">-- (LV --)</span></div>
+
         <div class="player-art">
             <!-- ════════════════════════════════════════════════════════
                  ▼▼▼ [이미지 1: 좌측 캐릭터 초상화] ▼▼▼
                  권장 크기: 정사각형 PNG (256x256 또는 512x512)
-                 파일 위치 예시: static/img/portrait_warrior.png
+                 파일 위치: static/img/portrait_warrior.png
                  사용 방법:
-                   1. 아래 <div class="player-art-icon"> 한 줄을 주석처리
-                   2. 그 위/아래에 <img> 태그 추가:
-                      <img src="/img/portrait_warrior.png"
-                           class="player-art-img" alt="">
-                   3. 직업별로 바꾸려면 JS의 refreshPlayer()에서
-                      이미지 src 동적 변경 (직업명 매핑)
+                   1. 아래 player-art-icon div를 주석처리
+                   2. 위의 <img> 태그 주석을 풀고 활성화
+                   3. 직업별 동적 변경: js/state.js의 JOB_PORTRAITS 매핑 활성화
+                      + js/ui-player.js의 refreshPlayer()에서 src 갱신
                  ════════════════════════════════════════════════════════ -->
             <!-- <img id="player-portrait" class="player-art-img"
                       src="/img/portrait_warrior.png" alt="" /> -->
             <div class="player-art-icon" id="player-icon">⚔</div>
         </div>
+
+        <!-- HP / MP / EXP / ATB 4개 세로 게이지 -->
         <div class="stats-bars">
             <div class="stat-bar">
                 <div class="stat-bar-label">HP</div>
@@ -1147,6 +100,8 @@ img.combatant-art {
                 </div>
             </div>
         </div>
+
+        <!-- 능력치 표 -->
         <div class="stat-grid" id="stat-grid">
             <div class="stat-row"><span>STG</span><span class="v">--</span></div>
             <div class="stat-row"><span>SP</span><span class="v">--</span></div>
@@ -1171,7 +126,9 @@ img.combatant-art {
     <button id="btn-restart" class="btn">⚡ NEW GAME</button>
 </div>
 
-<!-- CENTER -->
+<!-- ──────────────────────────────────────────────────────
+     CENTER: 배틀 / 탐험
+     ────────────────────────────────────────────────────── -->
 <div class="center-col">
     <div class="battle-zone">
         <div class="battle-header">
@@ -1179,6 +136,7 @@ img.combatant-art {
             <div class="field-name" id="turn-counter">TURN --</div>
         </div>
 
+        <!-- ═════════════════════ 탐험 모드 ═════════════════════ -->
         <div id="explore-mode" style="display:none;">
             <div class="explore-hero">
                 <div class="explore-title">PEACEFUL FIELD</div>
@@ -1193,14 +151,12 @@ img.combatant-art {
                     </div>
                     <div class="ep-bar">
                         <div class="ep-bar-fill" id="explore-turn-fill" style="width:0%"></div>
-                        <!-- 중간 보스 마커 (turn 25) -->
                         <div class="ep-marker midboss" style="left:50%;" title="중간 보스 (Turn 25)"></div>
                     </div>
                     <div class="ep-hint" id="explore-turn-hint">최종 보스까지 50턴</div>
                 </div>
             </div>
 
-            <!-- 탐험 모드에서도 캐릭터 정보 한눈에 보이도록 -->
             <div class="explore-info-grid">
                 <div class="explore-card">
                     <div class="explore-card-title">🎒 INVENTORY</div>
@@ -1210,9 +166,7 @@ img.combatant-art {
                 </div>
                 <div class="explore-card">
                     <div class="explore-card-title">⚔ STATS</div>
-                    <div id="explore-stats" class="explore-card-body explore-stat-grid">
-                        <!-- JS로 채움 -->
-                    </div>
+                    <div id="explore-stats" class="explore-card-body explore-stat-grid"></div>
                 </div>
                 <div class="explore-card">
                     <div class="explore-card-title">✦ SKILLS</div>
@@ -1223,19 +177,19 @@ img.combatant-art {
             </div>
         </div>
 
+        <!-- ═════════════════════ 배틀 모드 ═════════════════════ -->
         <div id="battle-mode" style="display:none;">
             <!-- ════════════════════════════════════════════════════════
                  배틀 필드 — 5분할 그리드 구조
                    슬롯1: 플레이어
                    슬롯2: 공백 (거리감)
-                   슬롯3~5: 몬스터 (다대일 전투용)
+                   슬롯3~5: 몬스터 (단일전 = 슬롯3, 다대일 = 3+4+5)
 
                  ▼▼▼ [배경 이미지: 배틀 필드 배경] ▼▼▼
-                 권장 크기: 가로형 PNG (1280x400 정도, 가로:세로 비율 약 3.2:1)
-                 파일 위치: static/img/bg_field.png
-                 사용 방법:
-                   아래 .battle-stage 의 background를 활성화하면 됨.
-                   기본은 다크 그라데이션이 들어가 있고, 그 위에 이미지 덮어쓰기 가능.
+                 권장 크기: 가로형 PNG (1280x500, 약 2.5:1 비율)
+                 파일: static/img/bg_field.png
+                 사용 방법: css/battle.css 안 .battle-stage 의
+                          background-image 한 줄 활성화
                  ════════════════════════════════════════════════════════ -->
             <div class="battle-stage">
                 <!-- ─── 슬롯 1: 플레이어 ─── -->
@@ -1244,8 +198,10 @@ img.combatant-art {
                         <!-- ════════════════════════════════════════════════════════
                              ▼ [이미지: 플레이어 도트 (투명 배경)] ▼
                              권장 크기: 96x96 PNG (투명배경)
-                             파일 위치: static/img/sprite_warrior.png 등
-                             사용 방법: <img>로 교체. 직업별 이미지는 JS에서 src 동적 변경
+                             파일 위치: static/img/sprite_warrior.png
+                             사용 방법: <img>로 교체. 직업별 매핑은
+                                      js/state.js의 JOB_SPRITES 활성화 +
+                                      js/ui-battle.js refreshBattle()에서 src 갱신
                              ════════════════════════════════════════════════════════ -->
                         <!-- <img class="combatant-art" id="player-combatant-art"
                                   src="/img/sprite_warrior.png" alt="" /> -->
@@ -1268,18 +224,17 @@ img.combatant-art {
                 </div>
 
                 <!-- ─── 슬롯 2: 공백 (거리감) ─── -->
-                <div class="battle-slot slot-gap">
-                    <!-- 거리감을 위한 빈 슬롯 — 비워둠 -->
-                </div>
+                <div class="battle-slot slot-gap"></div>
 
-                <!-- ─── 슬롯 3: 몬스터 (단일전 시 메인 위치) ─── -->
+                <!-- ─── 슬롯 3: 몬스터 (단일전 메인 위치) ─── -->
                 <div class="battle-slot slot-enemy">
                     <div class="combatant enemy" id="enemy-slot-1">
                         <div id="target-tag" class="target-tag" style="display:none;">▶ TARGET</div>
                         <!-- ════════════════════════════════════════════════════════
                              ▼ [이미지: 몬스터 도트 - 슬롯 3] ▼
                              권장 크기: 96x96 PNG (투명배경)
-                             ENEMY_SPRITES 매핑으로 종류별 이미지 자동 변경
+                             js/state.js의 ENEMY_SPRITES 매핑 활성화 시
+                             refreshBattle()에서 자동으로 종류별 이미지 변경
                              ════════════════════════════════════════════════════════ -->
                         <!-- <img class="combatant-art" id="enemy-art"
                                   src="/img/sprite_goblin.png" alt="" /> -->
@@ -1299,11 +254,8 @@ img.combatant-art {
                 <!-- ─── 슬롯 4: 추가 몬스터 (Phase 2 다대일 대비) ─── -->
                 <div class="battle-slot slot-enemy">
                     <!-- ════════════════════════════════════════════════════════
-                         ▼ [이미지: 몬스터 도트 - 슬롯 4 (Phase 2 다대일 전투용)] ▼
+                         ▼ [이미지: 몬스터 도트 - 슬롯 4 (Phase 2 다대일)] ▼
                          현재는 비어있음. Phase 2에서 사용.
-                         사용 방법:
-                           아래 주석 풀고 enemy-art-2 컨트롤 활성화.
-                           JS의 refreshBattle()이 enemies 배열 받으면 채울 예정.
                          ════════════════════════════════════════════════════════ -->
                     <!--
                     <div class="combatant enemy" id="enemy-slot-2">
@@ -1324,10 +276,6 @@ img.combatant-art {
 
                 <!-- ─── 슬롯 5: 추가 몬스터 (Phase 2 다대일 대비) ─── -->
                 <div class="battle-slot slot-enemy">
-                    <!-- ════════════════════════════════════════════════════════
-                         ▼ [이미지: 몬스터 도트 - 슬롯 5 (Phase 2 다대일 전투용)] ▼
-                         슬롯 4와 동일한 패턴. enemy-slot-3 / enemy-art-3 등으로 분리 사용.
-                         ════════════════════════════════════════════════════════ -->
                     <!--
                     <div class="combatant enemy" id="enemy-slot-3">
                         <img class="combatant-art" id="enemy-art-3"
@@ -1348,6 +296,7 @@ img.combatant-art {
         </div>
     </div>
 
+    <!-- 배틀 로그 + 액션 패널 -->
     <div class="panel">
         <div class="panel-title">BATTLE LOG</div>
         <div id="log-area" class="log-area">
@@ -1382,7 +331,9 @@ img.combatant-art {
     </div>
 </div>
 
-<!-- RIGHT -->
+<!-- ──────────────────────────────────────────────────────
+     RIGHT: AI Monitor 패널
+     ────────────────────────────────────────────────────── -->
 <div class="right-col">
     <div class="panel">
         <div class="panel-title">AI MONITOR: BALANCE STATE</div>
@@ -1459,8 +410,13 @@ img.combatant-art {
         </div>
     </div>
 </div>
-</div>
+</div><!-- /.dashboard -->
 
+<!-- ═══════════════════════════════════════════════════════════
+     모달 3종
+     ═══════════════════════════════════════════════════════════ -->
+
+<!-- 새 게임 모달 (시작 시 active) -->
 <div id="modal-newgame" class="modal-bg active">
     <div class="modal">
         <h2>▶ INITIALIZE PLAYER</h2>
@@ -1481,10 +437,7 @@ img.combatant-art {
     </div>
 </div>
 
-<!-- ═════════════════════════════════════════════════════════
-     휴식 이벤트 모달 — 탐험 중 'rest' 이벤트 발생 시 표시
-     사용자가 회복(heal) 또는 수련(train) 선택
-     ═════════════════════════════════════════════════════════ -->
+<!-- 휴식 모달 (rest 이벤트 시) -->
 <div id="modal-rest" class="modal-bg">
     <div class="modal modal-rest">
         <h2>🌙 REST AREA</h2>
@@ -1506,10 +459,7 @@ img.combatant-art {
     </div>
 </div>
 
-<!-- ═════════════════════════════════════════════════════════
-     도망 확인 모달 — 도망치기 버튼 클릭 시 Y/N 선택
-     "아니오" 시 turn 안 깎임 (battleAction 호출 자체 안 함)
-     ═════════════════════════════════════════════════════════ -->
+<!-- 도망 확인 모달 (Y/N) -->
 <div id="modal-escape" class="modal-bg">
     <div class="modal modal-rest">
         <h2>▶ ESCAPE?</h2>
@@ -1534,802 +484,23 @@ img.combatant-art {
     </div>
 </div>
 
+<!-- 토스트 알림 -->
 <div id="toast" class="toast"></div>
 
-<script>
-const API = '/api';
-async function api(path, body=null) {
-    const opts = { method: body ? 'POST' : 'GET', credentials: 'same-origin' };
-    if (body) {
-        opts.headers = { 'Content-Type': 'application/json' };
-        opts.body = JSON.stringify(body);
-    }
-    const r = await fetch(API + path, opts);
-    return r.json();
-}
+<!-- ═══════════════════════════════════════════════════════════
+     JS 모듈 — 의존성 순서 중요
+     기반 → 상태 → 유틸 → UI → 액션 → 이벤트 바인딩 순
+     ═══════════════════════════════════════════════════════════ -->
+<script src="/js/api.js"></script>          <!-- fetch wrapper -->
+<script src="/js/state.js"></script>        <!-- 전역 state + 매핑 -->
+<script src="/js/utils.js"></script>        <!-- 시계, 토스트, 로그 -->
+<script src="/js/pentagon.js"></script>     <!-- 펜타곤 차트 -->
+<script src="/js/ui-player.js"></script>    <!-- 좌측 패널 -->
+<script src="/js/ui-explore.js"></script>   <!-- 탐험 모드 -->
+<script src="/js/ui-battle.js"></script>    <!-- 배틀 모드 -->
+<script src="/js/modals.js"></script>       <!-- 휴식/도망 + 시뮬 가시화 -->
+<script src="/js/actions.js"></script>      <!-- API 호출 액션 -->
+<script src="/js/main.js"></script>         <!-- 부팅 + 이벤트 바인딩 -->
 
-let state = { player: null, inBattle: false, battleState: null, aiLevel: 'normal', exploreTurn: 0 };
-
-function tick() {
-    const d = new Date();
-    document.getElementById('clock').textContent =
-        String(d.getHours()).padStart(2,'0') + ':' +
-        String(d.getMinutes()).padStart(2,'0') + ':' +
-        String(d.getSeconds()).padStart(2,'0');
-}
-setInterval(tick, 1000); tick();
-
-function pentagonPoints(cx, cy, r, values=null) {
-    const pts = [];
-    for (let i = 0; i < 5; i++) {
-        const angle = -Math.PI/2 + (2*Math.PI/5) * i;
-        const radius = values ? r * Math.max(0.05, Math.min(1, values[i])) : r;
-        pts.push((cx + Math.cos(angle)*radius).toFixed(1) + ',' + (cy + Math.sin(angle)*radius).toFixed(1));
-    }
-    return pts.join(' ');
-}
-function drawPentagonBackground() {
-    const cx = 110, cy = 110;
-    const labels = ['POWER', 'DEFENSE', 'SPEED', 'TIME', 'RESOURCE'];
-    const bgGroup = document.getElementById('pentagon-bg');
-    const lblGroup = document.getElementById('pentagon-labels');
-    bgGroup.innerHTML = ''; lblGroup.innerHTML = '';
-    [80, 60, 40, 20].forEach(r => {
-        const poly = document.createElementNS('http://www.w3.org/2000/svg', 'polygon');
-        poly.setAttribute('points', pentagonPoints(cx, cy, r));
-        poly.setAttribute('fill', 'none');
-        poly.setAttribute('stroke', '#1e3a4a');
-        poly.setAttribute('stroke-width', '0.8');
-        bgGroup.appendChild(poly);
-    });
-    for (let i = 0; i < 5; i++) {
-        const angle = -Math.PI/2 + (2*Math.PI/5) * i;
-        const x = cx + Math.cos(angle) * 80;
-        const y = cy + Math.sin(angle) * 80;
-        const line = document.createElementNS('http://www.w3.org/2000/svg', 'line');
-        line.setAttribute('x1', cx); line.setAttribute('y1', cy);
-        line.setAttribute('x2', x);  line.setAttribute('y2', y);
-        line.setAttribute('stroke', '#1e3a4a');
-        line.setAttribute('stroke-width', '0.6');
-        bgGroup.appendChild(line);
-        const lx = cx + Math.cos(angle) * 96;
-        const ly = cy + Math.sin(angle) * 96;
-        const text = document.createElementNS('http://www.w3.org/2000/svg', 'text');
-        text.setAttribute('x', lx); text.setAttribute('y', ly);
-        text.setAttribute('text-anchor', 'middle');
-        text.setAttribute('dominant-baseline', 'middle');
-        text.setAttribute('font-size', '8');
-        text.setAttribute('font-family', 'monospace');
-        text.setAttribute('font-weight', '700');
-        text.setAttribute('fill', '#7a96a3');
-        text.textContent = labels[i];
-        lblGroup.appendChild(text);
-    }
-}
-function updatePentagon(idealVals, currentVals) {
-    document.getElementById('pentagon-ideal').setAttribute('points', pentagonPoints(110, 110, 80, idealVals));
-    document.getElementById('pentagon-current').setAttribute('points', pentagonPoints(110, 110, 80, currentVals));
-}
-drawPentagonBackground();
-updatePentagon([0.7,0.7,0.7,0.7,0.7], [0.65,0.7,0.7,0.65,0.65]);
-
-let toastTimer;
-function toast(msg, type='') {
-    const t = document.getElementById('toast');
-    t.className = 'toast active' + (type ? ' '+type : '');
-    t.textContent = msg;
-    clearTimeout(toastTimer);
-    toastTimer = setTimeout(() => t.classList.remove('active'), 2500);
-}
-
-function term(msg, type='') {
-    const t = document.getElementById('terminal');
-    const d = new Date();
-    const ts = String(d.getHours()).padStart(2,'0') + ':' +
-               String(d.getMinutes()).padStart(2,'0') + ':' +
-               String(d.getSeconds()).padStart(2,'0');
-    const line = document.createElement('div');
-    line.className = 'terminal-line ' + type;
-    line.innerHTML = `<span class="ts">[${ts}]</span> ${msg}`;
-    t.appendChild(line);
-    t.scrollTop = t.scrollHeight;
-    while (t.children.length > 30) t.removeChild(t.firstChild);
-}
-
-function logLine(msg, type='') {
-    const l = document.getElementById('log-area');
-    const d = new Date();
-    const ts = String(d.getHours()).padStart(2,'0') + ':' +
-               String(d.getMinutes()).padStart(2,'0') + ':' +
-               String(d.getSeconds()).padStart(2,'0');
-    const line = document.createElement('div');
-    line.className = 'log-line ' + type;
-    line.innerHTML = `<span class="ts">[${ts}]</span> ${msg}`;
-    l.appendChild(line);
-    l.scrollTop = l.scrollHeight;
-    while (l.children.length > 50) l.removeChild(l.firstChild);
-}
-function clearLog() { document.getElementById('log-area').innerHTML = ''; }
-
-const JOB_ICONS = {'전사':'⚔','마법사':'⚡','탱커':'🛡','도적':'🗡'};
-const ENEMY_ICONS = {
-    '고블린':'👺','박쥐':'🦇','슬라임':'🟢','골렘':'🗿','유령':'👻','암살자':'🥷',
-    '중간 보스':'👹','최종 보스':'🐉',
-};
-
-/* ═════════════════════════════════════════════════════════
-   ▼ 이미지 사용 시 매핑 테이블 활성화 ▼
-   <img> 태그로 교체했다면 아래 주석을 풀고 사용.
-   refreshPlayer() / refreshBattle() 안에서 src 갱신.
-
-const JOB_PORTRAITS = {
-    '전사':   '/img/portrait_warrior.png',
-    '마법사': '/img/portrait_mage.png',
-    '탱커':   '/img/portrait_tanker.png',
-    '도적':   '/img/portrait_rogue.png',
-};
-const JOB_SPRITES = {
-    '전사':   '/img/sprite_warrior.png',
-    '마법사': '/img/sprite_mage.png',
-    '탱커':   '/img/sprite_tanker.png',
-    '도적':   '/img/sprite_rogue.png',
-};
-const ENEMY_SPRITES = {
-    '고블린':   '/img/sprite_goblin.png',
-    '박쥐':     '/img/sprite_bat.png',
-    '슬라임':   '/img/sprite_slime.png',
-    '골렘':     '/img/sprite_golem.png',
-    '유령':     '/img/sprite_ghost.png',
-    '암살자':   '/img/sprite_assassin.png',
-    '중간 보스': '/img/sprite_midboss.png',
-    '최종 보스': '/img/sprite_finalboss.png',
-};
-
-   refreshPlayer() 에서:
-     const portrait = document.getElementById('player-portrait');
-     if (portrait) portrait.src = JOB_PORTRAITS[p.job] || JOB_PORTRAITS['전사'];
-
-   refreshBattle() 에서:
-     const playerArt = document.getElementById('player-combatant-art');
-     if (playerArt.tagName === 'IMG') {
-         playerArt.src = JOB_SPRITES[p.job] || JOB_SPRITES['전사'];
-     }
-     const enemyArt = document.getElementById('enemy-art');
-     if (enemyArt.tagName === 'IMG') {
-         enemyArt.src = ENEMY_SPRITES[ei.name] || '/img/sprite_default.png';
-     }
-   ═════════════════════════════════════════════════════════ */
-
-function refreshPlayer() {
-    if (!state.player) return;
-    const p = state.player;
-    document.getElementById('player-id').textContent = `${p.name} (LV ${p.lv} ${p.job})`;
-    document.getElementById('player-icon').textContent = JOB_ICONS[p.job] || '?';
-
-    // ── 좌측 게이지: HP/MP/EXP ──
-    document.getElementById('hp-cur').textContent = Math.round(p.hp);
-    document.getElementById('hp-max').textContent = p.maxhp;
-    document.getElementById('mp-cur').textContent = Math.round(p.mp);
-    document.getElementById('mp-max').textContent = p.maxmp;
-    document.getElementById('hp-fill').style.height = (p.hp/p.maxhp*100) + '%';
-    document.getElementById('mp-fill').style.height = (p.mp/p.maxmp*100) + '%';
-
-    // EXP 게이지 (노란색)
-    const expEl = document.getElementById('exp-fill');
-    if (expEl) {
-        const expRatio = p.maxexp > 0 ? (p.exp / p.maxexp * 100) : 0;
-        expEl.style.height = expRatio + '%';
-        document.getElementById('exp-cur').textContent = Math.round(p.exp || 0);
-        document.getElementById('exp-max').textContent = p.maxexp || 0;
-    }
-
-    // ── 능력치 표 (좌측 패널) ──
-    document.getElementById('stat-grid').innerHTML = `
-        <div class="stat-row"><span>STG</span><span class="v">${p.stg}</span></div>
-        <div class="stat-row"><span>SP</span><span class="v">${p.sp}</span></div>
-        <div class="stat-row"><span>ARM</span><span class="v">${p.arm}</span></div>
-        <div class="stat-row"><span>SPARM</span><span class="v">${p.sparm}</span></div>
-        <div class="stat-row"><span>SPD</span><span class="v">${p.spd}</span></div>
-        <div class="stat-row"><span>LUC</span><span class="v">${p.luc}</span></div>
-    `;
-
-    // ── 좌측 스킬북 ──
-    const sb = document.getElementById('skill-book');
-    sb.innerHTML = '';
-    const skills = p.skills || [];
-    const max = Math.max(5, skills.length);
-    for (let i = 0; i < max; i++) {
-        const slot = document.createElement('div');
-        if (skills[i]) {
-            slot.className = 'skill-slot learned';
-            slot.title = skills[i];
-            const sk = skills[i];
-            slot.textContent = sk.includes('파이어') ? '🔥' :
-                              sk.includes('힐') ? '✚' :
-                              sk.includes('실드') ? '⛨' :
-                              sk.includes('강타') ? '⚒' :
-                              sk.includes('연속') ? '⚔' :
-                              sk.includes('찌르기') ? '⚡' :
-                              sk.includes('아이스') ? '❄' :
-                              sk.includes('라이트닝') ? '⚡' :
-                              sk.includes('수비') ? '⛨' :
-                              sk.includes('몸통') ? '◆' :
-                              sk.includes('추진력') ? '➤' :
-                              sk.includes('급소') ? '✦' : '★';
-        } else {
-            slot.className = 'skill-slot';
-            slot.textContent = '·';
-        }
-        sb.appendChild(slot);
-    }
-
-    // ── 탐험 모드 정보 카드 (인벤토리/스탯/스킬) ──
-    refreshExploreInfo();
-}
-
-// 탐험 모드 카드 갱신
-function refreshExploreInfo() {
-    if (!state.player) return;
-    const p = state.player;
-
-    // 인벤토리 (player.items) — 탐험 중 클릭으로 사용 가능
-    // 백엔드 형식:
-    //  - player_dict: 단순 문자열 배열 ['HP_S_potion', 'HP_S_potion', ...]
-    //  - 전투 state.items: [{name, count}, ...]
-    const invEl = document.getElementById('explore-inventory');
-    if (invEl) {
-        const items = p.items || [];
-        let entries = [];
-        if (items.length > 0) {
-            if (typeof items[0] === 'object' && items[0].name !== undefined) {
-                entries = items.map(it => [it.name, it.count]);
-            } else {
-                const counts = {};
-                items.forEach(it => counts[it] = (counts[it]||0)+1);
-                entries = Object.entries(counts);
-            }
-        }
-        if (entries.length === 0) {
-            invEl.innerHTML = '<div class="explore-empty">아이템이 없습니다</div>';
-        } else {
-            invEl.innerHTML = '';
-            entries.forEach(([name, n]) => {
-                const row = document.createElement('div');
-                row.className = 'inv-item clickable';
-                row.title = '클릭해서 사용';
-                row.innerHTML = `<span>${name}</span><span class="qty">×${n}</span>`;
-                row.onclick = () => useItemInField(name);
-                invEl.appendChild(row);
-            });
-        }
-    }
-
-    // 스탯 (간단 요약)
-    const statEl = document.getElementById('explore-stats');
-    if (statEl) {
-        statEl.innerHTML = `
-            <div class="explore-stat-row"><span>STG</span><span class="v">${p.stg}</span></div>
-            <div class="explore-stat-row"><span>SP</span><span class="v">${p.sp}</span></div>
-            <div class="explore-stat-row"><span>ARM</span><span class="v">${p.arm}</span></div>
-            <div class="explore-stat-row"><span>SPARM</span><span class="v">${p.sparm}</span></div>
-            <div class="explore-stat-row"><span>SPD</span><span class="v">${p.spd}</span></div>
-            <div class="explore-stat-row"><span>LUC</span><span class="v">${p.luc}</span></div>
-        `;
-    }
-
-    // 스킬
-    const skEl = document.getElementById('explore-skills');
-    if (skEl) {
-        const skills = p.skills || [];
-        if (skills.length === 0) {
-            skEl.innerHTML = '<div class="explore-empty">학습한 스킬 없음</div>';
-        } else {
-            skEl.innerHTML = skills.map(sk =>
-                `<span class="sk-chip">${sk}</span>`
-            ).join('');
-        }
-    }
-}
-
-// 탐험 진행 턴 표시 갱신 (state.exploreTurn 기반)
-//   백엔드 흐름:
-//     turn=25 → 중간 보스 발생
-//     turn>=50 → 최종 보스 발생
-//   따라서 진행률은 turn / 50 으로 계산
-function refreshExploreTurn() {
-    const turn = state.exploreTurn || 0;
-    const tv = document.getElementById('explore-turn-value');
-    const fill = document.getElementById('explore-turn-fill');
-    const hint = document.getElementById('explore-turn-hint');
-    if (!tv || !fill) return;
-
-    tv.textContent = turn;
-    const pct = Math.min(100, (turn / 50) * 100);
-    fill.style.width = pct + '%';
-
-    if (hint) {
-        if (turn >= 50) {
-            hint.textContent = '⚠ 최종 보스 출현!';
-            hint.style.color = 'var(--accent-warn)';
-        } else if (turn >= 25) {
-            hint.textContent = `최종 보스까지 ${50 - turn}턴`;
-            hint.style.color = '';
-        } else {
-            const toMid = 25 - turn;
-            hint.textContent = `중간 보스까지 ${toMid}턴 / 최종 보스까지 ${50 - turn}턴`;
-            hint.style.color = '';
-        }
-    }
-}
-
-function refreshBattle(bs) {
-    state.battleState = bs;
-    state.inBattle = !bs.done && (bs.player_hp > 0);
-
-    document.getElementById('explore-mode').style.display = state.inBattle ? 'none' : 'block';
-    document.getElementById('battle-mode').style.display = state.inBattle ? 'block' : 'none';
-    // 배틀 시에만 액션 패널 표시
-    document.getElementById('actions-panel').style.display = state.inBattle ? 'block' : 'none';
-
-    if (!state.inBattle) {
-        ['btn-attack','btn-skill','btn-item','btn-escape'].forEach(id => {
-            document.getElementById(id).disabled = true;
-        });
-        return;
-    }
-
-    // ── 핵심: 좌측 게이지도 전투 중 HP/MP 변동 반영 ──
-    // _state()는 player_hp/player_mp 만 주므로 player 객체의 현재값을 갱신.
-    if (state.player) {
-        state.player.hp = bs.player_hp;
-        state.player.mp = bs.player_mp;
-        // 전투 중 받은 items 리스트도 동기화 (아이템 사용 후 줄어듬)
-        if (bs.items) state.player.items = bs.items;
-        // 좌측 게이지 즉시 갱신
-        document.getElementById('hp-cur').textContent = Math.round(bs.player_hp);
-        document.getElementById('mp-cur').textContent = Math.round(bs.player_mp);
-        document.getElementById('hp-fill').style.height = (bs.player_hp/bs.player_maxhp*100) + '%';
-        document.getElementById('mp-fill').style.height = (bs.player_mp/bs.player_maxmp*100) + '%';
-    }
-
-    document.getElementById('turn-counter').textContent = `TURN ${bs.turn}`;
-    document.getElementById('field-name').textContent = bs.is_boss ? 'BOSS ARENA' : 'FIELD';
-
-    const p = state.player;
-    document.getElementById('player-combatant-art').textContent = JOB_ICONS[p.job] || '?';
-    document.getElementById('player-combatant-name').textContent = p.name;
-    document.getElementById('player-combatant-meta').textContent = `LV ${p.lv} ${p.job}`;
-    document.getElementById('player-cb-hp').style.width = (bs.player_hp/bs.player_maxhp*100) + '%';
-    document.getElementById('player-cb-hp-text').textContent = `${Math.round(bs.player_hp)}/${bs.player_maxhp}`;
-    document.getElementById('player-cb-mp').style.width = (bs.player_mp/bs.player_maxmp*100) + '%';
-    document.getElementById('player-cb-mp-text').textContent = `${Math.round(bs.player_mp)}/${bs.player_maxmp}`;
-
-    const ei = bs.enemy_info || {};
-    document.getElementById('enemy-art').textContent = ENEMY_ICONS[ei.name || bs.enemy_name] || '👹';
-    document.getElementById('enemy-name').textContent = ei.name || bs.enemy_name;
-    document.getElementById('enemy-meta').textContent = `LV ${ei.lv || '?'} ${ei.difficulty_label ? '['+ei.difficulty_label+']' : ''}`;
-    document.getElementById('enemy-cb-hp').style.width = (bs.enemy_hp/bs.enemy_maxhp*100) + '%';
-    document.getElementById('enemy-cb-hp-text').textContent = `${Math.round(bs.enemy_hp)}/${bs.enemy_maxhp}`;
-    document.getElementById('target-tag').style.display = 'block';
-
-    if (bs.messages && bs.messages.length) {
-        bs.messages.forEach(m => {
-            let cls = '';
-            if (/크리|CRIT/i.test(m)) cls = 'crit';
-            else if (/회피|MISS/i.test(m)) cls = 'system';
-            else if (/사용|스킬/i.test(m)) cls = 'skill';
-            else if (/회복/i.test(m)) cls = 'heal';
-            else if (/데미지|피해/i.test(m)) cls = 'dmg';
-            logLine(m, cls);
-        });
-    }
-
-    // ── 스킬 메뉴 ──
-    if (bs.skills) {
-        const sl = document.getElementById('skill-list');
-        sl.innerHTML = '';
-        bs.skills.forEach(sk => {
-            const cell = document.createElement('div');
-            cell.className = 'submenu-item';
-            cell.innerHTML = `${sk.name}<span class="cost">MP${sk.mp}</span>`;
-            const canUse = bs.player_mp >= sk.mp;
-            if (!canUse) cell.style.opacity = 0.4;
-            cell.onclick = canUse ? () => useSkill(sk.name) : null;
-            sl.appendChild(cell);
-        });
-        if (!bs.skills.length) {
-            sl.innerHTML = '<div style="color:var(--text-muted); padding:8px; grid-column:1/-1;">학습한 스킬 없음</div>';
-        }
-    }
-
-    // ── 아이템 메뉴 (배틀 _state는 items를 줌) ──
-    // 백엔드 형식 두 가지 지원:
-    //  - 객체 배열: [{name:'HP_S_potion', count:2}, ...]  (전투 _state 형식)
-    //  - 문자열 배열: ['HP_S_potion', 'HP_S_potion', ...]  (player_dict 형식)
-    const il = document.getElementById('item-list');
-    il.innerHTML = '';
-    const battleItems = bs.items || [];
-    let itemEntries = [];  // [[name, count], ...]
-    if (battleItems.length > 0) {
-        if (typeof battleItems[0] === 'object' && battleItems[0].name !== undefined) {
-            // 객체 배열 형식
-            itemEntries = battleItems.map(it => [it.name, it.count]);
-        } else {
-            // 문자열 배열 형식
-            const counts = {};
-            battleItems.forEach(it => counts[it] = (counts[it]||0)+1);
-            itemEntries = Object.entries(counts);
-        }
-    }
-    if (itemEntries.length === 0) {
-        il.innerHTML = '<div style="color:var(--text-muted); padding:8px; grid-column:1/-1;">아이템 없음</div>';
-    } else {
-        itemEntries.forEach(([name, n]) => {
-            const cell = document.createElement('div');
-            cell.className = 'submenu-item';
-            cell.innerHTML = `${name}<span class="cost">×${n}</span>`;
-            cell.onclick = () => useItem(name);
-            il.appendChild(cell);
-        });
-    }
-
-    // ── ATB 시뮬 (시각적 효과) ──
-    // 실제 ATB 시스템은 백엔드에 있지만 매 액션마다 player turn으로 가정.
-    // 시각화: 액션 버튼 활성 상태일 때 ATB 게이지 100% (player turn).
-    document.getElementById('atb-fill').style.height = '100%';
-    document.getElementById('atb-cur').textContent = '100';
-    document.getElementById('atb-fill').classList.add('full');
-
-    // ── 펜타곤 차트 ──
-    if (ei.stg && ei.arm) {
-        const norm = v => Math.min(1, Math.max(0.1, v / 50));
-        const enemyVec = [norm(ei.stg), norm(ei.arm), norm(ei.spd),
-                          0.5, norm((ei.luc||0) + (ei.sp||0))];
-        const playerVec = [norm(p.stg), norm(p.arm), norm(p.spd),
-                           0.5, norm(p.luc + p.sp)];
-        updatePentagon(playerVec, enemyVec);
-        document.getElementById('balance-label').textContent =
-            ei.difficulty_label ? '['+ei.difficulty_label.toUpperCase()+']' : '[STABLE]';
-    }
-
-    // ── 행동 버튼 활성 + 차례 시각화 ──
-    showPlayerTurn();
-}
-
-// ATB 시각화: 플레이어 차례 (행동 가능 상태)
-function showPlayerTurn() {
-    ['btn-attack','btn-skill','btn-item','btn-escape'].forEach(id => {
-        document.getElementById(id).disabled = false;
-    });
-    if (state.battleState && state.battleState.is_boss) {
-        const escBtn = document.getElementById('btn-escape');
-        escBtn.disabled = true;
-        escBtn.textContent = '✖ NO ESCAPE';
-        escBtn.title = '보스전에서는 도망칠 수 없습니다';
-        escBtn.classList.add('escape-blocked');
-    } else {
-        const escBtn = document.getElementById('btn-escape');
-        escBtn.textContent = 'ESCAPE';
-        escBtn.title = '';
-        escBtn.classList.remove('escape-blocked');
-    }
-    const ind = document.getElementById('turn-indicator');
-    ind.className = 'turn-indicator player-turn';
-    ind.textContent = '▶ YOUR TURN';
-    document.getElementById('action-bar').classList.add('your-turn');
-    // 플레이어 도트에 활성 효과
-    document.querySelector('.combatant.player')?.classList.add('acting');
-    document.querySelector('.combatant.enemy')?.classList.remove('acting');
-}
-
-// ATB 시각화: 적 차례 (행동 불가)
-function showEnemyTurn() {
-    ['btn-attack','btn-skill','btn-item','btn-escape'].forEach(id => {
-        document.getElementById(id).disabled = true;
-    });
-    const ind = document.getElementById('turn-indicator');
-    ind.className = 'turn-indicator enemy-turn';
-    ind.textContent = '◀ ENEMY TURN';
-    document.getElementById('action-bar').classList.remove('your-turn');
-    document.querySelector('.combatant.player')?.classList.remove('acting');
-    document.querySelector('.combatant.enemy')?.classList.add('acting');
-    // ATB 게이지 0으로
-    document.getElementById('atb-fill').style.height = '20%';
-    document.getElementById('atb-cur').textContent = '20';
-    document.getElementById('atb-fill').classList.remove('full');
-}
-
-async function loadStatus() {
-    const r = await api('/status');
-    if (!r.ok) return false;
-
-    state.player = r.player;
-    state.exploreTurn = r.turn || 0;
-    refreshPlayer();
-
-    // 서버 세션이 전투 중이면 전투 상태 복구.
-    // 1차: /api/status 응답에 battle 페이로드가 포함되었는지 확인 (백엔드가 합쳐서 줌)
-    // 2차 폴백: in_battle만 true면 /api/battle/state 별도 호출
-    if (r.in_battle) {
-        let bs = r.battle;
-        if (!bs) {
-            // 폴백: status 응답에 battle 없으면 별도 호출
-            const fetched = await api('/battle/state');
-            // /api/battle/state는 _state() dict 통째로 옴 — turn 필드로 유효성 판단
-            if (fetched && fetched.turn !== undefined && fetched.player_hp !== undefined) {
-                bs = fetched;
-            }
-        }
-        if (bs) {
-            refreshBattle(bs);
-            term('battle session restored', 'ok');
-            return true;
-        }
-        term('battle restore failed, fallback to peace', 'warn');
-    }
-
-    state.inBattle = false;
-    setExploreMode();
-    return true;
-}
-
-// 평시 모드로 UI 전환 — 탐험 보이기 + 배틀/액션 패널 숨김
-function setExploreMode() {
-    document.getElementById('explore-mode').style.display = 'block';
-    document.getElementById('battle-mode').style.display = 'none';
-    document.getElementById('actions-panel').style.display = 'none';
-    // 탐험 진행 턴 수 표시 갱신
-    refreshExploreTurn();
-}
-
-async function newGame(name, job) {
-    const r = await api('/new_game', { name, job });
-    if (r.ok) {
-        state.player = r.player;
-        refreshPlayer();
-        document.getElementById('modal-newgame').classList.remove('active');
-        setExploreMode();
-        clearLog();
-        logLine(`▶ ${name} (${job}) 모험 시작!`, 'skill');
-        term(`session created: ${name}/${job}`, 'ok');
-        toast(`Welcome, ${name}!`);
-    } else {
-        toast('생성 실패: ' + (r.error||'unknown'), 'error');
-    }
-}
-
-async function explore() {
-    term('exploring field...');
-    const r = await api('/explore', {});
-    if (!r.ok) { toast(r.error||'탐험 실패', 'error'); return; }
-
-    if (r.event === 'battle' || r.event === 'midboss' || r.event === 'finalboss') {
-        state.inBattle = true;
-        if (r.event === 'midboss') {
-            logLine('▼ 중간 보스가 나타났다!', 'crit');
-            term('encounter: MIDBOSS', 'warn');
-        } else if (r.event === 'finalboss') {
-            logLine('▼ 최종 보스가 나타났다!', 'crit');
-            term('encounter: FINALBOSS', 'warn');
-        } else {
-            const enemyName = r.battle_state?.enemy_info?.name || r.battle_state?.enemy_name || '???';
-            logLine(`▼ ${enemyName}이(가) 나타났다!`, 'system');
-            term(`encounter: ${enemyName}`);
-        }
-        refreshBattle(r.battle_state);
-        animateBalanceTuning();
-    } else if (r.event === 'item') {
-        logLine(`✚ 아이템 획득: ${r.item}`, 'heal');
-        term('item gained');
-        if (r.player) { state.player = r.player; refreshPlayer(); }
-        toast(`+ ${r.item}`);
-    } else if (r.event === 'rest') {
-        // 휴식 이벤트 — 사용자가 heal/train 선택
-        logLine('🌙 휴식 장소를 발견했다.', 'heal');
-        term('rest event');
-        showRestModal();
-    } else if (r.event === 'gameover') {
-        logLine('✖ GAME OVER', 'crit');
-        term('game over', 'warn');
-        toast('게임 오버. 다시 시작하세요.', 'warn');
-    } else {
-        logLine(r.message || '아무 일도 일어나지 않았다.', 'system');
-        if (r.player) { state.player = r.player; refreshPlayer(); }
-    }
-
-    // 진행 턴 동기화 — explore가 turn을 안 주므로 status로 한 번 더 받아서 갱신
-    // (전투 이벤트는 battle 모드라 표시 안 됨, 평시 이벤트는 표시 갱신)
-    if (!state.inBattle) {
-        const st = await api('/status');
-        if (st.ok) {
-            state.exploreTurn = st.turn || 0;
-            refreshExploreTurn();
-        }
-    }
-}
-
-async function battleAction(action) {
-    document.getElementById('skill-menu').classList.remove('active');
-    document.getElementById('item-menu').classList.remove('active');
-
-    // ATB 시각화: 액션 즉시 적 차례로 전환
-    showEnemyTurn();
-
-    const r = await api('/battle/action', { action });
-    if (!r.ok) { toast(r.error || 'action 실패', 'error'); return; }
-    refreshBattle(r);
-
-    if (r.done) {
-        if (r.winner === 'player') {
-            logLine('★ VICTORY!', 'crit');
-            term('battle won', 'ok');
-            toast('승리!');
-        } else if (r.winner === 'enemy') {
-            logLine('✖ DEFEAT', 'crit');
-            term('battle lost', 'warn');
-            toast('패배...', 'error');
-        } else {
-            logLine('▶ 도망쳤다.', 'system');
-            term('escaped');
-        }
-        // 차례 표시 정리
-        document.getElementById('turn-indicator').className = 'turn-indicator';
-        document.getElementById('action-bar').classList.remove('your-turn');
-        await loadStatus();
-    }
-}
-async function useSkill(skillName) { await battleAction(`skill:${skillName}`); }
-async function useItem(itemName)  { await battleAction(`item:${itemName}`); }
-
-// 탐험 중 아이템 사용 (전투 외 — /api/use_item 호출)
-async function useItemInField(itemName) {
-    if (state.inBattle) {
-        toast('전투 중에는 전투 메뉴에서 사용하세요', 'warn');
-        return;
-    }
-    const r = await api('/use_item', { item: itemName });
-    if (!r.ok) {
-        toast(r.error || '아이템 사용 실패', 'error');
-        return;
-    }
-    // 갱신
-    if (r.player) { state.player = r.player; refreshPlayer(); }
-    if (r.message) {
-        logLine('✚ ' + r.message, 'heal');
-        term(`item used: ${itemName}`, 'ok');
-        toast(r.message);
-    }
-}
-
-// 휴식 이벤트 모달 표시
-function showRestModal() {
-    const modal = document.getElementById('modal-rest');
-    if (modal) modal.classList.add('active');
-}
-
-// 휴식 선택 (heal | train)
-async function performRest(choice) {
-    const r = await api('/rest', { choice });
-    if (!r.ok) {
-        toast(r.error || '휴식 실패', 'error');
-        return;
-    }
-    if (r.player) { state.player = r.player; refreshPlayer(); }
-    const icon = choice === 'heal' ? '✚' : '⚡';
-    if (r.message) {
-        logLine(`${icon} ${r.message}`, 'heal');
-        term(`rest: ${choice}`, 'ok');
-        toast(r.message);
-    }
-    // 모달 닫기
-    document.getElementById('modal-rest').classList.remove('active');
-}
-
-function animateBalanceTuning() {
-    let iter = 0;
-    let wrPlayer = 50;
-    const targetWR = state.aiLevel === 'hard' ? 45 : state.aiLevel === 'easy' ? 70 : 60;
-    const interval = setInterval(() => {
-        iter++;
-        wrPlayer = wrPlayer + (targetWR - wrPlayer) * 0.4 + (Math.random()-0.5)*8;
-        const wrEnemy = 100 - wrPlayer;
-        document.getElementById('wr-player').style.width = wrPlayer + '%';
-        document.getElementById('wr-player-pct').textContent = Math.round(wrPlayer) + '%';
-        document.getElementById('wr-enemy').style.width = wrEnemy + '%';
-        document.getElementById('wr-enemy-pct').textContent = Math.round(wrEnemy) + '%';
-        document.getElementById('sim-iter').textContent = iter;
-        document.getElementById('sim-avg-turns').textContent = (12 + Math.random()*8).toFixed(0);
-
-        const hpT = 50 + Math.sin(iter * 0.5) * 30;
-        const dmgT = 50 + Math.cos(iter * 0.7) * 25;
-        document.getElementById('tuner-hp').style.width = hpT + '%';
-        document.getElementById('tuner-dmg').style.width = dmgT + '%';
-
-        const err = Math.abs(wrPlayer - targetWR);
-        document.getElementById('error-margin').textContent = '±' + err.toFixed(1) + '%';
-
-        if (iter >= 8) {
-            clearInterval(interval);
-            term(`sim_${iter*250} converged. target=${targetWR}%`, 'ok');
-        }
-    }, 200);
-}
-
-document.getElementById('btn-newgame-confirm').onclick = () => {
-    const name = document.getElementById('input-name').value.trim() || 'HERO';
-    const job = document.getElementById('input-job').value;
-    newGame(name, job);
-};
-document.getElementById('btn-restart').onclick = () => {
-    document.getElementById('modal-newgame').classList.add('active');
-};
-document.getElementById('btn-explore').onclick = explore;
-
-// 휴식 모달 버튼
-document.getElementById('btn-rest-heal').onclick  = () => performRest('heal');
-document.getElementById('btn-rest-train').onclick = () => performRest('train');
-document.getElementById('btn-attack').onclick = () => battleAction('attack');
-document.getElementById('btn-skill').onclick = () => {
-    document.getElementById('skill-menu').classList.toggle('active');
-    document.getElementById('item-menu').classList.remove('active');
-};
-document.getElementById('btn-item').onclick = () => {
-    document.getElementById('item-menu').classList.toggle('active');
-    document.getElementById('skill-menu').classList.remove('active');
-};
-document.getElementById('btn-escape').onclick = () => {
-    // 보스전이면 무시 (이미 disabled지만 안전장치)
-    if (state.battleState && state.battleState.is_boss) return;
-    // 휴식 모달과 동일 스타일의 도망 확인 모달 표시
-    document.getElementById('modal-escape').classList.add('active');
-};
-
-// 도망 모달 - YES: 실제 도망 시도 (battleAction이 턴 진행)
-document.getElementById('btn-escape-yes').onclick = () => {
-    document.getElementById('modal-escape').classList.remove('active');
-    battleAction('escape');
-};
-// 도망 모달 - NO: 모달만 닫음 (battleAction 호출 안 됨 → 턴 안 깎임)
-document.getElementById('btn-escape-no').onclick = () => {
-    document.getElementById('modal-escape').classList.remove('active');
-    term('escape canceled', 'warn');
-};
-
-document.querySelectorAll('.ai-level-btn').forEach(btn => {
-    btn.onclick = () => {
-        document.querySelectorAll('.ai-level-btn').forEach(b => b.classList.remove('active'));
-        btn.classList.add('active');
-        state.aiLevel = btn.dataset.level;
-        term(`AI level set: ${state.aiLevel}`);
-    };
-});
-
-document.getElementById('btn-sim-start').onclick = () => {
-    term('manual sim start', 'ok');
-    animateBalanceTuning();
-};
-document.getElementById('btn-sim-stop').onclick = () => {
-    term('sim stopped', 'warn');
-};
-
-document.addEventListener('keydown', (e) => {
-    if (!state.inBattle) return;
-    if (e.key === 'F1') { e.preventDefault(); document.getElementById('btn-skill').click(); }
-    if (e.key === 'F2') { e.preventDefault(); document.getElementById('btn-item').click(); }
-    if (e.key === '1')  { document.getElementById('btn-attack').click(); }
-});
-
-(async () => {
-    term('booting...');
-    const ok = await loadStatus();
-    if (ok) {
-        document.getElementById('modal-newgame').classList.remove('active');
-        term('session restored', 'ok');
-        toast(`다시 오신 걸 환영합니다, ${state.player.name}`);
-    } else {
-        term('no session, awaiting input');
-    }
-})();
-</script>
 </body>
 </html>

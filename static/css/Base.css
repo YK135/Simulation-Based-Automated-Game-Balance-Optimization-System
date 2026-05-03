@@ -1,0 +1,90 @@
+/* ═══════════════════════════════════════════════════════════
+   base.css
+   - CSS 변수 (색상 팔레트)
+   - 리셋 + body
+   - 공통 버튼 (.btn)
+   - 토스트 (.toast)
+   - 공통 애니메이션
+   ═══════════════════════════════════════════════════════════ */
+
+:root {
+    --bg-darkest:    #0a1419;
+    --bg-dark:       #0f1d24;
+    --bg-panel:      #142632;
+    --bg-panel-2:    #1a3140;
+    --border:        #1e3a4a;
+    --border-active: #2dd4bf;
+    --text-main:     #d6e7ed;
+    --text-dim:      #7a96a3;
+    --text-muted:    #4f6976;
+    --accent-cyan:   #2dd4bf;
+    --accent-blue:   #38bdf8;
+    --accent-warn:   #fbbf24;
+    --hp-red:        #ef4444;
+    --mp-blue:       #3b82f6;
+    --atb-cyan:      #22d3ee;
+    --skill-yellow:  #facc15;
+    --enemy-orange:  #fb923c;
+}
+
+* { box-sizing: border-box; margin: 0; padding: 0; }
+
+body {
+    background: var(--bg-darkest);
+    color: var(--text-main);
+    font-family: 'JetBrains Mono', 'D2Coding', 'Menlo', 'Consolas', monospace;
+    font-size: 12px;
+    min-height: 100vh;
+    padding: 12px;
+    background-image:
+        linear-gradient(rgba(45, 212, 191, 0.02) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(45, 212, 191, 0.02) 1px, transparent 1px);
+    background-size: 24px 24px;
+}
+
+/* ── 공통 버튼 ── */
+.btn {
+    width: 100%;
+    padding: 8px 12px;
+    background: var(--bg-darkest);
+    border: 1px solid var(--border);
+    color: var(--text-dim);
+    font-family: inherit;
+    font-size: 11px;
+    letter-spacing: 0.08em;
+    cursor: pointer;
+    transition: all 0.15s;
+    border-radius: 3px;
+}
+.btn:hover:not(:disabled) {
+    border-color: var(--accent-cyan);
+    color: var(--accent-cyan);
+    background: rgba(45, 212, 191, 0.08);
+}
+.btn:disabled { opacity: 0.4; cursor: not-allowed; }
+
+/* ── 토스트 알림 ── */
+.toast {
+    position: fixed;
+    top: 20px; right: 20px;
+    background: var(--bg-panel);
+    border: 1px solid var(--accent-cyan);
+    border-left: 3px solid var(--accent-cyan);
+    padding: 10px 16px;
+    border-radius: 3px;
+    font-size: 11px;
+    z-index: 2000;
+    transform: translateX(110%);
+    transition: transform 0.3s;
+    max-width: 300px;
+}
+.toast.active { transform: translateX(0); }
+.toast.warn   { border-color: var(--accent-warn); border-left-color: var(--accent-warn); }
+.toast.error  { border-color: var(--hp-red); border-left-color: var(--hp-red); }
+
+/* ── AI 밸런싱 표시 (전투 시작 전 placeholder) ── */
+.ai-balancing {
+    text-align: center;
+    padding: 30px;
+    color: var(--accent-cyan);
+}

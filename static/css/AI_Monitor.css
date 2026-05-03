@@ -1,0 +1,168 @@
+/* ═══════════════════════════════════════════════════════════
+   ai-monitor.css
+   - 우측 AI Monitor 패널
+   - 펜타곤 차트
+   - 시뮬레이터 컨트롤 (HARD/MID/EASY)
+   - 승률 바
+   - 스테이트 튜너
+   - 시스템 터미널
+   ═══════════════════════════════════════════════════════════ */
+
+/* ── 펜타곤 차트 ── */
+.pentagon-wrap {
+    position: relative;
+    aspect-ratio: 1;
+    width: 100%;
+    margin: 6px 0;
+}
+.pentagon-svg { width: 100%; height: 100%; }
+.pentagon-legend {
+    display: flex; justify-content: space-around;
+    font-size: 9px;
+    margin-top: 6px;
+}
+.legend-item {
+    display: flex; align-items: center;
+    gap: 4px;
+    color: var(--text-dim);
+}
+.legend-dot { width: 8px; height: 8px; border-radius: 50%; }
+.legend-dot.ideal   { background: var(--accent-cyan); }
+.legend-dot.current { background: var(--accent-warn); }
+
+.balance-state {
+    margin-top: 8px;
+    font-size: 10px;
+    color: var(--text-dim);
+    text-align: center;
+}
+.balance-state .label {
+    color: var(--accent-cyan);
+    font-weight: 700;
+    letter-spacing: 0.1em;
+}
+
+/* ── 시뮬레이터 컨트롤 ── */
+.sim-controls {
+    display: flex;
+    gap: 6px;
+    margin-bottom: 10px;
+}
+.sim-controls .btn {
+    flex: 1;
+    padding: 6px;
+    font-size: 10px;
+}
+.sim-controls .btn.start {
+    border-color: var(--accent-cyan);
+    color: var(--accent-cyan);
+    background: rgba(45, 212, 191, 0.1);
+}
+
+/* ── AI Level 토글 (HARD/MID/EASY) ── */
+.ai-level-row {
+    display: flex; align-items: center;
+    gap: 8px;
+    font-size: 10px;
+    margin-bottom: 8px;
+}
+.ai-level-row .lbl { color: var(--text-dim); }
+.ai-level-toggle {
+    display: flex; gap: 4px;
+    margin-left: auto;
+}
+.ai-level-btn {
+    padding: 3px 8px;
+    background: var(--bg-darkest);
+    border: 1px solid var(--border);
+    color: var(--text-dim);
+    font-family: inherit;
+    font-size: 9px;
+    cursor: pointer;
+    border-radius: 2px;
+}
+.ai-level-btn.active {
+    background: rgba(45, 212, 191, 0.15);
+    border-color: var(--accent-cyan);
+    color: var(--accent-cyan);
+}
+
+/* ── 승률 바 ── */
+.winrate-bars {
+    display: flex; flex-direction: column;
+    gap: 4px;
+    margin: 8px 0 6px 0;
+}
+.wr-row {
+    display: flex; align-items: center;
+    gap: 6px; font-size: 9px;
+}
+.wr-label { width: 60px; color: var(--text-dim); }
+.wr-track {
+    flex: 1; height: 10px;
+    background: var(--bg-darkest);
+    border: 1px solid var(--border);
+    border-radius: 2px;
+    overflow: hidden;
+}
+.wr-fill { height: 100%; transition: width 0.5s ease; }
+.wr-fill.player { background: linear-gradient(90deg, #67e8f9, var(--accent-cyan)); }
+.wr-fill.enemy  { background: linear-gradient(90deg, #fca5a5, var(--hp-red)); }
+.wr-pct {
+    width: 36px;
+    text-align: right;
+    font-size: 9px;
+    font-weight: 700;
+}
+
+.sim-stats {
+    font-size: 9px;
+    color: var(--text-dim);
+    text-align: center;
+    margin-top: 4px;
+    border-top: 1px dashed var(--border);
+    padding-top: 6px;
+}
+.sim-stats .v { color: var(--accent-cyan); font-weight: 700; }
+
+/* ── 스테이트 튜너 ── */
+.tuner-row {
+    display: flex; flex-direction: column;
+    gap: 4px;
+    margin-bottom: 8px;
+    font-size: 9px;
+}
+.tuner-row .lbl { color: var(--text-dim); }
+.tuner-bar {
+    height: 6px;
+    background: var(--bg-darkest);
+    border: 1px solid var(--border);
+    border-radius: 2px;
+    overflow: hidden;
+}
+.tuner-bar-fill {
+    height: 100%;
+    background: linear-gradient(90deg, var(--accent-cyan), var(--accent-blue));
+    transition: width 0.3s;
+}
+
+/* ── 시스템 터미널 ── */
+.terminal {
+    background: #050a0d;
+    border: 1px solid var(--border);
+    border-radius: 3px;
+    padding: 8px;
+    max-height: 100px;
+    overflow-y: auto;
+    font-size: 9px;
+    line-height: 1.5;
+}
+.terminal-line {
+    color: var(--text-dim);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+.terminal-line .ts { color: var(--text-muted); }
+.terminal-line.ok   { color: #a7f3d0; }
+.terminal-line.warn { color: var(--accent-warn); }
