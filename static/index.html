@@ -89,19 +89,9 @@
                     <div class="max" id="exp-max">--</div>
                 </div>
             </div>
-            <div class="stat-bar">
-                <div class="stat-bar-label">ATB</div>
-                <div class="stat-bar-track">
-                    <div id="atb-fill" class="stat-bar-fill atb" style="height:0%"></div>
-                </div>
-                <div class="stat-bar-values">
-                    <div class="cur" id="atb-cur">0</div>
-                    <div class="max">100%</div>
-                </div>
-            </div>
         </div>
 
-        <!-- 능력치 표 -->
+        <!-- 능력치 표 (스킬북 자리 → 능력치로 통합) -->
         <div class="stat-grid" id="stat-grid">
             <div class="stat-row"><span>STG</span><span class="v">--</span></div>
             <div class="stat-row"><span>SP</span><span class="v">--</span></div>
@@ -109,17 +99,6 @@
             <div class="stat-row"><span>SPARM</span><span class="v">--</span></div>
             <div class="stat-row"><span>SPD</span><span class="v">--</span></div>
             <div class="stat-row"><span>LUC</span><span class="v">--</span></div>
-        </div>
-    </div>
-
-    <div class="panel">
-        <div class="panel-title">SKILL BOOK</div>
-        <div class="skill-book" id="skill-book">
-            <div class="skill-slot">·</div>
-            <div class="skill-slot">·</div>
-            <div class="skill-slot">·</div>
-            <div class="skill-slot">·</div>
-            <div class="skill-slot">·</div>
         </div>
     </div>
 
@@ -226,9 +205,9 @@
                 <!-- ─── 슬롯 2: 공백 (거리감) ─── -->
                 <div class="battle-slot slot-gap"></div>
 
-                <!-- ─── 슬롯 3: 몬스터 (단일전 메인 위치) ─── -->
+                <!-- ─── 슬롯 3: 몬스터 (단일전 메인 위치 / 다대일 슬롯 0) ─── -->
                 <div class="battle-slot slot-enemy">
-                    <div class="combatant enemy" id="enemy-slot-1">
+                    <div class="combatant enemy" id="enemy-slot-1" data-slot="0">
                         <div id="target-tag" class="target-tag" style="display:none;">▶ TARGET</div>
                         <!-- ════════════════════════════════════════════════════════
                              ▼ [이미지: 몬스터 도트 - 슬롯 3] ▼
@@ -251,16 +230,19 @@
                     </div>
                 </div>
 
-                <!-- ─── 슬롯 4: 추가 몬스터 (Phase 2 다대일 대비) ─── -->
+                <!-- ─── 슬롯 4: 추가 몬스터 (다대일 슬롯 1) ─── -->
                 <div class="battle-slot slot-enemy">
                     <!-- ════════════════════════════════════════════════════════
-                         ▼ [이미지: 몬스터 도트 - 슬롯 4 (Phase 2 다대일)] ▼
-                         현재는 비어있음. Phase 2에서 사용.
+                         ▼ [이미지: 몬스터 도트 - 슬롯 4 (다대일)] ▼
+                         권장 크기: 96x96 PNG (투명배경)
+                         단일전에서는 display:none.
+                         다대일 (enemies.length >= 2) 일 때 자동 표시.
                          ════════════════════════════════════════════════════════ -->
-                    <!--
-                    <div class="combatant enemy" id="enemy-slot-2">
-                        <img class="combatant-art" id="enemy-art-2"
-                             src="/img/sprite_goblin.png" alt="" />
+                    <div class="combatant enemy" id="enemy-slot-2" data-slot="1" style="display:none;">
+                        <div class="target-tag enemy-target-tag-2" style="display:none;">▶ TARGET</div>
+                        <!-- <img class="combatant-art" id="enemy-art-2"
+                                  src="/img/sprite_goblin.png" alt="" /> -->
+                        <div class="combatant-art" id="enemy-art-2">👺</div>
                         <div class="combatant-name" id="enemy-name-2">--</div>
                         <div class="combatant-meta" id="enemy-meta-2">LV --</div>
                         <div class="combatant-bars">
@@ -271,15 +253,15 @@
                             </div>
                         </div>
                     </div>
-                    -->
                 </div>
 
-                <!-- ─── 슬롯 5: 추가 몬스터 (Phase 2 다대일 대비) ─── -->
+                <!-- ─── 슬롯 5: 추가 몬스터 (다대일 슬롯 2) ─── -->
                 <div class="battle-slot slot-enemy">
-                    <!--
-                    <div class="combatant enemy" id="enemy-slot-3">
-                        <img class="combatant-art" id="enemy-art-3"
-                             src="/img/sprite_goblin.png" alt="" />
+                    <div class="combatant enemy" id="enemy-slot-3" data-slot="2" style="display:none;">
+                        <div class="target-tag enemy-target-tag-3" style="display:none;">▶ TARGET</div>
+                        <!-- <img class="combatant-art" id="enemy-art-3"
+                                  src="/img/sprite_goblin.png" alt="" /> -->
+                        <div class="combatant-art" id="enemy-art-3">👺</div>
                         <div class="combatant-name" id="enemy-name-3">--</div>
                         <div class="combatant-meta" id="enemy-meta-3">LV --</div>
                         <div class="combatant-bars">
@@ -290,7 +272,6 @@
                             </div>
                         </div>
                     </div>
-                    -->
                 </div>
             </div>
         </div>

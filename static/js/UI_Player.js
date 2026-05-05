@@ -38,23 +38,8 @@ function refreshPlayer() {
         <div class="stat-row"><span>LUC</span><span class="v">${p.luc}</span></div>
     `;
 
-    // ── 좌측 스킬북 ──
-    const sb = document.getElementById('skill-book');
-    sb.innerHTML = '';
-    const skills = p.skills || [];
-    const max = Math.max(5, skills.length);
-    for (let i = 0; i < max; i++) {
-        const slot = document.createElement('div');
-        if (skills[i]) {
-            slot.className = 'skill-slot learned';
-            slot.title = skills[i];
-            slot.textContent = skillIcon(skills[i]);
-        } else {
-            slot.className = 'skill-slot';
-            slot.textContent = '·';
-        }
-        sb.appendChild(slot);
-    }
+    // ── 좌측 스킬북 제거됨 ──
+    // 좌측 패널은 능력치까지만. 스킬 목록은 탐험 모드 SKILLS 카드에서 표시.
 
     // ── 탐험 모드 정보 카드 (인벤토리/스탯/스킬) ──
     refreshExploreInfo();

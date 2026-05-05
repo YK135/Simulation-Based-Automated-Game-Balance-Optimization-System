@@ -60,7 +60,7 @@ async function explore() {
     const r = await api('/explore', {});
     if (!r.ok) { toast(r.error||'탐험 실패', 'error'); return; }
 
-    if (r.event === 'battle' || r.event === 'midboss' || r.event === 'finalboss') {
+    if (r.event === 'battle' || r.event === 'midboss' || r.event === 'finalboss' || r.event === 'battle_multi') {
         state.inBattle = true;
         if (r.event === 'midboss') {
             logLine('▼ 중간 보스가 나타났다!', 'crit');
@@ -68,6 +68,11 @@ async function explore() {
         } else if (r.event === 'finalboss') {
             logLine('▼ 최종 보스가 나타났다!', 'crit');
             term('encounter: FINALBOSS', 'warn');
+        } else if (r.event === 'battle_multi') {
+            // 다대일 전투 — 등장한 모든 몬스터 표시
+            const names = (r.enemies || []).map(e => e.name).join(', ');
+            logLine(`⚠ ${r.enemy_count}마리의 적이 나타났다! [${names}]`, 'crit');
+            term(`encounter: ${r.enemy_count} enemies`, 'warn');
         } else {
             const enemyName = r.battle_state?.enemy_info?.name || r.battle_state?.enemy_name || '???';
             logLine(`▼ ${enemyName}이(가) 나타났다!`, 'system');
@@ -132,8 +137,18 @@ async function battleAction(action) {
     }
 }
 
-async function useSkill(skillName) { await battleAction(`skill:${skillName}`); }
-async function useItem(itemName)  { await battleAction(`item:${itemName}`); }
+// 다대일 전투 시 타깃 인덱스를 액션에 첨부.
+// 단일전이면 그대로 보냄.
+function _withTarget(action) {
+    if (!state.battleState) return action;
+    const enemies = state.battleState.enemies || [];
+    if (enemies.length <= 1) return action;
+    const idx = state.battleState.target_idx ?? 0;
+    return `${action}:${idx}`;
+}
+
+async function useSkill(skillName) { await battleAction(_withTarget(`skill:${skillName}`)); }
+async function useItem(itemName)  { await battleAction(`item:${itemName}`); }  // 아이템은 타깃 무관
 
 // 탐험 중 아이템 사용 (전투 외 — /api/use_item 호출)
 async function useItemInField(itemName) {

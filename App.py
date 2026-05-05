@@ -254,24 +254,50 @@ def explore():
     rd = randint(1, 20)
 
     if 1 <= rd <= 12:
-        # 전투 이벤트
+        # ── 전투 이벤트 ──
+        # 다대일 확률 분배 (rd 1~12 안에서):
+        #   1~7  (58%): 1대1 단일 전투
+        #   8~10 (25%): 2마리 다대일
+        #   11~12(17%): 3마리 다대일
+        # 전체 탐험 기준으로는 약 12% (2마리) + 8% (3마리) = 20% 다대일 발생
         enemy_type = "고블린" if random() < 0.5 else "박쥐"
-        enemy_snap = gs["hook"].get_enemy(enemy_type)
-        enemy      = gs["hook"].make_battle_unit(enemy_snap)
-        state      = _start_battle(gs, enemy)
-        return jsonify({
-            "ok":          True,
-            "event":       "battle",
-            "enemy":       {"name": enemy.name, "hp": enemy.hp},
-            "battle_state": state,
-        })
+
+        if rd <= 7:
+            # 1대1
+            enemy_snap = gs["hook"].get_enemy(enemy_type)
+            enemy      = gs["hook"].make_battle_unit(enemy_snap)
+            state      = _start_battle(gs, enemy)
+            return jsonify({
+                "ok":          True,
+                "event":       "battle",
+                "enemy":       {"name": enemy.name, "hp": enemy.hp},
+                "battle_state": state,
+            })
+        else:
+            # 다대일 (Phase 2): 2마리 또는 3마리
+            n_enemies = 2 if rd <= 10 else 3
+            enemies = []
+            for _ in range(n_enemies):
+                # 각 마리마다 종류 랜덤 (혼합 그룹 가능)
+                t = "고블린" if random() < 0.5 else "박쥐"
+                snap = gs["hook"].get_enemy(t)
+                enemies.append(gs["hook"].make_battle_unit(snap))
+            state = _start_battle_multi(gs, enemies, is_boss=False)
+            return jsonify({
+                "ok":          True,
+                "event":       "battle_multi",
+                "enemy_count": n_enemies,
+                "enemies":     [{"name": e.name, "hp": e.hp} for e in enemies],
+                "battle_state": state,
+            })
 
     elif 13 <= rd <= 15:
         # 아이템 획득
         gained = items[randint(0, len(items) - 1)]
         items.append(gained)
         return jsonify({"ok": True, "event": "item", "item": gained,
-                        "message": f"[아이템 획득] {gained}을(를) 발견했다!"})
+                        "message": f"[아이템 획득] {gained}을(를) 발견했다!",
+                        "player": _player_dict(player, items)})  # UI 즉시 반영용
 
     elif 16 <= rd <= 17:
         # 휴식
@@ -288,11 +314,30 @@ def explore():
 
 
 def _start_battle(gs: dict, enemy, is_boss: bool = False) -> dict:
-    """전투 세션 생성 후 초기 상태 반환"""
+    """1대1 전투 세션 생성 후 초기 상태 반환"""
     p_snap = _player_to_snap(gs["player"], gs["items"])
     e_snap = EntitySnapshot.from_enemy(enemy)
-    gs["battle"] = BattleSession(p_snap, e_snap, gs["items"], is_boss=is_boss)
+    gs["battle"] = BattleSession(p_snap, enemy=e_snap, items=gs["items"], is_boss=is_boss)
     return gs["battle"]._state(messages=[f"{enemy.name}이(가) 나타났다!"])
+
+
+def _start_battle_multi(gs: dict, enemies: list, is_boss: bool = False) -> dict:
+    """
+    다대일 전투 세션 생성. enemies는 길이 1~3.
+    초기 메시지로 등장한 모든 몬스터 명시.
+    """
+    p_snap   = _player_to_snap(gs["player"], gs["items"])
+    e_snaps  = [EntitySnapshot.from_enemy(e) for e in enemies]
+    gs["battle"] = BattleSession(p_snap, enemies=e_snaps, items=gs["items"], is_boss=is_boss)
+
+    # 같은 종류는 묶어서 메시지 표시
+    counts = {}
+    for e in enemies:
+        counts[e.name] = counts.get(e.name, 0) + 1
+    parts = [f"{n}마리의 {name}" if n > 1 else name for name, n in counts.items()]
+    msg = f"⚠ {', '.join(parts)}이(가) 나타났다!"
+
+    return gs["battle"]._state(messages=[msg])
 
 
 # ─────────────────────────────────────────────

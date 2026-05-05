@@ -34,7 +34,7 @@ document.getElementById('btn-rest-heal').onclick  = () => performRest('heal');
 document.getElementById('btn-rest-train').onclick = () => performRest('train');
 
 // ── 전투 행동 ──
-document.getElementById('btn-attack').onclick = () => battleAction('attack');
+document.getElementById('btn-attack').onclick = () => battleAction(_withTarget('attack'));
 document.getElementById('btn-skill').onclick  = () => {
     document.getElementById('skill-menu').classList.toggle('active');
     document.getElementById('item-menu').classList.remove('active');

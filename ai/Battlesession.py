@@ -36,12 +36,35 @@ class BattleSession:
     def __init__(
         self,
         player: EntitySnapshot,
-        enemy:  EntitySnapshot,
+        enemy:  EntitySnapshot = None,
         items:  list = None,
         is_boss: bool = False,
+        enemies: list = None,  # ★ 다대일 전투용: enemy 대신 enemies (리스트) 전달 가능
     ):
+        """
+        BattleSession — 1대1 또는 1대N 전투 세션.
+
+        호환성:
+          - 기존 코드는 enemy=... 단수로 호출 (1대1 전투).
+          - 다대일은 enemies=[e1, e2, e3] 리스트로 호출 (Phase 2).
+          - 내부에서는 항상 self.enemies 리스트로 관리.
+          - self.enemy는 첫 번째 살아있는 적을 가리키는 동적 프로퍼티 (구 코드 호환).
+        """
         self.player  = copy.deepcopy(player)
-        self.enemy   = copy.deepcopy(enemy)
+
+        # ── enemies 리스트로 통일 ──
+        # 단수 enemy로 호출되면 자동으로 [enemy]로 변환.
+        if enemies is not None:
+            self.enemies = [copy.deepcopy(e) for e in enemies]
+        elif enemy is not None:
+            self.enemies = [copy.deepcopy(enemy)]
+        else:
+            raise ValueError("BattleSession은 enemy 또는 enemies 중 하나를 받아야 합니다")
+
+        # 각 적에게 인덱스 부여 (UI 슬롯 매핑용: 0=슬롯3, 1=슬롯4, 2=슬롯5)
+        for i, e in enumerate(self.enemies):
+            e._slot_index = i
+
         self.items   = list(items or [])
         self.is_boss = is_boss
         self.turn    = 0
@@ -49,12 +72,40 @@ class BattleSession:
         self.winner  = None    # "player" | "enemy" | "escaped"
 
         # 행동 로그 — BehaviorAnalyzer 입력용.
-        # 매 플레이어/적 행동마다 TurnLog를 append. to_battle_result()에서
-        # BattleResult.logs로 전달되어 LOG_Manager가 JSON 저장.
         self.logs: list = []
 
-        # 적 ATB용 (간단히 매 플레이어 행동마다 적도 행동)
+        # 적 AI
         self._enemy_ai = EnemyAI()
+
+        # 현재 타깃 인덱스 (플레이어가 슬롯 클릭으로 변경)
+        # 기본값: 첫 번째 살아있는 적
+        self._target_idx = 0
+
+    # ── self.enemy 호환성 프로퍼티 ──
+    # 기존 1대1 코드는 self.enemy 직접 접근. 살아있는 첫 번째 적 반환.
+    @property
+    def enemy(self):
+        for e in self.enemies:
+            if e.hp > 0:
+                return e
+        # 모두 죽었으면 마지막 적 (메시지 표시용)
+        return self.enemies[-1] if self.enemies else None
+
+    def _alive_enemies(self) -> list:
+        """살아있는 적 리스트"""
+        return [e for e in self.enemies if e.hp > 0]
+
+    def _current_target(self):
+        """플레이어 공격 대상 — 인덱스가 죽었으면 살아있는 첫 번째로 자동 변경"""
+        if 0 <= self._target_idx < len(self.enemies):
+            t = self.enemies[self._target_idx]
+            if t.hp > 0:
+                return t
+        # 자동 폴백
+        for e in self.enemies:
+            if e.hp > 0:
+                return e
+        return None
 
     # ── 외부에서 호출하는 메서드 ─────────────
 
@@ -116,16 +167,21 @@ class BattleSession:
             msgs.append("도망에 성공했다!")
             return self._state(messages=msgs)
 
-        # 적 사망 체크
-        if self.enemy.hp <= 0:
+        # ── 모든 적 사망 체크 (다대일) ──
+        # 한 마리 죽어도 다른 적이 살아있으면 전투 계속.
+        # 살아있는 적이 한 명도 없을 때만 승리.
+        if not self._alive_enemies():
             self.done   = True
             self.winner = "player"
-            msgs.append(f"{self.enemy.name}을(를) 처치했다!")
+            if len(self.enemies) > 1:
+                msgs.append(f"모든 적을 처치했다!")
+            else:
+                msgs.append(f"{self.enemies[0].name}을(를) 처치했다!")
             return self._state(messages=msgs)
 
         # ── 적 행동 ───────────────────────────
+        # 다대일: 모든 살아있는 적이 SPD 내림차순으로 한 번씩 행동.
         # 콘솔 전투(Act.action)와 동일하게 아이템 사용 후에도 적 턴 진행.
-        # Digital Twin 원칙: UI가 달라도 전투 룰은 동일해야 함.
         self._enemy_action(msgs)
 
         # 플레이어 사망 체크
@@ -182,26 +238,64 @@ class BattleSession:
     # ── 내부: 플레이어 행동 처리 ─────────────
 
     def _player_action(self, action: str, msgs: list) -> str:
-        """처리 후 "ok" | "escaped" 반환. 모든 분기에서 TurnLog를 self.logs에 추가."""
+        """처리 후 "ok" | "escaped" 반환. 모든 분기에서 TurnLog를 self.logs에 추가.
+
+        action 형식:
+          - "attack"          → 현재 타깃 공격 (UI에서 슬롯 클릭으로 선택된 적)
+          - "attack:0"        → 슬롯 인덱스 0 적 공격 (다대일)
+          - "skill:이름"        → 현재 타깃에게 스킬
+          - "skill:이름:0"      → 슬롯 0 적에게 스킬
+          - "item:이름"         → 아이템 사용 (대상 무관)
+          - "escape"          → 도망
+        """
+        # 타깃 인덱스 파싱 (있으면 적용)
+        # "attack:1" 또는 "skill:파이어볼1:2" 같은 형식 지원.
+        target_idx = None
+        if action.startswith("attack:"):
+            try:
+                target_idx = int(action.split(":", 1)[1])
+                action = "attack"
+            except (ValueError, IndexError):
+                pass
+        elif action.startswith("skill:"):
+            parts = action.split(":")
+            # skill:이름 또는 skill:이름:인덱스
+            if len(parts) == 3:
+                try:
+                    target_idx = int(parts[2])
+                    action = f"skill:{parts[1]}"
+                except ValueError:
+                    pass
+
+        # 타깃 인덱스 적용 (살아있고 유효한 경우만)
+        if target_idx is not None and 0 <= target_idx < len(self.enemies):
+            if self.enemies[target_idx].hp > 0:
+                self._target_idx = target_idx
+
+        # 현재 타깃 결정 (자동 폴백 포함)
+        target = self._current_target()
+        if target is None:
+            # 모든 적 사망 (이론상 도달 불가 - step에서 먼저 체크)
+            return "ok"
 
         # 기본 공격
         if action == "attack":
             dmg, dodge, crit = DamageCalc.physical(
                 self.player.effective_stg(), self.player.luc,
-                self.enemy.effective_arm(),  self.enemy.luc,
+                target.effective_arm(),       target.luc,
                 skill_mult=1.0,
                 role="player",
                 attacker=self.player,
-                defender=self.enemy,
+                defender=target,
             )
             actual = 0 if dodge else int(dmg)
             if dodge:
-                msgs.append(f"{self.enemy.name}이(가) 공격을 회피했다!")
+                msgs.append(f"{target.name}이(가) 공격을 회피했다!")
             else:
-                self.enemy.hp -= dmg
+                target.hp -= dmg
                 tag = " (치명타!)" if crit else ""
                 msgs.append(f"{self.player.name} → 공격{tag} | {dmg} 데미지")
-                msgs.append(f"{self.enemy.name} HP: {max(0, int(self.enemy.hp))}")
+                msgs.append(f"{target.name} HP: {max(0, int(target.hp))}")
 
             self.logs.append(TurnLog(
                 turn=self.turn,
@@ -209,7 +303,7 @@ class BattleSession:
                 action="attack",
                 action_detail="basic_attack",
                 damage_dealt=actual,
-                hp_after=max(0, self.enemy.hp),
+                hp_after=max(0, target.hp),
                 mp_after=self.player.mp,
                 is_dodge=dodge,
                 is_crit=crit,
@@ -220,7 +314,7 @@ class BattleSession:
             skill_name = action[6:]
             mp_before = self.player.mp
             dmg, mp_lack, debuff_name = execute_skill(
-                skill_name, self.player, self.enemy
+                skill_name, self.player, target
             )
             if mp_lack:
                 msgs.append("MP가 부족합니다!")
@@ -230,7 +324,7 @@ class BattleSession:
                     action="skill_failed",
                     action_detail=f"{skill_name}(mp_lack)",
                     damage_dealt=0,
-                    hp_after=self.enemy.hp,
+                    hp_after=target.hp,
                     mp_after=self.player.mp,
                 ))
             else:
@@ -239,28 +333,28 @@ class BattleSession:
                     stat_kor = {"arm":"방어력","sparm":"마법방어력",
                                 "stg":"공격력","spd":"스피드"}.get(
                         meta.get("debuff_stat",""), "스탯")
-                    msgs.append(f"{skill_name} 사용 → {self.enemy.name} {stat_kor} 감소!")
+                    msgs.append(f"{skill_name} 사용 → {target.name} {stat_kor} 감소!")
                     self.logs.append(TurnLog(
                         turn=self.turn,
                         actor="player",
                         action="skill",
                         action_detail=skill_name,
                         damage_dealt=0,
-                        hp_after=self.enemy.hp,
+                        hp_after=target.hp,
                         mp_after=self.player.mp,
                         debuff_applied=debuff_name or meta.get("debuff_stat", ""),
                     ))
                 else:
-                    self.enemy.hp -= dmg
+                    target.hp -= dmg
                     msgs.append(f"{skill_name} 사용 → {dmg} 데미지")
-                    msgs.append(f"{self.enemy.name} HP: {max(0, int(self.enemy.hp))}")
+                    msgs.append(f"{target.name} HP: {max(0, int(target.hp))}")
                     self.logs.append(TurnLog(
                         turn=self.turn,
                         actor="player",
                         action="skill",
                         action_detail=skill_name,
                         damage_dealt=int(dmg),
-                        hp_after=max(0, self.enemy.hp),
+                        hp_after=max(0, target.hp),
                         mp_after=self.player.mp,
                     ))
 
@@ -312,7 +406,12 @@ class BattleSession:
                 ))
                 return "ok"
             p_spd = self.player.effective_spd()
-            e_spd = self.enemy.effective_spd()
+            # 다대일 도망: 살아있는 모든 적의 평균 SPD 기준 (한 명만 빠르면 곤란하니까 평균)
+            alive = self._alive_enemies()
+            if alive:
+                e_spd = sum(e.effective_spd() for e in alive) / len(alive)
+            else:
+                e_spd = 1.0
             ratio = p_spd / max(e_spd, 1.0)
             if   ratio >= 2.0: chance = 0.95
             elif ratio >= 1.5: chance = 0.80
@@ -340,24 +439,41 @@ class BattleSession:
     # ── 내부: 적 행동 처리 ───────────────────
 
     def _enemy_action(self, msgs: list):
-        action = self._enemy_ai(self.enemy, self.player)
+        """
+        다대일: 살아있는 모든 적이 SPD 내림차순으로 한 번씩 행동.
+        각 적이 행동할 때마다 플레이어 사망 체크 — 죽으면 즉시 종료.
+        """
+        # SPD 내림차순 정렬 (빠른 적 먼저)
+        alive = sorted(
+            self._alive_enemies(),
+            key=lambda e: e.effective_spd(),
+            reverse=True
+        )
+        for e in alive:
+            if self.player.hp <= 0:
+                break  # 플레이어 사망 시 남은 적 행동 스킵
+            self._single_enemy_action(e, msgs)
+
+    def _single_enemy_action(self, enemy, msgs: list):
+        """단일 적의 1회 행동 처리. 기존 _enemy_action 로직을 적 1마리 단위로 분리."""
+        action = self._enemy_ai(enemy, self.player)
 
         if action.action_type == "attack":
             dmg, dodge, crit = DamageCalc.physical(
-                self.enemy.effective_stg(), self.enemy.luc,
+                enemy.effective_stg(), enemy.luc,
                 self.player.effective_arm(), self.player.luc,
                 skill_mult=1.0,
                 role="monster",
-                attacker=self.enemy,
+                attacker=enemy,
                 defender=self.player,
             )
             actual = 0 if dodge else int(dmg)
             if dodge:
-                msgs.append(f"{self.player.name}이(가) 공격을 회피했다!")
+                msgs.append(f"{self.player.name}이(가) {enemy.name}의 공격을 회피했다!")
             else:
                 self.player.hp -= dmg
                 tag = " (치명타!)" if crit else ""
-                msgs.append(f"{self.enemy.name} → 공격{tag} | {dmg} 데미지")
+                msgs.append(f"{enemy.name} → 공격{tag} | {dmg} 데미지")
                 msgs.append(f"{self.player.name} HP: {max(0, int(self.player.hp))}")
             self.logs.append(TurnLog(
                 turn=self.turn,
@@ -366,17 +482,16 @@ class BattleSession:
                 action_detail="basic_attack",
                 damage_dealt=actual,
                 hp_after=max(0, self.player.hp),
-                mp_after=self.enemy.mp,
+                mp_after=enemy.mp,
                 is_dodge=dodge,
                 is_crit=crit,
             ))
 
         elif action.action_type == "skill":
             dmg, mp_lack, debuff_name = execute_skill(
-                action.detail, self.enemy, self.player
+                action.detail, enemy, self.player
             )
             if mp_lack:
-                # MP 부족으로 스킬 실패 — 기록은 남김
                 self.logs.append(TurnLog(
                     turn=self.turn,
                     actor="enemy",
@@ -384,15 +499,15 @@ class BattleSession:
                     action_detail=f"{action.detail}(mp_lack)",
                     damage_dealt=0,
                     hp_after=self.player.hp,
-                    mp_after=self.enemy.mp,
+                    mp_after=enemy.mp,
                 ))
             else:
                 if dmg > 0:
                     self.player.hp -= dmg
-                    msgs.append(f"{self.enemy.name} → {action.detail} | {dmg} 데미지")
+                    msgs.append(f"{enemy.name} → {action.detail} | {dmg} 데미지")
                     msgs.append(f"{self.player.name} HP: {max(0, int(self.player.hp))}")
                 elif debuff_name:
-                    msgs.append(f"{self.enemy.name} → {action.detail} 사용!")
+                    msgs.append(f"{enemy.name} → {action.detail} 사용!")
                 self.logs.append(TurnLog(
                     turn=self.turn,
                     actor="enemy",
@@ -400,19 +515,19 @@ class BattleSession:
                     action_detail=action.detail,
                     damage_dealt=int(dmg) if dmg > 0 else 0,
                     hp_after=max(0, self.player.hp),
-                    mp_after=self.enemy.mp,
+                    mp_after=enemy.mp,
                     debuff_applied=debuff_name or "",
                 ))
 
         elif action.action_type == "watch":
-            msgs.append(f"{self.enemy.name}이(가) 기회를 엿보고 있다...")
+            msgs.append(f"{enemy.name}이(가) 기회를 엿보고 있다...")
             self.logs.append(TurnLog(
                 turn=self.turn,
                 actor="enemy",
                 action="watch",
                 action_detail="watching",
                 hp_after=self.player.hp,
-                mp_after=self.enemy.mp,
+                mp_after=enemy.mp,
             ))
 
     # ── 내부: 현재 상태 dict 반환 ────────────
@@ -425,8 +540,33 @@ class BattleSession:
     }
 
     def _state(self, messages: list = None) -> dict:
+        # 첫 번째 살아있는 적 또는 마지막 적 (호환성 — 1대1 UI는 enemy_* 필드 사용)
         e = self.enemy
         diff_raw = getattr(e, "difficulty", "")
+
+        # 모든 적의 정보 — 다대일용 (UI는 이 배열을 받아서 슬롯 3·4·5에 매핑)
+        enemies_payload = []
+        for i, en in enumerate(self.enemies):
+            en_diff = getattr(en, "difficulty", "")
+            enemies_payload.append({
+                "slot_index":       i,                        # UI 슬롯 매핑 (0=슬롯3, 1=슬롯4, 2=슬롯5)
+                "name":             en.name,
+                "lv":               en.lv,
+                "alive":            en.hp > 0,
+                "hp":               max(0.0, round(en.hp, 1)),
+                "maxhp":            round(en.maxhp, 1),
+                "mp":               round(en.mp, 1),
+                "maxmp":            round(en.maxmp, 1),
+                "stg":              round(en.stg, 1),
+                "arm":              round(en.arm, 1),
+                "sparm":            round(en.sparm, 1),
+                "sp":               round(en.sp, 1),
+                "spd":              round(en.spd, 1),
+                "luc":              round(en.luc, 1),
+                "difficulty":       en_diff,
+                "difficulty_label": self._DIFF_LABEL.get(en_diff, en_diff),
+            })
+
         return {
             "turn":       self.turn,
             "is_boss":    self.is_boss,   # UI: 보스전이면 도망 버튼 숨김
@@ -434,10 +574,10 @@ class BattleSession:
             "player_mp":  round(self.player.mp, 1),
             "player_maxhp": self.player.maxhp,
             "player_maxmp": self.player.maxmp,
+            # ── 1대1 호환 (단수) — 기존 UI는 이 필드들 사용 ──
             "enemy_hp":   max(0.0, round(e.hp, 1)),
             "enemy_maxhp": e.maxhp,
             "enemy_name": e.name,
-            # ── 몬스터 상세 정보 (UI 표시용) ──
             "enemy_info": {
                 "name":             e.name,
                 "lv":               e.lv,
@@ -454,6 +594,11 @@ class BattleSession:
                 "spd":              round(e.spd, 1),
                 "luc":              round(e.luc, 1),
             },
+            # ── 다대일 (배열) — UI는 enemies.length > 1 이면 다대일 모드로 전환 ──
+            "enemies":          enemies_payload,
+            "enemy_count":      len(self.enemies),
+            "target_idx":       self._target_idx,  # 현재 선택된 타깃 슬롯
+            # ── 공통 ──
             "items":      self.get_items(),
             "skills":     self.get_skills(),
             "done":       self.done,
