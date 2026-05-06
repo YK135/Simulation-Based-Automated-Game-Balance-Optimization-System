@@ -37,19 +37,37 @@
     padding: 20px 8px 28px 8px;
     border-radius: 3px;
     position: relative;
+    background-size: cover;
+    background-position: center bottom;
+    background-repeat: no-repeat;
+    transition: background-image 0.6s ease;
 
     /* ═══════════════════════════════════════════════════════════════
-       ▼ 배틀 필드 배경 이미지 자리 ▼
-       권장: 가로형 PNG, 1280x500 정도 (2.5:1 비율 권장)
-       파일: static/img/bg_field.png
-       사용 방법: 아래 background-image 한 줄을 활성화
-       ═══════════════════════════════════════════════════════════════ */
-    /* background-image: url('/img/bg_field.png');
-       background-size: cover;
-       background-position: center bottom; */
+       ▼▼▼ 배틀 필드 배경 자리 (4종) ▼▼▼
+       JS가 .battle-stage에 단계 클래스를 토글:
+         .battle-bg-normal-early  →  turn 0~24, 일반 몬스터
+         .battle-bg-midboss       →  중간 보스 전투
+         .battle-bg-normal-late   →  turn 25~49, 일반 몬스터
+         .battle-bg-finalboss     →  최종 보스 전투
 
-    /* 기본 배경 (배경 이미지 없을 때) */
-    background:
+       ▶ 권장 이미지 사이즈 (모두 가로형 PNG, JPG):
+         가로 1280px × 세로 500px (약 2.5:1 비율)
+         - 더 큰 사이즈도 OK (800x315 이상이면 무난)
+         - cover 모드로 잘려서 표시되니 위/아래는 살짝 잘릴 수 있음
+         - 이미지 하단에 풀밭/돌바닥 같은 "지면"이 있으면 자연스러움
+
+       ▶ 파일 경로:
+         static/img/bg_battle_normal_early.png
+         static/img/bg_battle_midboss.png
+         static/img/bg_battle_normal_late.png
+         static/img/bg_battle_finalboss.png
+
+       ▶ 사용 방법:
+         아래 4개 background-image 한 줄씩 활성화 (주석 풀기)
+       ═══════════════════════════════════════════════════════════════ */
+
+    /* 기본 배경 (이미지 없을 때 폴백) */
+    background-image:
         linear-gradient(180deg, transparent 0%, rgba(45, 212, 191, 0.04) 100%),
         repeating-linear-gradient(90deg,
             transparent 0px,
@@ -57,6 +75,22 @@
             rgba(45, 212, 191, 0.04) 19.8%,
             rgba(45, 212, 191, 0.04) 20%);
 }
+
+/* ── 단계별 배경 (이미지 적용 시 주석 풀기) ── */
+/*
+.battle-stage.battle-bg-normal-early {
+    background-image: url('/img/bg_battle_normal_early.png');
+}
+.battle-stage.battle-bg-midboss {
+    background-image: url('/img/bg_battle_midboss.png');
+}
+.battle-stage.battle-bg-normal-late {
+    background-image: url('/img/bg_battle_normal_late.png');
+}
+.battle-stage.battle-bg-finalboss {
+    background-image: url('/img/bg_battle_finalboss.png');
+}
+*/
 .battle-stage::after {
     content: '';
     position: absolute;

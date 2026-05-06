@@ -2,7 +2,7 @@
    explore.css
    - 탐험 모드 (배틀 안 할 때)
    - 진행 턴 progress 바
-   - 인벤토리/스탯/스킬 카드 그리드
+   - 인벤토리/스킬 카드 그리드
    - 인벤토리 클릭 가능 항목
    ═══════════════════════════════════════════════════════════ */
 
@@ -11,7 +11,55 @@
     display: flex;
     flex-direction: column;
     padding: 4px;
+    border-radius: 3px;
+    background-size: cover;
+    background-position: center;
+    background-repeat: no-repeat;
+    transition: background-image 0.6s ease;
+
+    /* ═══════════════════════════════════════════════════════════════
+       ▼▼▼ 탐험 필드 배경 자리 (4종) ▼▼▼
+       JS가 #explore-mode에 단계 클래스를 토글 (state.exploreTurn 기반):
+         .explore-bg-early-normal   →  turn 0~22, 일반 탐험
+         .explore-bg-pre-midboss    →  turn 23~24, 중간 보스 임박 (긴장감)
+         .explore-bg-late-normal    →  turn 25~47, 후반 탐험 (어두운 느낌)
+         .explore-bg-pre-finalboss  →  turn 48~49, 최종 보스 임박 (붉은 톤)
+
+       ▶ 권장 이미지 사이즈 (가로형 PNG/JPG):
+         900px × 400px (약 2.25:1 비율)
+         - 탐험 영역은 배틀 화면보다 약간 작음
+         - EXPLORE 버튼/진행바/카드가 위에 깔리므로
+           배경은 분위기 표현용 (디테일 너무 강하지 않게)
+         - 위에 어두운 그라데이션 자동 오버레이 (가독성용)
+
+       ▶ 파일 경로:
+         static/img/bg_explore_early.png
+         static/img/bg_explore_pre_midboss.png
+         static/img/bg_explore_late.png
+         static/img/bg_explore_pre_finalboss.png
+       ═══════════════════════════════════════════════════════════════ */
 }
+
+/* ── 단계별 탐험 배경 (이미지 적용 시 주석 풀기) ── */
+/*
+#explore-mode.explore-bg-early-normal {
+    background-image: linear-gradient(rgba(10,20,25,0.55), rgba(10,20,25,0.75)),
+                      url('/img/bg_explore_early.png');
+}
+#explore-mode.explore-bg-pre-midboss {
+    background-image: linear-gradient(rgba(10,20,25,0.55), rgba(10,20,25,0.75)),
+                      url('/img/bg_explore_pre_midboss.png');
+}
+#explore-mode.explore-bg-late-normal {
+    background-image: linear-gradient(rgba(10,20,25,0.55), rgba(10,20,25,0.75)),
+                      url('/img/bg_explore_late.png');
+}
+#explore-mode.explore-bg-pre-finalboss {
+    background-image: linear-gradient(rgba(10,20,25,0.6), rgba(50,15,20,0.8)),
+                      url('/img/bg_explore_pre_finalboss.png');
+}
+*/
+
 .explore-hero {
     text-align: center;
     padding: 18px 0 12px 0;
@@ -111,8 +159,8 @@
 /* ── 인벤토리/스탯/스킬 카드 3개 ── */
 .explore-info-grid {
     display: grid;
-    grid-template-columns: 1fr 1fr 1fr;
-    gap: 10px;
+    grid-template-columns: 1fr 1fr;
+    gap: 12px;
     flex: 1;
 }
 .explore-card {

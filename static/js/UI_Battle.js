@@ -56,6 +56,14 @@ function refreshBattle(bs) {
     document.getElementById('turn-counter').textContent = `TURN ${bs.turn}`;
     document.getElementById('field-name').textContent = bs.is_boss ? 'BOSS ARENA' : 'FIELD';
 
+    // ── 배틀 배경 단계별 클래스 토글 ──
+    // 우선순위: is_boss > 게임 진행 turn (state.exploreTurn 기반)
+    //   midboss   →  battle-bg-midboss   (turn ~25)
+    //   finalboss →  battle-bg-finalboss (turn ~50)
+    //   일반 + early →  battle-bg-normal-early
+    //   일반 + late  →  battle-bg-normal-late (turn 25~)
+    refreshBattleBackground(bs);
+
     // ── 플레이어 슬롯 ──
     const p = state.player;
     document.getElementById('player-combatant-art').textContent = JOB_ICONS[p.job] || '?';
@@ -294,5 +302,29 @@ function refreshBattleTargetTags(targetIdx) {
         if (!tag) continue;
         const en = state.battleState.enemies && state.battleState.enemies[i];
         tag.style.display = (i === targetIdx && en && en.alive) ? 'block' : 'none';
+    }
+}
+
+// 배틀 단계별 배경 클래스 토글
+//   battle-bg-midboss     →  bs.is_boss && state.exploreTurn ~25 (중간 보스)
+//   battle-bg-finalboss   →  bs.is_boss && state.exploreTurn ~50 (최종 보스)
+//   battle-bg-normal-early →  일반전 + turn < 25
+//   battle-bg-normal-late  →  일반전 + turn >= 25
+function refreshBattleBackground(bs) {
+    const stage = document.querySelector('.battle-stage');
+    if (!stage) return;
+    stage.classList.remove('battle-bg-normal-early',
+                            'battle-bg-midboss',
+                            'battle-bg-normal-late',
+                            'battle-bg-finalboss');
+    const turn = state.exploreTurn || 0;
+    if (bs.is_boss) {
+        // 보스전: turn 위치로 중간 vs 최종 판단
+        // 중간 보스는 turn==25 시점에 발생, 최종 보스는 turn>=50
+        if (turn >= 50) stage.classList.add('battle-bg-finalboss');
+        else            stage.classList.add('battle-bg-midboss');
+    } else {
+        if (turn >= 25) stage.classList.add('battle-bg-normal-late');
+        else            stage.classList.add('battle-bg-normal-early');
     }
 }

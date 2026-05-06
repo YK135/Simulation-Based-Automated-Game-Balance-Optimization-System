@@ -42,18 +42,7 @@ function refreshExploreInfo() {
         }
     }
 
-    // 스탯 (간단 요약)
-    const statEl = document.getElementById('explore-stats');
-    if (statEl) {
-        statEl.innerHTML = `
-            <div class="explore-stat-row"><span>STG</span><span class="v">${p.stg}</span></div>
-            <div class="explore-stat-row"><span>SP</span><span class="v">${p.sp}</span></div>
-            <div class="explore-stat-row"><span>ARM</span><span class="v">${p.arm}</span></div>
-            <div class="explore-stat-row"><span>SPARM</span><span class="v">${p.sparm}</span></div>
-            <div class="explore-stat-row"><span>SPD</span><span class="v">${p.spd}</span></div>
-            <div class="explore-stat-row"><span>LUC</span><span class="v">${p.luc}</span></div>
-        `;
-    }
+    // 스탯 카드는 제거됨 (좌측 패널 능력치로 통합)
 
     // 스킬
     const skEl = document.getElementById('explore-skills');
@@ -106,4 +95,25 @@ function setExploreMode() {
     document.getElementById('battle-mode').style.display = 'none';
     document.getElementById('actions-panel').style.display = 'none';
     refreshExploreTurn();
+    refreshExploreBackground();   // 단계별 배경 클래스 토글
+}
+
+// 탐험 진행 턴에 따라 배경 클래스 자동 전환
+//   0~22:  early-normal       (밝은 풀밭 등)
+//   23~24: pre-midboss        (긴장감, 어두워짐)
+//   25~47: late-normal        (후반 어두운 톤)
+//   48~49: pre-finalboss      (붉은 톤, 임박)
+function refreshExploreBackground() {
+    const exp = document.getElementById('explore-mode');
+    if (!exp) return;
+    const turn = state.exploreTurn || 0;
+    // 모든 배경 클래스 제거 후 현재 단계만 추가
+    exp.classList.remove('explore-bg-early-normal',
+                         'explore-bg-pre-midboss',
+                         'explore-bg-late-normal',
+                         'explore-bg-pre-finalboss');
+    if (turn >= 48 && turn < 50) exp.classList.add('explore-bg-pre-finalboss');
+    else if (turn >= 25)         exp.classList.add('explore-bg-late-normal');
+    else if (turn >= 23)         exp.classList.add('explore-bg-pre-midboss');
+    else                          exp.classList.add('explore-bg-early-normal');
 }
