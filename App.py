@@ -265,9 +265,9 @@ def explore():
         # 몬스터 종류: BalanceHook의 레벨별 풀에서 선택
         #   Lv 1+: 고블린, 박쥐
         #   Lv 3+: + 슬라임
-        #   Lv 6+: + 골렘
-        #   Lv 7+: + 유령
-        #   Lv 10+: + 암살자
+        #   Lv 5+: + 골렘
+        #   Lv 6+: + 유령
+        #   Lv 8+: + 암살자
         # → 콘솔/Flask 단일 출처(BalanceHook._ENEMY_POOL)로 통일됨
         enemy_type = gs["hook"].pick_random_enemy_type()
 
