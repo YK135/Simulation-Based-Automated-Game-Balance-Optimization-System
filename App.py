@@ -286,7 +286,7 @@ def explore():
             enemies = []
             for _ in range(n_enemies):
                 # 각 마리마다 종류 랜덤 (혼합 그룹 가능)
-                t = gs["hook"].pick_enemy_type()
+                t = gs["hook"].pick_random_enemy_type()
                 snap = gs["hook"].get_enemy(t)
                 enemies.append(gs["hook"].make_battle_unit(snap))
             state = _start_battle_multi(gs, enemies, is_boss=False)
