@@ -392,7 +392,7 @@ class LV_:
 
         # 5) 경험치 차감 및 maxexp 증가
         player.exp -= player.maxexp
-        player.maxexp = max(1, int(round(player.maxexp * LV_.EXP_GROWTH_RATE)))
+        #player.maxexp = max(1, int(round(player.maxexp * LV_.EXP_GROWTH_RATE)))
 
         # 6) 스킬 해금
         unlocked_skills = _unlock_skills_for_current_level(player)

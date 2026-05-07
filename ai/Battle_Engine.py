@@ -97,6 +97,16 @@ class EntitySnapshot:
     # 종족 식별자 (UI 표시 등에 활용)
     enemy_type: str = ""
 
+    # ── 직업 식별자 (플레이어 전용) ──
+    # 직업별 패시브 발동에 사용:
+    #   "전사":   2턴마다 maxhp 10% 회복 (Battlesession.step에서 처리)
+    #   "마법사": 스킬 MP 비용 30% 감소 (execute_skill에서 처리)
+    #   "탱커":   물공 받으면 maxmp 10%, 마공 받으면 maxhp 10% 회복
+    #             (DamageCalc 또는 _execute_action 에서 처리)
+    #   "도적":   크리 시 70% 확률로 방어력 50% 무시
+    #             (DamageCalc.physical 에서 처리)
+    job: str = ""
+
     def effective_stg(self) -> float:
         debuff_r = sum(d.amount for d in self.debuffs if d.stat == "stg")
         buff_r = sum(b.amount for b in self.buffs if b.stat == "stg")
@@ -117,8 +127,67 @@ class EntitySnapshot:
         return max(1.0, self.spd * (1 - debuff_r + buff_r))
 
     def mp_cost_multiplier(self) -> float:
+        # 기존 buff 기반 효율 (한정 시간 효과)
         reduction = sum(b.amount for b in self.buffs if b.stat == "mp_efficiency")
+
+        # ── 마법사 패시브: 영구 30% MP 비용 감소 ──
+        # 직업 정체성 — 마나 효율형. 시뮬레이터에서도 자동 검증됨.
+        if self.job == "마법사":
+            reduction += 0.30
+
         return max(0.3, 1.0 - reduction)
+
+    # ═══════════════════════════════════════════════════════════
+    # 직업 패시브 헬퍼
+    # ═══════════════════════════════════════════════════════════
+
+    def passive_on_turn_start(self) -> str:
+        """
+        매 턴 시작 시 발동되는 패시브 처리.
+          - 전사: 2턴마다 maxhp 10% 회복 (turn_count 외부에서 관리)
+        반환: 발동 메시지 (없으면 "")
+
+        주의: 호출 측에서 turn 카운터를 가지고 있어야 함 (BattleSession/BattleEngine).
+        여기서는 단순히 "전사인지" + "회복" 만 처리. 발동 조건(2턴마다)은 호출 측에서.
+        """
+        if self.job == "전사":
+            heal = self.maxhp * 0.10
+            before = self.hp
+            self.hp = min(self.maxhp, self.hp + heal)
+            healed = int(self.hp - before)
+            if healed > 0:
+                return f"[전사 패시브] 자동회복 +{healed} HP"
+        return ""
+
+    def passive_on_hit_received(self, damage_type: str) -> str:
+        """
+        데미지를 받은 직후 발동되는 패시브.
+          - 탱커:
+              물리(physical) 받음 → maxmp 10% 회복
+              마법(magical)  받음 → maxhp 10% 회복
+        damage_type: "physical" | "magical"
+        반환: 발동 메시지 (없으면 "")
+
+        호출 시점: _execute_action 또는 BattleSession이 데미지 적용 직후.
+        회피했거나 데미지 0이면 호출 안 됨.
+        """
+        if self.job != "탱커":
+            return ""
+        if damage_type == "physical":
+            heal = self.maxmp * 0.10
+            before = self.mp
+            self.mp = min(self.maxmp, self.mp + heal)
+            gained = int(self.mp - before)
+            if gained > 0:
+                return f"[탱커 패시브] 물리피격 → MP +{gained}"
+        elif damage_type == "magical":
+            heal = self.maxhp * 0.10
+            before = self.hp
+            self.hp = min(self.maxhp, self.hp + heal)
+            gained = int(self.hp - before)
+            if gained > 0:
+                return f"[탱커 패시브] 마법피격 → HP +{gained}"
+        return ""
 
     def apply_debuff(self, debuff: Debuff):
         for existing in self.debuffs:
@@ -176,6 +245,7 @@ class EntitySnapshot:
             lv=player.lv,
             spd=getattr(player, "spd", 10.0),
             learned_skills=skills,
+            job=getattr(player, "job", ""),  # 직업별 패시브 발동용
         )
 
     @classmethod
@@ -366,6 +436,17 @@ class DamageCalc:
         is_crit = randint(1, 100) <= crit_chance
         if is_crit:
             base *= 1.5
+
+            # ── 도적 패시브: 크리 시 70% 확률로 방어력 50% 무시 ──
+            # 효과 = 원래 base를 def_stat 절반으로 다시 계산한 값으로 보정.
+            #   원래: atk * 200 / (100 + def)
+            #   무시: atk * 200 / (100 + def * 0.5)
+            #   비율: (100 + def) / (100 + def * 0.5)
+            # def가 높을수록 효과가 큼 → 일격 특화 정체성과 일치.
+            if attacker is not None and attacker.job == "도적":
+                if randint(1, 100) <= 70:
+                    pen_ratio = (100 + def_stat) / (100 + def_stat * 0.5)
+                    base *= pen_ratio
 
         # ── 최소 데미지 보장 (atk_stat × 0.20) ──
         # 상성으로 깎여도 공격력의 20% 이상은 보장 (Phase 1 디자인 원칙)
@@ -831,11 +912,11 @@ class BattleEngine:
         self.atb = ATBSystem(spd_multiplier)
         self.tick_count = 0
         self.action_count = 0
+        # 직업 패시브용 카운터
+        self._player_action_count = 0   # 전사 패시브 (2번마다 회복)
 
     def run(self, player_ai, enemy_ai) -> BattleResult:
         # ── first_strike 처리 (암살자) ──
-        # ATB 무관하게 첫 턴에 적이 강제 선공. Phase 1 디자인.
-        # 시뮬/콘솔/Flask 3경로 모두 동일 규칙으로 작동.
         if getattr(self.enemy, "first_strike", False):
             self.action_count += 1
             action = enemy_ai(self.enemy, self.player)
@@ -858,6 +939,11 @@ class BattleEngine:
                 self.action_count += 1
 
                 if actor == "player":
+                    # ── 전사 패시브: 2번째 행동마다 maxhp 10% 회복 ──
+                    self._player_action_count += 1
+                    if self.player.job == "전사" and self._player_action_count % 2 == 0:
+                        self.player.passive_on_turn_start()  # 메시지는 시뮬에선 무시
+
                     action = player_ai(self.player, self.enemy)
                     res = self._execute_action(action, self.player, self.enemy, "player")
                     if res == "escaped":
@@ -907,6 +993,11 @@ class BattleEngine:
             log.is_dodge = is_dodge
             log.is_crit = is_crit
 
+            # ── 탱커 패시브: 물리 피격 후 MP 회복 ──
+            # defender가 탱커이고 회피하지 않고 데미지를 입은 경우 발동
+            if not is_dodge and actual > 0:
+                defender.passive_on_hit_received("physical")
+
         elif action.action_type == "skill":
             dmg, mp_lack, info = execute_skill(action.detail, attacker, defender)
             log.mp_after = attacker.mp
@@ -916,6 +1007,12 @@ class BattleEngine:
                     actual = _apply_damage_with_shield(defender, dmg)
                     log.damage_dealt = actual
                     log.hp_after = defender.hp
+
+                    # ── 탱커 패시브: 스킬 피격 후 회복 (스킬 타입 따라 HP/MP) ──
+                    # SKILL_META에서 type 조회 ("physical" or "magical")
+                    skill_meta = SKILL_META.get(action.detail, {})
+                    skill_type = skill_meta.get("type", "physical")
+                    defender.passive_on_hit_received(skill_type)
                 else:
                     log.hp_after = defender.hp
 

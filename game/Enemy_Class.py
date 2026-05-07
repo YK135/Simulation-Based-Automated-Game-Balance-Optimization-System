@@ -53,7 +53,7 @@ class Unit:
         self.enemy_type      = enemy_type or name
 
     def exp_reward(self, player_maxexp: int) -> int:
-        ratio = {"상": 0.45, "중": 0.34, "하": 0.28}.get(self.grade, 0.34)
+        ratio = {"상": 0.9, "중": 0.7, "하": 0.5}.get(self.grade, 0.34)
         return int(player_maxexp * ratio)
 
     def decide_action(self, player) -> str:
@@ -76,9 +76,9 @@ class Unit:
 # 하급: 전반적으로 약하게
 # 상급: 탱커(HP/ARM) or 유리대포(STG) 성향 공존
 GRADE_MULT = {
-    "하": {"hp": 0.70, "stg": 0.80, "arm": 0.85, "sparm": 0.85, "sp": 0.80},
-    "중": {"hp": 1.00, "stg": 1.00, "arm": 1.00, "sparm": 1.00, "sp": 1.00},
-    "상": {"hp": 1.30, "stg": 1.20, "arm": 1.15, "sparm": 1.15, "sp": 1.20},
+    "하": {"hp": 0.3, "stg": 0.80, "arm": 0.85, "sparm": 0.85, "sp": 0.80},
+    "중": {"hp": 0.60, "stg": 1.00, "arm": 1.00, "sparm": 1.00, "sp": 1.00},
+    "상": {"hp": 1.00, "stg": 1.20, "arm": 1.15, "sparm": 1.15, "sp": 1.20},
 }
 
 

@@ -145,6 +145,13 @@ class BattleSession:
 
         self.turn += 1
 
+        # ── 전사 패시브: 2턴마다 maxhp 10% 회복 ──
+        # 시뮬과 동일 룰. self.turn은 1부터 시작이므로 turn % 2 == 0 (즉 2,4,6...턴)에 발동.
+        if self.player.job == "전사" and self.turn % 2 == 0 and self.player.hp > 0:
+            warrior_msg = self.player.passive_on_turn_start()
+            if warrior_msg:
+                msgs.append(warrior_msg)
+
         # ── 첫 턴 + first_strike 처리 (암살자) ──
         # 적이 first_strike=True 이면 플레이어 행동 전에 적이 먼저 공격.
         # SPD 무관하게 강제 선공. 이후 턴부터는 정상 흐름.
@@ -475,6 +482,11 @@ class BattleSession:
                 tag = " (치명타!)" if crit else ""
                 msgs.append(f"{enemy.name} → 공격{tag} | {dmg} 데미지")
                 msgs.append(f"{self.player.name} HP: {max(0, int(self.player.hp))}")
+
+                # ── 탱커 패시브: 물리 피격 시 MP 회복 ──
+                tanker_msg = self.player.passive_on_hit_received("physical")
+                if tanker_msg:
+                    msgs.append(tanker_msg)
             self.logs.append(TurnLog(
                 turn=self.turn,
                 actor="enemy",
@@ -506,6 +518,13 @@ class BattleSession:
                     self.player.hp -= dmg
                     msgs.append(f"{enemy.name} → {action.detail} | {dmg} 데미지")
                     msgs.append(f"{self.player.name} HP: {max(0, int(self.player.hp))}")
+
+                    # ── 탱커 패시브: 스킬 피격 시 회복 (스킬 타입 따라) ──
+                    skill_meta = SKILL_META.get(action.detail, {})
+                    skill_type = skill_meta.get("type", "physical")
+                    tanker_msg = self.player.passive_on_hit_received(skill_type)
+                    if tanker_msg:
+                        msgs.append(tanker_msg)
                 elif debuff_name:
                     msgs.append(f"{enemy.name} → {action.detail} 사용!")
                 self.logs.append(TurnLog(
