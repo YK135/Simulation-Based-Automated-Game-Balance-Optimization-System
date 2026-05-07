@@ -49,6 +49,11 @@ from ai.Simulator      import MonsterFactory
 from core.Balance_Hook import BalanceHook
 from ai.Battlesession import BattleSession   # Flask용 전투 세션
 
+# --- 아이템 드랍 풀
+FIELD_ITEM_POOL = [
+    "HP_S_potion", "HP_M_potion", "HP_L_potion",
+    "MP_S_potion", "MP_M_potion", "MP_L_potion",
+]
 
 # ── Flask 앱 ─────────────────────────────────
 # Flask 앱 초기화.
@@ -142,6 +147,7 @@ def new_game():
         "HP_S_potion", "HP_S_potion",
         "HP_M_potion",
         "MP_S_potion", "MP_S_potion",
+        "mp_M_potion",
     ]
 
     hook = BalanceHook(player, items, show_graph=False, verbose=False)
@@ -260,7 +266,7 @@ def explore():
         #   8~10 (25%): 2마리 다대일
         #   11~12(17%): 3마리 다대일
         # 전체 탐험 기준으로는 약 12% (2마리) + 8% (3마리) = 20% 다대일 발생
-        enemy_type = "고블린" if random() < 0.5 else "박쥐"
+        enemy_type = gs["hook"].pick_enemy_type()
 
         if rd <= 7:
             # 1대1
@@ -279,7 +285,7 @@ def explore():
             enemies = []
             for _ in range(n_enemies):
                 # 각 마리마다 종류 랜덤 (혼합 그룹 가능)
-                t = "고블린" if random() < 0.5 else "박쥐"
+                t = gs["hook"].pick_enemy_type()
                 snap = gs["hook"].get_enemy(t)
                 enemies.append(gs["hook"].make_battle_unit(snap))
             state = _start_battle_multi(gs, enemies, is_boss=False)
@@ -293,13 +299,15 @@ def explore():
 
     elif 13 <= rd <= 15:
         # 아이템 획득
-        gained = items[randint(0, len(items) - 1)]
+        from random import choice
+
+        gained = choice(FIELD_ITEM_POOL)
         items.append(gained)
         return jsonify({"ok": True, "event": "item", "item": gained,
                         "message": f"[아이템 획득] {gained}을(를) 발견했다!",
                         "player": _player_dict(player, items)})  # UI 즉시 반영용
 
-    elif 16 <= rd <= 17:
+    elif 16 <= rd <= 18:
         # 휴식
         return jsonify({"ok": True, "event": "rest",
                         "message": "휴식 지점에 도착했다.",

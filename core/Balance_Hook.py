@@ -142,9 +142,9 @@ class BalanceHook:
         {"type": "고블린",  "min_lv": 1},
         {"type": "박쥐",    "min_lv": 1},
         {"type": "슬라임",  "min_lv": 3},
-        {"type": "골렘",    "min_lv": 6},
-        {"type": "유령",    "min_lv": 7},
-        {"type": "암살자",  "min_lv": 10},
+        {"type": "골렘",    "min_lv": 5},
+        {"type": "유령",    "min_lv": 6},
+        {"type": "암살자",  "min_lv": 8},
     ]
 
     def _available_enemy_types(self) -> list:
