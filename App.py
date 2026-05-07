@@ -148,7 +148,7 @@ def new_game():
         "HP_S_potion", "HP_S_potion",
         "HP_M_potion",
         "MP_S_potion", "MP_S_potion",
-        "mp_M_potion",
+        "MP_M_potion",
     ]
 
     hook = BalanceHook(player, items, show_graph=False, verbose=False)
