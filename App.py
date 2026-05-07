@@ -95,6 +95,7 @@ def _player_to_snap(player, items: list) -> EntitySnapshot:
         spd=getattr(player, "spd", 10.0),
         learned_skills=skills,
         items=list(items),
+        job=player.job,
     )
 
 
@@ -266,7 +267,7 @@ def explore():
         #   8~10 (25%): 2마리 다대일
         #   11~12(17%): 3마리 다대일
         # 전체 탐험 기준으로는 약 12% (2마리) + 8% (3마리) = 20% 다대일 발생
-        enemy_type = gs["hook"].pick_enemy_type()
+        enemy_type = gs["hook"].pick_random_enemy_type()
 
         if rd <= 7:
             # 1대1
