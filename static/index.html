@@ -91,7 +91,7 @@
             </div>
         </div>
 
-        <!-- 능력치 표 (스킬북 자리 → 능력치로 통합) -->
+        <!-- 능력치 표 (전투 중에는 effective_* 기준으로 갱신) -->
         <div class="stat-grid" id="stat-grid">
             <div class="stat-row"><span>STG</span><span class="v">--</span></div>
             <div class="stat-row"><span>SP</span><span class="v">--</span></div>
@@ -99,6 +99,12 @@
             <div class="stat-row"><span>SPARM</span><span class="v">--</span></div>
             <div class="stat-row"><span>SPD</span><span class="v">--</span></div>
             <div class="stat-row"><span>LUC</span><span class="v">--</span></div>
+        </div>
+
+        <!-- ── 버프 / 디버프 영역 (전투 중에만 채워짐) ── -->
+        <div id="player-status" class="player-status">
+            <div id="player-buffs" class="status-list"></div>
+            <div id="player-debuffs" class="status-list"></div>
         </div>
     </div>
 

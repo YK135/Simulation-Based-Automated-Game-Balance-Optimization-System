@@ -129,3 +129,52 @@
     border-color: rgba(250, 204, 21, 0.4);
     background: linear-gradient(135deg, rgba(250, 204, 21, 0.08), transparent);
 }
+
+/* ── 좌측 패널 — 버프 / 디버프 칩 ── */
+.player-status {
+    margin-top: 10px;
+    padding-top: 10px;
+    border-top: 1px dashed var(--border);
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+.player-status:empty {
+    display: none;
+}
+.status-list {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px;
+}
+.status-list:empty {
+    display: none;
+}
+.status-chip {
+    font-size: 9px;
+    padding: 3px 7px;
+    border-radius: 2px;
+    font-family: monospace;
+    border: 1px solid;
+    line-height: 1.2;
+}
+.status-chip.buff {
+    color: #67e8f9;
+    background: rgba(45, 212, 191, 0.10);
+    border-color: rgba(45, 212, 191, 0.4);
+}
+.status-chip.debuff {
+    color: #fca5a5;
+    background: rgba(239, 68, 68, 0.10);
+    border-color: rgba(239, 68, 68, 0.4);
+}
+.status-chip .turns {
+    opacity: 0.7;
+    margin-left: 4px;
+}
+
+/* 전투 중 stat-grid 강조 (실효 스탯이 변동할 때) */
+.stat-row.changed .v {
+    color: var(--accent-warn);
+    font-weight: 700;
+}

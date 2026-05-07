@@ -49,11 +49,6 @@ from ai.Simulator      import MonsterFactory
 from core.Balance_Hook import BalanceHook
 from ai.Battlesession import BattleSession   # Flask용 전투 세션
 
-# --- 아이템 드랍 풀
-FIELD_ITEM_POOL = [
-    "HP_S_potion", "HP_M_potion", "HP_L_potion",
-    "MP_S_potion", "MP_M_potion", "MP_L_potion",
-]
 
 # ── Flask 앱 ─────────────────────────────────
 # Flask 앱 초기화.
@@ -95,7 +90,7 @@ def _player_to_snap(player, items: list) -> EntitySnapshot:
         spd=getattr(player, "spd", 10.0),
         learned_skills=skills,
         items=list(items),
-        job=player.job,
+        job=getattr(player, "job", ""),  # 직업 패시브 발동용 (전사/마법사/탱커/도적)
     )
 
 
@@ -267,6 +262,13 @@ def explore():
         #   8~10 (25%): 2마리 다대일
         #   11~12(17%): 3마리 다대일
         # 전체 탐험 기준으로는 약 12% (2마리) + 8% (3마리) = 20% 다대일 발생
+        # 몬스터 종류: BalanceHook의 레벨별 풀에서 선택
+        #   Lv 1+: 고블린, 박쥐
+        #   Lv 3+: + 슬라임
+        #   Lv 6+: + 골렘
+        #   Lv 7+: + 유령
+        #   Lv 10+: + 암살자
+        # → 콘솔/Flask 단일 출처(BalanceHook._ENEMY_POOL)로 통일됨
         enemy_type = gs["hook"].pick_random_enemy_type()
 
         if rd <= 7:
@@ -282,10 +284,10 @@ def explore():
             })
         else:
             # 다대일 (Phase 2): 2마리 또는 3마리
+            # 각 마리마다 풀에서 독립 선택 → 혼합 그룹 자연스럽게 발생
             n_enemies = 2 if rd <= 10 else 3
             enemies = []
             for _ in range(n_enemies):
-                # 각 마리마다 종류 랜덤 (혼합 그룹 가능)
                 t = gs["hook"].pick_random_enemy_type()
                 snap = gs["hook"].get_enemy(t)
                 enemies.append(gs["hook"].make_battle_unit(snap))
@@ -299,16 +301,30 @@ def explore():
             })
 
     elif 13 <= rd <= 15:
-        # 아이템 획득
-        from random import choice
-
-        gained = choice(FIELD_ITEM_POOL)
+        # ── 아이템 획득 ──
+        # 고정 드랍 풀에서 rarity 가중치로 선택.
+        # 이전엔 인벤토리에서 복제하는 버그 → 시작에 없는 종류는 영영 못 얻음.
+        # 이제는 모든 포션 종류가 실제로 등장 가능.
+        #
+        # rarity:
+        #   common (자주):  HP_S, MP_S        — 가중 4
+        #   uncommon (보통): HP_M, MP_M       — 가중 2
+        #   rare (희귀):    HP_L, MP_L        — 가중 1
+        from random import choices
+        DROP_POOL = [
+            ("HP_S_potion", 4), ("MP_S_potion", 4),
+            ("HP_M_potion", 2), ("MP_M_potion", 2),
+            ("HP_L_potion", 1), ("MP_L_potion", 1),
+        ]
+        names   = [x[0] for x in DROP_POOL]
+        weights = [x[1] for x in DROP_POOL]
+        gained  = choices(names, weights=weights, k=1)[0]
         items.append(gained)
         return jsonify({"ok": True, "event": "item", "item": gained,
                         "message": f"[아이템 획득] {gained}을(를) 발견했다!",
                         "player": _player_dict(player, items)})  # UI 즉시 반영용
 
-    elif 16 <= rd <= 18:
+    elif 16 <= rd <= 17:
         # 휴식
         return jsonify({"ok": True, "event": "rest",
                         "message": "휴식 지점에 도착했다.",

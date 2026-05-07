@@ -53,6 +53,14 @@ function refreshBattle(bs) {
         document.getElementById('mp-fill').style.height = (bs.player_mp/bs.player_maxmp*100) + '%';
     }
 
+    // ── 좌측 stat-grid를 실효 스탯(effective_*)으로 갱신 ──
+    // 평상시(탐험 모드)에는 ui-player.js가 원본 스탯으로 렌더링.
+    // 전투 중에는 여기서 effective_* 로 덮어써서 버프/디버프 영향 즉시 표시.
+    refreshLeftStatsBattle(bs);
+
+    // 좌측 버프/디버프 영역
+    refreshPlayerStatusList(bs);
+
     document.getElementById('turn-counter').textContent = `TURN ${bs.turn}`;
     document.getElementById('field-name').textContent = bs.is_boss ? 'BOSS ARENA' : 'FIELD';
 
@@ -327,4 +335,58 @@ function refreshBattleBackground(bs) {
         if (turn >= 25) stage.classList.add('battle-bg-normal-late');
         else            stage.classList.add('battle-bg-normal-early');
     }
+}
+
+// ── 전투 중 좌측 stat-grid를 실효 스탯으로 다시 렌더 ──
+//   bs.player_effective_stg 등이 있으면 사용, 없으면 원본으로 폴백.
+//   원본과 다르면 .changed 클래스 (노란색 강조).
+function refreshLeftStatsBattle(bs) {
+    const grid = document.getElementById('stat-grid');
+    if (!grid || !state.player) return;
+    const p = state.player;
+
+    // (label, original, effective) 순서
+    const rows = [
+        ["STG",   p.stg,   bs.player_effective_stg ],
+        ["SP",    p.sp,    p.sp                    ],  // SP는 effective 없음
+        ["ARM",   p.arm,   bs.player_effective_arm ],
+        ["SPARM", p.sparm, bs.player_effective_sparm],
+        ["SPD",   p.spd,   bs.player_effective_spd ],
+        ["LUC",   p.luc,   p.luc                   ],
+    ];
+    grid.innerHTML = rows.map(([label, orig, eff]) => {
+        const useEff = (typeof eff === 'number') ? eff : orig;
+        const changed = Math.abs(useEff - orig) > 0.5;
+        return `<div class="stat-row${changed ? ' changed' : ''}">
+                  <span>${label}</span>
+                  <span class="v">${Math.round(useEff * 10) / 10}</span>
+                </div>`;
+    }).join('');
+}
+
+// ── 좌측 버프/디버프 칩 렌더 ──
+//   bs.player_buffs / bs.player_debuffs (각각 [{stat, amount, turns, name}, ...])
+function refreshPlayerStatusList(bs) {
+    const buffsEl   = document.getElementById('player-buffs');
+    const debuffsEl = document.getElementById('player-debuffs');
+    if (!buffsEl || !debuffsEl) return;
+
+    const STAT_KOR = {
+        stg:'공격', arm:'방어', sparm:'마방', spd:'속도',
+        mp_efficiency:'마나효율'
+    };
+
+    const renderChip = (s, kind) => {
+        const stat = STAT_KOR[s.stat] || s.stat;
+        const amt  = Math.round((s.amount || 0) * 100);
+        const sign = kind === 'buff' ? '+' : '−';
+        return `<span class="status-chip ${kind}" title="${s.name || ''}">
+                  ${stat} ${sign}${amt}%<span class="turns">${s.turns}T</span>
+                </span>`;
+    };
+
+    const buffs   = bs.player_buffs   || [];
+    const debuffs = bs.player_debuffs || [];
+    buffsEl.innerHTML   = buffs.map(b => renderChip(b, 'buff')).join('');
+    debuffsEl.innerHTML = debuffs.map(d => renderChip(d, 'debuff')).join('');
 }

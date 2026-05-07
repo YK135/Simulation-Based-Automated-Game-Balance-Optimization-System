@@ -168,6 +168,10 @@ class BattleSession:
         # ── 플레이어 행동 ──────────────────────
         p_result = self._player_action(action, msgs)
 
+        # 플레이어 본인 버프 turn -1 (escape도 행동에 포함)
+        # — 플레이어가 행동 1회 했으니 본인 버프 1턴 소진
+        self.player.tick_buffs()
+
         if p_result == "escaped":
             self.done   = True
             self.winner = "escaped"
@@ -549,6 +553,14 @@ class BattleSession:
                 mp_after=enemy.mp,
             ))
 
+        # ── 이 적의 행동 1회 처리 후 turn 감소 ──
+        # · 적 본인의 버프/디버프 1턴 소진
+        # · 플레이어 디버프도 적 행동 단위로 1턴 소진
+        #   (다대일이면 적 N마리가 행동 → 디버프가 N번 빨리 풀림 — 의도된 동작)
+        enemy.tick_buffs()
+        enemy.tick_debuffs()
+        self.player.tick_debuffs()
+
     # ── 내부: 현재 상태 dict 반환 ────────────
 
     _DIFF_LABEL = {
@@ -558,15 +570,39 @@ class BattleSession:
         "":       "",
     }
 
+    def _pack_status_list(self, entity) -> dict:
+        """
+        엔티티의 buffs / debuffs 를 JSON 직렬화 가능 dict 리스트로.
+        UI는 stat / amount / turns / name 4필드를 사용.
+        """
+        return {
+            "buffs": [
+                {"stat": b.stat, "amount": round(b.amount, 3),
+                 "turns": b.turns, "name": b.name}
+                for b in getattr(entity, "buffs", [])
+            ],
+            "debuffs": [
+                {"stat": d.stat, "amount": round(d.amount, 3),
+                 "turns": d.turns, "name": d.name}
+                for d in getattr(entity, "debuffs", [])
+            ],
+        }
+
     def _state(self, messages: list = None) -> dict:
         # 첫 번째 살아있는 적 또는 마지막 적 (호환성 — 1대1 UI는 enemy_* 필드 사용)
         e = self.enemy
         diff_raw = getattr(e, "difficulty", "")
 
+        # 플레이어 / 적 상태이상
+        p_status = self._pack_status_list(self.player)
+        e_status = self._pack_status_list(e)
+
         # 모든 적의 정보 — 다대일용 (UI는 이 배열을 받아서 슬롯 3·4·5에 매핑)
+        # 각 적도 본인의 effective_* + buffs/debuffs 포함
         enemies_payload = []
         for i, en in enumerate(self.enemies):
             en_diff = getattr(en, "difficulty", "")
+            en_status = self._pack_status_list(en)
             enemies_payload.append({
                 "slot_index":       i,                        # UI 슬롯 매핑 (0=슬롯3, 1=슬롯4, 2=슬롯5)
                 "name":             en.name,
@@ -576,12 +612,21 @@ class BattleSession:
                 "maxhp":            round(en.maxhp, 1),
                 "mp":               round(en.mp, 1),
                 "maxmp":            round(en.maxmp, 1),
+                # 원본 스탯 (참고용)
                 "stg":              round(en.stg, 1),
                 "arm":              round(en.arm, 1),
                 "sparm":            round(en.sparm, 1),
                 "sp":               round(en.sp, 1),
                 "spd":              round(en.spd, 1),
                 "luc":              round(en.luc, 1),
+                # ── 실효 스탯 (버프/디버프 반영) ──
+                "effective_stg":    round(en.effective_stg(), 1),
+                "effective_arm":    round(en.effective_arm(), 1),
+                "effective_sparm":  round(en.effective_sparm(), 1),
+                "effective_spd":    round(en.effective_spd(), 1),
+                # ── 상태이상 ──
+                "buffs":            en_status["buffs"],
+                "debuffs":          en_status["debuffs"],
                 "difficulty":       en_diff,
                 "difficulty_label": self._DIFF_LABEL.get(en_diff, en_diff),
             })
@@ -593,6 +638,14 @@ class BattleSession:
             "player_mp":  round(self.player.mp, 1),
             "player_maxhp": self.player.maxhp,
             "player_maxmp": self.player.maxmp,
+            # ── 플레이어 실효 스탯 (UI 좌측 패널이 전투 중에 이걸로 갱신) ──
+            "player_effective_stg":   round(self.player.effective_stg(), 1),
+            "player_effective_arm":   round(self.player.effective_arm(), 1),
+            "player_effective_sparm": round(self.player.effective_sparm(), 1),
+            "player_effective_spd":   round(self.player.effective_spd(), 1),
+            # ── 플레이어 상태이상 ──
+            "player_buffs":   p_status["buffs"],
+            "player_debuffs": p_status["debuffs"],
             # ── 1대1 호환 (단수) — 기존 UI는 이 필드들 사용 ──
             "enemy_hp":   max(0.0, round(e.hp, 1)),
             "enemy_maxhp": e.maxhp,
@@ -613,6 +666,13 @@ class BattleSession:
                 "spd":              round(e.spd, 1),
                 "luc":              round(e.luc, 1),
             },
+            # ── 적 (단수) 실효 스탯 + 상태이상 ──
+            "enemy_effective_stg":   round(e.effective_stg(), 1),
+            "enemy_effective_arm":   round(e.effective_arm(), 1),
+            "enemy_effective_sparm": round(e.effective_sparm(), 1),
+            "enemy_effective_spd":   round(e.effective_spd(), 1),
+            "enemy_buffs":           e_status["buffs"],
+            "enemy_debuffs":         e_status["debuffs"],
             # ── 다대일 (배열) — UI는 enemies.length > 1 이면 다대일 모드로 전환 ──
             "enemies":          enemies_payload,
             "enemy_count":      len(self.enemies),
