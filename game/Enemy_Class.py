@@ -76,9 +76,9 @@ class Unit:
 # 하급: 전반적으로 약하게
 # 상급: 탱커(HP/ARM) or 유리대포(STG) 성향 공존
 GRADE_MULT = {
-    "하": {"hp": 0.3, "stg": 0.80, "arm": 0.85, "sparm": 0.85, "sp": 0.80},
-    "중": {"hp": 0.60, "stg": 1.00, "arm": 1.00, "sparm": 1.00, "sp": 1.00},
-    "상": {"hp": 1.00, "stg": 1.20, "arm": 1.15, "sparm": 1.15, "sp": 1.20},
+    "하": {"hp": 0.6, "stg": 0.70, "arm": 0.85, "sparm": 0.7, "sp": 0.70},
+    "중": {"hp": 0.90, "stg": 0.90, "arm": 1.00, "sparm": 0.8, "sp": 0.80},
+    "상": {"hp": 1.20, "stg": 1.12, "arm": 1.10, "sparm": 0.9, "sp": 1.0},
 }
 
 
@@ -270,9 +270,9 @@ def Make_Random_Monster(player_lv: int) -> Unit:
 
     pool = [Make_Goblin, Make_Bat]
     if player_lv >= 3:  pool.append(Make_Slime)
-    if player_lv >= 6:  pool.append(Make_Golem)
+    if player_lv >= 5:  pool.append(Make_Golem)
     if player_lv >= 7:  pool.append(Make_Ghost)
-    if player_lv >= 10: pool.append(Make_Assassin)
+    if player_lv >= 8: pool.append(Make_Assassin)
     return choice(pool)(player_lv, grade)
 
 

@@ -364,7 +364,6 @@ def _start_battle_multi(gs: dict, enemies: list, is_boss: bool = False) -> dict:
 
     return gs["battle"]._state(messages=[msg])
 
-
 # ─────────────────────────────────────────────
 # API: 전투 상태 조회
 # ─────────────────────────────────────────────
