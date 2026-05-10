@@ -17,6 +17,12 @@ let state = {
     battleState: null,
     aiLevel: 'normal',
     exploreTurn: 0,
+
+    // ── 비동기 작업 락 (Race condition 방지) ──
+    // exploring:        /explore 응답 대기 중인지 (true면 추가 클릭 무시)
+    // battleProcessing: /battle/action 응답 대기 + 적 턴 연출 중인지
+    exploring: false,
+    battleProcessing: false,
 };
 
 // ── 이모지 폴백 (이미지 못 넣었을 때 표시용) ──

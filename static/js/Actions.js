@@ -56,85 +56,150 @@ async function newGame(name, job) {
 }
 
 async function explore() {
-    term('exploring field...');
-    const r = await api('/explore', {});
-    if (!r.ok) { toast(r.error||'탐험 실패', 'error'); return; }
+    // ── 연타 방지 락 ──
+    // 백엔드 응답이 도착하기 전에 두 번째 explore 클릭이 들어오면 무시.
+    // 응답 처리 중 race condition으로 인해 이벤트가 스킵되는 버그 방지.
+    if (state.exploring) {
+        term('exploration in progress, ignored', 'warn');
+        return;
+    }
+    state.exploring = true;
 
-    if (r.event === 'battle' || r.event === 'midboss' || r.event === 'finalboss' || r.event === 'battle_multi') {
-        state.inBattle = true;
-        if (r.event === 'midboss') {
-            logLine('▼ 중간 보스가 나타났다!', 'crit');
-            term('encounter: MIDBOSS', 'warn');
-        } else if (r.event === 'finalboss') {
-            logLine('▼ 최종 보스가 나타났다!', 'crit');
-            term('encounter: FINALBOSS', 'warn');
-        } else if (r.event === 'battle_multi') {
-            // 다대일 전투 — 등장한 모든 몬스터 표시
-            const names = (r.enemies || []).map(e => e.name).join(', ');
-            logLine(`⚠ ${r.enemy_count}마리의 적이 나타났다! [${names}]`, 'crit');
-            term(`encounter: ${r.enemy_count} enemies`, 'warn');
-        } else {
-            const enemyName = r.battle_state?.enemy_info?.name || r.battle_state?.enemy_name || '???';
-            logLine(`▼ ${enemyName}이(가) 나타났다!`, 'system');
-            term(`encounter: ${enemyName}`);
-        }
-        refreshBattle(r.battle_state);
-        animateBalanceTuning();
-    } else if (r.event === 'item') {
-        logLine(`✚ 아이템 획득: ${r.item}`, 'heal');
-        term('item gained');
-        if (r.player) { state.player = r.player; refreshPlayer(); }
-        toast(`+ ${r.item}`);
-    } else if (r.event === 'rest') {
-        logLine('🌙 휴식 장소를 발견했다.', 'heal');
-        term('rest event');
-        showRestModal();
-    } else if (r.event === 'gameover') {
-        logLine('✖ GAME OVER', 'crit');
-        term('game over', 'warn');
-        toast('게임 오버. 다시 시작하세요.', 'warn');
-    } else {
-        logLine(r.message || '아무 일도 일어나지 않았다.', 'system');
-        if (r.player) { state.player = r.player; refreshPlayer(); }
+    // 탐험 버튼 즉시 비활성화 (시각적 피드백)
+    const btn = document.getElementById('btn-explore');
+    if (btn) {
+        btn.disabled = true;
+        btn.style.opacity = '0.5';
+        btn.style.cursor = 'wait';
     }
 
-    // 진행 턴 동기화 — explore가 turn을 안 주므로 status로 한 번 더 받아서 갱신
-    if (!state.inBattle) {
-        const st = await api('/status');
-        if (st.ok) {
-            state.exploreTurn = st.turn || 0;
-            refreshExploreTurn();
+    try {
+        term('exploring field...');
+        const r = await api('/explore', {});
+        if (!r.ok) {
+            toast(r.error || '탐험 실패', 'error');
+            return;
+        }
+
+        if (r.event === 'battle' || r.event === 'midboss' || r.event === 'finalboss' || r.event === 'battle_multi') {
+            state.inBattle = true;
+            if (r.event === 'midboss') {
+                logLine('▼ 중간 보스가 나타났다!', 'crit');
+                term('encounter: MIDBOSS', 'warn');
+            } else if (r.event === 'finalboss') {
+                logLine('▼ 최종 보스가 나타났다!', 'crit');
+                term('encounter: FINALBOSS', 'warn');
+            } else if (r.event === 'battle_multi') {
+                const names = (r.enemies || []).map(e => e.name).join(', ');
+                logLine(`⚠ ${r.enemy_count}마리의 적이 나타났다! [${names}]`, 'crit');
+                term(`encounter: ${r.enemy_count} enemies`, 'warn');
+            } else {
+                const enemyName = r.battle_state?.enemy_info?.name || r.battle_state?.enemy_name || '???';
+                logLine(`▼ ${enemyName}이(가) 나타났다!`, 'system');
+                term(`encounter: ${enemyName}`);
+            }
+            refreshBattle(r.battle_state);
+            animateBalanceTuning();
+        } else if (r.event === 'item') {
+            logLine(`✚ 아이템 획득: ${r.item}`, 'heal');
+            term('item gained');
+            if (r.player) { state.player = r.player; refreshPlayer(); }
+            toast(`+ ${r.item}`);
+        } else if (r.event === 'rest') {
+            logLine('🌙 휴식 장소를 발견했다.', 'heal');
+            term('rest event');
+            showRestModal();
+        } else if (r.event === 'gameover') {
+            logLine('✖ GAME OVER', 'crit');
+            term('game over', 'warn');
+            toast('게임 오버. 다시 시작하세요.', 'warn');
+        } else {
+            logLine(r.message || '아무 일도 일어나지 않았다.', 'system');
+            if (r.player) { state.player = r.player; refreshPlayer(); }
+        }
+
+        // 진행 턴 동기화
+        if (!state.inBattle) {
+            const st = await api('/status');
+            if (st.ok) {
+                state.exploreTurn = st.turn || 0;
+                refreshExploreTurn();
+            }
+        }
+    } finally {
+        // 락 해제 — 응답이 성공/실패 어느 쪽이든 반드시 해제 (try/finally)
+        state.exploring = false;
+        if (btn) {
+            btn.disabled = false;
+            btn.style.opacity = '';
+            btn.style.cursor = '';
         }
     }
 }
 
 async function battleAction(action) {
+    // ── 연타 방지 락 ──
+    // 적 턴 처리 중 ATTACK/SKILL 버튼 연타 시 한 턴에 여러 번 행동 호출되는 것 방지.
+    // showEnemyTurn()으로 버튼이 disabled 되지만, 키보드 단축키(F1/F2 등)로
+    // 우회 가능하므로 state 락이 추가로 필요.
+    if (state.battleProcessing) {
+        term('battle action in progress, ignored', 'warn');
+        return;
+    }
+    state.battleProcessing = true;
+
     document.getElementById('skill-menu').classList.remove('active');
     document.getElementById('item-menu').classList.remove('active');
 
+    // 즉시 적 턴 시각화 (버튼 disabled + ENEMY TURN 표시)
     showEnemyTurn();
 
-    const r = await api('/battle/action', { action });
-    if (!r.ok) { toast(r.error || 'action 실패', 'error'); return; }
-    refreshBattle(r);
-
-    if (r.done) {
-        if (r.winner === 'player') {
-            logLine('★ VICTORY!', 'crit');
-            term('battle won', 'ok');
-            toast('승리!');
-        } else if (r.winner === 'enemy') {
-            logLine('✖ DEFEAT', 'crit');
-            term('battle lost', 'warn');
-            toast('패배...', 'error');
-        } else {
-            logLine('▶ 도망쳤다.', 'system');
-            term('escaped');
+    try {
+        const r = await api('/battle/action', { action });
+        if (!r.ok) {
+            toast(r.error || 'action 실패', 'error');
+            return;
         }
-        document.getElementById('turn-indicator').className = 'turn-indicator';
-        document.getElementById('action-bar').classList.remove('your-turn');
-        await loadStatus();
+        refreshBattle(r);
+
+        // 적 턴 연출 — 응답이 너무 빨리 와서 ENEMY TURN 표시가 안 보이는 문제 해결.
+        // refreshBattle 내부에서 showPlayerTurn()이 호출되지만,
+        // 그 전에 ENEMY TURN을 0.5초 정도 보여주기 위한 의도적 딜레이.
+        // 전투 종료(r.done)면 어차피 PLAYER/ENEMY TURN 인디케이터 끄므로 딜레이 불필요.
+        if (!r.done) {
+            await _sleep(500);
+            // refreshBattle이 이미 showPlayerTurn()을 호출했지만, 위 await 동안
+            // showEnemyTurn 상태를 유지하기 위해 다시 호출 (안전망).
+            showPlayerTurn();
+        }
+
+        if (r.done) {
+            if (r.winner === 'player') {
+                logLine('★ VICTORY!', 'crit');
+                term('battle won', 'ok');
+                toast('승리!');
+            } else if (r.winner === 'enemy') {
+                logLine('✖ DEFEAT', 'crit');
+                term('battle lost', 'warn');
+                toast('패배...', 'error');
+            } else {
+                logLine('▶ 도망쳤다.', 'system');
+                term('escaped');
+            }
+            document.getElementById('turn-indicator').className = 'turn-indicator';
+            document.getElementById('action-bar').classList.remove('your-turn');
+            await loadStatus();
+        }
+    } finally {
+        // 락 해제 — try/finally로 예외 시에도 보장
+        state.battleProcessing = false;
     }
+}
+
+
+// ── 헬퍼: 비동기 sleep ──
+function _sleep(ms) {
+    return new Promise(resolve => setTimeout(resolve, ms));
 }
 
 // 다대일 전투 시 타깃 인덱스를 액션에 첨부.
