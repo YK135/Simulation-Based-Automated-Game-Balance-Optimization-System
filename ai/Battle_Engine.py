@@ -99,7 +99,7 @@ class EntitySnapshot:
 
     # ── 직업 식별자 (플레이어 전용) ──
     # 직업별 패시브 발동에 사용:
-    #   "전사":   2턴마다 maxhp 10% 회복 (Battlesession.step에서 처리)
+    #   "전사":   공격 3회마다 maxhp 10% 회복 (Battlesession.step에서 처리)
     #   "마법사": 스킬 MP 비용 30% 감소 (execute_skill에서 처리)
     #   "탱커":   물공 받으면 maxmp 10%, 마공 받으면 maxhp 10% 회복
     #             (DamageCalc 또는 _execute_action 에서 처리)
@@ -143,12 +143,16 @@ class EntitySnapshot:
 
     def passive_on_turn_start(self) -> str:
         """
-        매 턴 시작 시 발동되는 패시브 처리.
-          - 전사: 2턴마다 maxhp 10% 회복 (turn_count 외부에서 관리)
+        플레이어 행동 시점에 호출되는 패시브 처리.
+          - 전사: 공격 3회마다 maxhp 10% 회복 (action_count 외부에서 관리)
         반환: 발동 메시지 (없으면 "")
-
-        주의: 호출 측에서 turn 카운터를 가지고 있어야 함 (BattleSession/BattleEngine).
-        여기서는 단순히 "전사인지" + "회복" 만 처리. 발동 조건(2턴마다)은 호출 측에서.
+ 
+        주의: 호출 측에서 발동 조건(3회마다)을 가지고 있어야 함.
+        여기서는 단순히 "전사인지" + "회복" 만 처리.
+ 
+        밸런싱 이력:
+          - 초기: 2턴마다 → 시뮬 결과 +76.5%p 승률 향상 (과강)
+          - 현재: 공격 3회마다 → 발동 빈도 ~33% 감소 → 적정 수준 기대
         """
         if self.job == "전사":
             heal = self.maxhp * 0.10
@@ -680,9 +684,30 @@ SKILL_META = {
         "mp": 18, "mult": 0.85, "type": "physical", "hits": 1, "aoe": True
     },
     "추진력": {
-        # 스펙: buff_amount 0.10 (도적 SPD 폭주 억제)
         "mp": 13, "type": "buff",
         "buff_stat": "spd", "buff_amount": 0.10, "buff_turns": 2
+    },
+    # ─────────────────────────────────────────────
+    # 사제(서포터형 몬스터) 전용 스킬 — 적이 사용
+    # 플레이어 스킬 트리에는 등록되지 않음.
+    # ─────────────────────────────────────────────
+    "홀리볼트": {
+        # 사제의 공격 스킬 — 마법 데미지 (약함)
+        # 골렘(마법 저항 0.65)에는 잘 안 통하고, 슬라임(마법 +10%)에는 잘 통함
+        "mp": 8, "mult": 1.10, "type": "magical", "hits": 1
+    },
+    "사제축복": {
+        # 사제 본인이 사용 안 함. Battlesession._priest_action에서 다른 아군에게 적용.
+        # SKILL_META에는 buff 형태로만 정의 (실제 발동은 별도 처리).
+        "mp": 12, "type": "buff",
+        "buff_stat": "stg", "buff_amount": 0.15, "buff_turns": 3
+    },
+    "사제힐": {
+        # 사제의 핵심 — 다른 아군 회복.
+        # SKILL_META에는 heal 형태로만 정의 (실제 발동은 Battlesession에서 별도 처리).
+        # 자기 자신 X / 가장 HP 비율 낮은 아군 O.
+        "mp": 14, "type": "heal",
+        "base_heal": 60, "sp_mult": 1.4, "cap": 0.40
     },
 }
 
@@ -939,11 +964,12 @@ class BattleEngine:
                 self.action_count += 1
 
                 if actor == "player":
-                    # ── 전사 패시브: 2번째 행동마다 maxhp 10% 회복 ──
+                    # ── 전사 패시브: 공격 3회마다 maxhp 10% 회복 ──
+                    # 변경: 2회→3회로 발동 빈도 ~33% 감소 (과강 +76.5%p 시뮬결과 반영)
                     self._player_action_count += 1
-                    if self.player.job == "전사" and self._player_action_count % 2 == 0:
+                    if self.player.job == "전사" and self._player_action_count % 3 == 0:
                         self.player.passive_on_turn_start()  # 메시지는 시뮬에선 무시
-
+ 
                     action = player_ai(self.player, self.enemy)
                     res = self._execute_action(action, self.player, self.enemy, "player")
                     if res == "escaped":

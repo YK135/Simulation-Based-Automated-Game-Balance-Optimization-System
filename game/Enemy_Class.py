@@ -248,20 +248,53 @@ def Make_Assassin(player_lv: int, grade: str) -> Unit:
     )
     return _apply_grade(unit, grade)
 
+def Make_Priest(player_lv: int, grade: str) -> Unit:
+    """
+    사제: 서포터형 몬스터 (Lv9+ 등장)
+
+    역할 정체성:
+      - 본인 공격력은 약함. 다른 아군 몬스터를 회복/버프하는 게 핵심.
+      - 다대일에서 등장 시 가장 위협적 — 먼저 잡아야 하는 우선순위 타깃.
+      - 단독 등장 시에는 약한 마법 몬스터로 동작.
+
+    스펙:
+      hp 70+15, mp 50+5, stg 4+0.8, arm 4+0.8, sparm 7+1.2,
+      sp 10+1.8, spd 7+0.4, luc 6+0.5
+
+    특수 동작 (Battlesession._priest_action):
+      1) 다른 아군 중 HP ≤ 70%면 → 사제힐 (가장 비율 낮은 아군)
+      2) 30% 확률로 사제축복 (가장 STG 높은 아군에게 STG 버프)
+      3) 그 외 → 홀리볼트 (마법 공격)
+      4) MP 부족 시 → 기본 물리 공격
+    """
+    lv = max(1, player_lv)
+    unit = Unit(
+        name  = "사제",
+        lv    = lv,
+        hp    = int(70  + 15 * (lv - 1)),
+        mp    = int(50  + 5  * (lv - 1)),
+        stg   = round(4   + 0.8 * (lv - 1), 1),
+        arm   = round(4   + 0.8 * (lv - 1), 1),
+        sparm = round(7   + 1.2 * (lv - 1), 1),
+        sp    = round(10  + 1.8 * (lv - 1), 1),
+        spd   = round(7   + 0.4 * (lv - 1), 1),
+        luc   = round(6   + 0.5 * (lv - 1), 1),
+        enemy_type = "사제",
+    )
+    return _apply_grade(unit, grade)
 
 def Make_Random_Monster(player_lv: int) -> Unit:
     """
     랜덤 몬스터 + 랜덤 등급. 레벨대별 풀 적용 (Phase 1 통합).
       Lv1+:  고블린, 박쥐
       Lv3+:  + 슬라임
-      Lv6+:  + 골렘
+      Lv5+:  + 골렘
       Lv7+:  + 유령
-      Lv10+: + 암살자
+      Lv8+:  + 암살자
+      Lv9+:  + 사제          ← 신규
     등급: 하40% / 중45% / 상15%
 
     Balance_Hook의 _ENEMY_POOL과 동일한 규칙 — 콘솔/웹 풀 일치.
-    Balance_Hook을 의존하기 어려운 외부 호출(레거시 콘솔 등)을 위해
-    여기서도 단일 출처 풀을 정의해서 동일하게 적용.
     """
     roll = random()
     if   roll < 0.40: grade = "하"
@@ -272,9 +305,9 @@ def Make_Random_Monster(player_lv: int) -> Unit:
     if player_lv >= 3:  pool.append(Make_Slime)
     if player_lv >= 5:  pool.append(Make_Golem)
     if player_lv >= 7:  pool.append(Make_Ghost)
-    if player_lv >= 8: pool.append(Make_Assassin)
+    if player_lv >= 8:  pool.append(Make_Assassin)
+    if player_lv >= 9:  pool.append(Make_Priest)
     return choice(pool)(player_lv, grade)
-
 
 def Make_MidBoss(player_lv: int, base_monster_snap=None) -> Unit:
     """

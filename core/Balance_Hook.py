@@ -24,7 +24,7 @@ from ai.FeedBack       import FeedbackEngine
 from ai.Visualizer     import Visualizer
 from game.Enemy_Class  import (
     Make_Goblin, Make_Bat,
-    Make_Slime, Make_Golem, Make_Ghost, Make_Assassin,
+    Make_Slime, Make_Golem, Make_Ghost, Make_Assassin, Make_Priest,
 )
 
 # 루트 디렉토리 (Main.py가 있는 곳)
@@ -133,6 +133,7 @@ class BalanceHook:
         "골렘":     Make_Golem,
         "유령":     Make_Ghost,
         "암살자":   Make_Assassin,
+        "사제":     Make_Priest,
     }
 
     # 레벨대별 등장 가능 몬스터 풀
@@ -145,6 +146,7 @@ class BalanceHook:
         {"type": "골렘",    "min_lv": 5},
         {"type": "유령",    "min_lv": 6},
         {"type": "암살자",  "min_lv": 8},
+        {"type": "사제",    "min_lv": 9},
     ]
 
     def _available_enemy_types(self) -> list:

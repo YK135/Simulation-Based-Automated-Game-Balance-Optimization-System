@@ -20,14 +20,14 @@ try:
     from ai.Auto_AI        import PlayerAI, EnemyAI
     from game.Enemy_Class  import (
         Make_Goblin, Make_Bat,
-        Make_Slime, Make_Golem, Make_Ghost, Make_Assassin,
+        Make_Slime, Make_Golem, Make_Ghost, Make_Assassin, Make_Priest,
     )
 except ModuleNotFoundError:
     from Battle_Engine import BattleEngine, EntitySnapshot, SKILL_META
     from Auto_AI       import PlayerAI, EnemyAI
     from game.Enemy_Class   import (
         Make_Goblin, Make_Bat,
-        Make_Slime, Make_Golem, Make_Ghost, Make_Assassin,
+        Make_Slime, Make_Golem, Make_Ghost, Make_Assassin, Make_Priest,
     )
 
 
@@ -241,6 +241,120 @@ class BattleSimulator:
         elif wr <= 0.65: return f"중간 ({wr*100:.1f}%)"
         else:            return f"약함 ({wr*100:.1f}%)"
 
+class MultiBattleSimulator:
+    """
+    1대N 다대일 전투 시뮬레이터.
+
+    BattleSession을 직접 사용해 N회 반복 시뮬 — Digital Twin 원칙:
+    실게임 다대일 = 시뮬 다대일 = BattleSession (동일 객체).
+
+    사용 예시:
+      from ai.Simulator import MultiBattleSimulator
+      from ai.Battle_Engine import EntitySnapshot
+      from game.Enemy_Class import Make_Goblin, Make_Priest
+
+      player_snap = EntitySnapshot.from_player(player)
+      enemies = [
+          EntitySnapshot.from_enemy(Make_Priest(10, "중")),
+          EntitySnapshot.from_enemy(Make_Goblin(10, "중")),
+      ]
+      sim = MultiBattleSimulator(player_snap, enemies, n=300)
+      result = sim.run()
+      print(f"승률 {result.win_rate*100:.1f}%, 평균 {result.avg_turns}턴")
+    """
+
+    def __init__(
+        self,
+        player: EntitySnapshot,
+        enemies: list,            # EntitySnapshot 리스트 (1~3마리)
+        n: int = 300,
+        items: list = None,
+        player_ai_mode: str = "balanced",
+        max_turns: int = 100,     # 무한루프 방지 (사제힐로 전투 길어질 수 있음)
+    ):
+        if not enemies:
+            raise ValueError("MultiBattleSimulator: enemies는 최소 1마리 이상이어야 함")
+        self.player_template  = player
+        self.enemy_templates  = enemies
+        self.n                = n
+        self.items_template   = list(items or [])
+        self.player_ai_mode   = player_ai_mode
+        self.max_turns        = max_turns
+
+    def run(self) -> SimulationResult:
+        """N회 반복 시뮬 → SimulationResult 반환"""
+        # 지연 import — 순환참조 방지
+        try:
+            from ai.Battlesession import BattleSession
+        except ModuleNotFoundError:
+            from Battlesession import BattleSession
+
+        wins = 0
+        turn_list = []
+        hp_list = []
+
+        # 시뮬용 PlayerAI — 매 행동마다 호출해서 action 문자열 생성
+        player_ai = PlayerAI(self.player_ai_mode)
+
+        for _ in range(self.n):
+            p_snap = copy.deepcopy(self.player_template)
+            e_snaps = [copy.deepcopy(e) for e in self.enemy_templates]
+            items = list(self.items_template)
+
+            session = BattleSession(
+                p_snap,
+                enemies=e_snaps,
+                items=items,
+                is_boss=False,
+            )
+
+            # 시뮬 루프 — done 또는 max_turns 도달까지 step
+            for _t in range(self.max_turns):
+                if session.done:
+                    break
+                # 살아있는 적 중 첫 번째를 타깃으로 (PlayerAI는 단일 타깃 기준 결정)
+                action = self._decide_player_action(session, player_ai)
+                session.step(action)
+
+            # max_turns 초과 = 미결 → 적 측 승리로 간주 (보수적)
+            if not session.done:
+                session.winner = "enemy"
+
+            if session.winner == "player":
+                wins += 1
+            turn_list.append(session.turn)
+            hp_list.append(max(0.0, session.player.hp))
+
+        win_rate = wins / self.n
+        return SimulationResult(
+            win_rate=round(win_rate, 4),
+            total_runs=self.n,
+            player_wins=wins,
+            avg_turns=round(statistics.mean(turn_list), 1),
+            avg_final_hp=round(statistics.mean(hp_list), 1),
+            win_rate_label=BattleSimulator._label(win_rate),
+        )
+
+    @staticmethod
+    def _decide_player_action(session, player_ai) -> str:
+        """
+        PlayerAI는 1대1 기준이므로 살아있는 첫 번째 적을 defender로 사용.
+        반환된 Action을 BattleSession이 받는 action 문자열로 변환.
+        """
+        target = session._current_target()
+        if target is None:
+            return "attack"  # 폴백 — 사실 호출 전에 done 체크되어 도달 안 함
+
+        action_obj = player_ai(session.player, target)
+
+        if action_obj.action_type == "attack":
+            return "attack"
+        elif action_obj.action_type == "skill":
+            return f"skill:{action_obj.detail}"
+        elif action_obj.action_type == "item":
+            return f"item:{action_obj.detail}"
+        else:
+            return "attack"
 
 # ────────────────────────────────────────────
 # 스탯 역산기 — 플레이어 상태 반영 버전
@@ -301,11 +415,11 @@ class StatTuner:
             "normal": 0.60,
             "easy":   0.70,
         },
-        # 암살자: 위협적이라 강함을 살짝 어렵게(40%) — 첫턴 폭딜 컨셉
+        # 암살자: 위협적이라 강함을 살짝 어렵게(동일하게%) — 첫턴 폭딜 컨셉
         "암살자": {
-            "hard":   0.40,
-            "normal": 0.55,
-            "easy":   0.65,
+            "hard":   0.45,
+            "normal": 0.60,
+            "easy":   0.70,
         },
     }
 
@@ -482,6 +596,7 @@ _MAKER_DISPATCH = {
     "골렘":     Make_Golem,
     "유령":     Make_Ghost,
     "암살자":   Make_Assassin,
+    "사제":     Make_Priest,
 }
 
 

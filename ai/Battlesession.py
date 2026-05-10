@@ -81,7 +81,10 @@ class BattleSession:
         # 기본값: 첫 번째 살아있는 적
         self._target_idx = 0
 
-    # ── self.enemy 호환성 프로퍼티 ──
+        # 전사 패시브용 행동 카운터 — 공격 3회마다 발동
+        # self.turn은 다른 곳에서도 쓰여서 별도로 관리.
+        # 플레이어가 실제로 행동한 횟수 (item, escape도 포함 — step과 1:1).
+        self._warrior_action_count = 0
     # 기존 1대1 코드는 self.enemy 직접 접근. 살아있는 첫 번째 적 반환.
     @property
     def enemy(self):
@@ -145,12 +148,16 @@ class BattleSession:
 
         self.turn += 1
 
-        # ── 전사 패시브: 2턴마다 maxhp 10% 회복 ──
-        # 시뮬과 동일 룰. self.turn은 1부터 시작이므로 turn % 2 == 0 (즉 2,4,6...턴)에 발동.
-        if self.player.job == "전사" and self.turn % 2 == 0 and self.player.hp > 0:
-            warrior_msg = self.player.passive_on_turn_start()
-            if warrior_msg:
-                msgs.append(warrior_msg)
+        # ── 전사 패시브: 공격 3회마다 maxhp 10% 회복 ──
+        # 시뮬(BattleEngine.run)과 동일 룰 — Digital Twin 원칙.
+        # 발동 시점: 행동 카운터 증가 직후 (이번 행동 전에 회복).
+        # 빈도 변경 이력: 2턴 → 3턴 (시뮬 결과 +76.5%p 과강 → 적정화)
+        if self.player.job == "전사" and self.player.hp > 0:
+            self._warrior_action_count += 1
+            if self._warrior_action_count % 3 == 0:
+                warrior_msg = self.player.passive_on_turn_start()
+                if warrior_msg:
+                    msgs.append(warrior_msg)
 
         # ── 첫 턴 + first_strike 처리 (암살자) ──
         # 적이 first_strike=True 이면 플레이어 행동 전에 적이 먼저 공격.
@@ -320,9 +327,115 @@ class BattleSession:
                 is_crit=crit,
             ))
 
+            """
+            ═══════════════════════════════════════════════════════════════════
+            ai/Battlesession.py  핵심 패치 ★
+            ═══════════════════════════════════════════════════════════════════
+
+            ✅ 작업 내용:
+            [수정 1] _player_action() 안의 스킬 분기 → AoE 처리 추가
+            [수정 2] _single_enemy_action() 시작부에 사제 분기 추가
+            [추가 3] _priest_action() 메서드 신규 추가
+            """
+            # ═══════════════════════════════════════════════════════════════════
+            # [수정 1]  _player_action() 의 스킬 분기 통째로 교체
+            # ═══════════════════════════════════════════════════════════════════
+            #
+            #   _player_action 메서드 안에서 elif action.startswith("skill:"):
+            #   로 시작하는 블록 전체를 아래 코드로 교체.
+            #   (그 위의 if action == "attack": 블록은 그대로 유지,
+            #    그 아래의 elif action.startswith("item:"): 블록도 그대로 유지)
+
         # 스킬
         elif action.startswith("skill:"):
             skill_name = action[6:]
+            meta = SKILL_META.get(skill_name, {})
+            is_aoe = bool(meta.get("aoe", False))
+
+            # ── AoE 스킬: 살아있는 모든 적에게 적용 ────────────
+            # 슬래시1/2, 난사1/2가 해당. SKILL_META의 "aoe": True 플래그.
+            # MP는 한 번만 차감, 두 번째 대상부터는 DamageCalc 직접 호출.
+            # 적별로 상성·회피·크리·랜덤계수 모두 독립 판정.
+            if is_aoe:
+                alive_targets = self._alive_enemies()
+                if not alive_targets:
+                    return "ok"
+
+                # 1) 첫 대상 — execute_skill로 MP 정상 차감
+                first = alive_targets[0]
+                dmg, mp_lack, _info = execute_skill(skill_name, self.player, first)
+                if mp_lack:
+                    msgs.append("MP가 부족합니다!")
+                    self.logs.append(TurnLog(
+                        turn=self.turn, actor="player",
+                        action="skill_failed",
+                        action_detail=f"{skill_name}(mp_lack)",
+                        damage_dealt=0,
+                        hp_after=first.hp,
+                        mp_after=self.player.mp,
+                    ))
+                    return "ok"
+
+                first.hp -= dmg
+                msgs.append(f"{skill_name} (전체 공격!) → {first.name}에게 {dmg} 데미지")
+                msgs.append(f"{first.name} HP: {max(0, int(first.hp))}")
+                total_dmg = dmg
+
+                # 2) 나머지 대상 — DamageCalc 직접 호출 (MP 차감 X)
+                stype = meta.get("type", "physical")
+                skill_mult = meta.get("mult", 1.0)
+                hits = meta.get("hits", 1)
+
+                for tgt in alive_targets[1:]:
+                    raw = 0
+                    for _ in range(hits):
+                        if stype == "physical":
+                            r, dodge, _crit = DamageCalc.physical(
+                                self.player.effective_stg(),
+                                self.player.luc,
+                                tgt.effective_arm(),
+                                tgt.luc,
+                                skill_mult=skill_mult,
+                                role="player",
+                                attacker=self.player,
+                                defender=tgt,
+                                hit_count=hits,
+                            )
+                        elif stype == "magical":
+                            r, dodge, _crit = DamageCalc.magical(
+                                self.player.sp,
+                                self.player.luc,
+                                tgt.effective_sparm(),
+                                tgt.luc,
+                                skill_mult=skill_mult,
+                                role="player",
+                                attacker=self.player,
+                                defender=tgt,
+                                hit_count=hits,
+                            )
+                        else:
+                            r, dodge = 0, False
+                        if not dodge:
+                            raw += int(r)
+                    if raw > 0:
+                        tgt.hp -= raw
+                        msgs.append(f"  └ {tgt.name}에게 {raw} 데미지")
+                        msgs.append(f"     {tgt.name} HP: {max(0, int(tgt.hp))}")
+                        total_dmg += raw
+                    else:
+                        msgs.append(f"  └ {tgt.name}이(가) 회피!")
+
+                self.logs.append(TurnLog(
+                    turn=self.turn, actor="player",
+                    action="skill",
+                    action_detail=f"{skill_name}(aoe)",
+                    damage_dealt=int(total_dmg),
+                    hp_after=max(0, first.hp),
+                    mp_after=self.player.mp,
+                ))
+                return "ok"
+
+            # ── 단일 타깃 스킬 (기존 로직 + buff/heal/shield 메시지 보강) ──
             mp_before = self.player.mp
             dmg, mp_lack, debuff_name = execute_skill(
                 skill_name, self.player, target
@@ -339,8 +452,8 @@ class BattleSession:
                     mp_after=self.player.mp,
                 ))
             else:
-                meta = SKILL_META.get(skill_name, {})
-                if meta.get("type") == "debuff":
+                stype = meta.get("type")
+                if stype == "debuff":
                     stat_kor = {"arm":"방어력","sparm":"마법방어력",
                                 "stg":"공격력","spd":"스피드"}.get(
                         meta.get("debuff_stat",""), "스탯")
@@ -354,6 +467,22 @@ class BattleSession:
                         hp_after=target.hp,
                         mp_after=self.player.mp,
                         debuff_applied=debuff_name or meta.get("debuff_stat", ""),
+                    ))
+                elif stype in ("buff", "heal", "shield"):
+                    if stype == "buff":
+                        msgs.append(f"{skill_name} 사용 → 능력치 강화!")
+                    elif stype == "heal":
+                        msgs.append(f"{skill_name} 사용 → HP {int(self.player.hp)}/{int(self.player.maxhp)}")
+                    elif stype == "shield":
+                        msgs.append(f"{skill_name} 사용 → 실드 {int(self.player.shield)} 생성!")
+                    self.logs.append(TurnLog(
+                        turn=self.turn,
+                        actor="player",
+                        action="skill",
+                        action_detail=skill_name,
+                        damage_dealt=0,
+                        hp_after=self.player.hp,
+                        mp_after=self.player.mp,
                     ))
                 else:
                     target.hp -= dmg
@@ -467,6 +596,12 @@ class BattleSession:
 
     def _single_enemy_action(self, enemy, msgs: list):
         """단일 적의 1회 행동 처리. 기존 _enemy_action 로직을 적 1마리 단위로 분리."""
+        # ── 사제 전용 행동 (다른 아군 회복/버프) ──
+        # enemy_type이 "사제"면 별도 로직 사용. 일반 EnemyAI 안 거침.
+        if getattr(enemy, "enemy_type", "") == "사제":
+            self._priest_action(enemy, msgs)
+            return
+        
         action = self._enemy_ai(enemy, self.player)
 
         if action.action_type == "attack":
@@ -561,6 +696,162 @@ class BattleSession:
         enemy.tick_debuffs()
         self.player.tick_debuffs()
 
+
+    # ─────────────────────────────────────────────
+    # 사제 전용 행동 (서포터형)
+    # ─────────────────────────────────────────────
+    def _priest_action(self, priest, msgs: list):
+        """
+        사제 행동 우선순위:
+          1) 다른 아군 중 HP ≤ 70%면 → 사제힐 (가장 비율 낮은 아군)
+          2) 30% 확률로 사제축복 (가장 STG 높은 아군 STG 버프)
+          3) 그 외 → 홀리볼트 (마법 공격)
+          4) MP 부족 → 기본 물리 공격
+        """
+        # 자기 제외 살아있는 아군
+        allies = [e for e in self.enemies if e is not priest and e.hp > 0]
+
+        # ── 1) 사제힐 우선 ──
+        if priest.mp >= 14 and allies:
+            wounded = [a for a in allies if a.hp / max(a.maxhp, 1) <= 0.70]
+            if wounded:
+                target_ally = min(wounded, key=lambda a: a.hp / max(a.maxhp, 1))
+                meta = SKILL_META["사제힐"]
+                priest.mp -= meta["mp"]
+                heal = meta["base_heal"] + priest.sp * meta["sp_mult"]
+                heal = min(heal, target_ally.maxhp * meta["cap"])
+                before = int(target_ally.hp)
+                target_ally.hp = min(target_ally.maxhp, target_ally.hp + int(heal))
+                gained = int(target_ally.hp) - before
+                msgs.append(f"{priest.name} → 사제힐! {target_ally.name} HP +{gained}")
+                self.logs.append(TurnLog(
+                    turn=self.turn, actor="enemy",
+                    action="skill", action_detail="사제힐",
+                    damage_dealt=-gained,
+                    hp_after=target_ally.hp,
+                    mp_after=priest.mp,
+                ))
+                return
+
+        # ── 2) 사제축복 (30% 확률) ──
+        if priest.mp >= 12 and allies and _random() < 0.30:
+            target_ally = max(allies, key=lambda a: a.effective_stg())
+            meta = SKILL_META["사제축복"]
+            priest.mp -= meta["mp"]
+            from Battle_Engine import Buff
+            target_ally.apply_buff(Buff(
+                stat=meta["buff_stat"],
+                amount=meta["buff_amount"],
+                turns=meta["buff_turns"],
+                name="사제축복",
+            ))
+            msgs.append(f"{priest.name} → 사제축복! {target_ally.name}의 공격력 강화!")
+            self.logs.append(TurnLog(
+                turn=self.turn, actor="enemy",
+                action="skill", action_detail="사제축복",
+                damage_dealt=0,
+                hp_after=target_ally.hp,
+                mp_after=priest.mp,
+            ))
+            return
+
+        # ── 3) 홀리볼트 (마법 공격) ──
+        if priest.mp >= 8:
+            meta = SKILL_META["홀리볼트"]
+            priest.mp -= meta["mp"]
+            dmg, dodge, crit = DamageCalc.magical(
+                priest.sp, priest.luc,
+                self.player.effective_sparm(), self.player.luc,
+                skill_mult=meta["mult"],
+                role="monster",
+                attacker=priest,
+                defender=self.player,
+            )
+            if dodge:
+                msgs.append(f"{self.player.name}이(가) {priest.name}의 홀리볼트를 회피!")
+                self.logs.append(TurnLog(
+                    turn=self.turn, actor="enemy",
+                    action="skill", action_detail="홀리볼트",
+                    damage_dealt=0,
+                    hp_after=self.player.hp,
+                    mp_after=priest.mp,
+                    is_dodge=True,
+                ))
+                return
+
+            actual = int(dmg)
+            if self.player.shield > 0:
+                absorbed = min(self.player.shield, actual)
+                self.player.shield -= absorbed
+                actual -= absorbed
+                msgs.append(f"실드가 {absorbed} 흡수!")
+            self.player.hp -= actual
+            self.player.last_damage_taken = actual
+            tag = " (치명타!)" if crit else ""
+            msgs.append(f"{priest.name} → 홀리볼트{tag} | {actual} 데미지")
+            msgs.append(f"{self.player.name} HP: {max(0, int(self.player.hp))}")
+
+            # 탱커 패시브: 마법 피격 시 HP 회복
+            tanker_msg = self.player.passive_on_hit_received("magical")
+            if tanker_msg:
+                msgs.append(tanker_msg)
+
+            self.logs.append(TurnLog(
+                turn=self.turn, actor="enemy",
+                action="skill", action_detail="홀리볼트",
+                damage_dealt=actual,
+                hp_after=max(0, self.player.hp),
+                mp_after=priest.mp,
+                is_crit=crit,
+            ))
+            return
+
+        # ── 4) MP 부족 → 기본 물리 공격 ──
+        dmg, dodge, crit = DamageCalc.physical(
+            priest.effective_stg(), priest.luc,
+            self.player.effective_arm(), self.player.luc,
+            skill_mult=1.0,
+            role="monster",
+            attacker=priest,
+            defender=self.player,
+        )
+        if dodge:
+            msgs.append(f"{self.player.name}이(가) {priest.name}의 공격을 회피!")
+            self.logs.append(TurnLog(
+                turn=self.turn, actor="enemy",
+                action="attack", action_detail="basic_attack",
+                damage_dealt=0,
+                hp_after=self.player.hp,
+                mp_after=priest.mp,
+                is_dodge=True,
+            ))
+            return
+
+        actual = int(dmg)
+        if self.player.shield > 0:
+            absorbed = min(self.player.shield, actual)
+            self.player.shield -= absorbed
+            actual -= absorbed
+            msgs.append(f"실드가 {absorbed} 흡수!")
+        self.player.hp -= actual
+        self.player.last_damage_taken = actual
+        tag = " (치명타!)" if crit else ""
+        msgs.append(f"{priest.name} → 공격{tag} | {actual} 데미지")
+        msgs.append(f"{self.player.name} HP: {max(0, int(self.player.hp))}")
+
+        # 탱커 패시브: 물리 피격 시 MP 회복
+        tanker_msg = self.player.passive_on_hit_received("physical")
+        if tanker_msg:
+            msgs.append(tanker_msg)
+
+        self.logs.append(TurnLog(
+            turn=self.turn, actor="enemy",
+            action="attack", action_detail="basic_attack",
+            damage_dealt=actual,
+            hp_after=max(0, self.player.hp),
+            mp_after=priest.mp,
+            is_crit=crit,
+        ))
     # ── 내부: 현재 상태 dict 반환 ────────────
 
     _DIFF_LABEL = {

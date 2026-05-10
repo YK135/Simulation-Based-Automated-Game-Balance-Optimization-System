@@ -184,7 +184,11 @@ def _manual_skill(p_snap: EntitySnapshot, e_snap: EntitySnapshot,
             actual = dmg - absorbed
             _p(f"  실드가 {absorbed} 흡수!")
         e_snap.hp -= actual
-        _p(f"  {skill_name} → {actual} 데미지")
+        # AoE 스킬은 메시지 명시 (콘솔은 1대1이라 단일 적에게만 들어감)
+        if meta.get("aoe"):
+            _p(f"  {skill_name} (전체 공격) → {actual} 데미지")
+        else:
+            _p(f"  {skill_name} → {actual} 데미지")
         _p(f"  {enemy_name} HP: {max(0, int(e_snap.hp))}")
 
     return True
