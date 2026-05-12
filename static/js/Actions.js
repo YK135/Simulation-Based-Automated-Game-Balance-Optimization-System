@@ -139,9 +139,6 @@ async function explore() {
 
 async function battleAction(action) {
     // ── 연타 방지 락 ──
-    // 적 턴 처리 중 ATTACK/SKILL 버튼 연타 시 한 턴에 여러 번 행동 호출되는 것 방지.
-    // showEnemyTurn()으로 버튼이 disabled 되지만, 키보드 단축키(F1/F2 등)로
-    // 우회 가능하므로 state 락이 추가로 필요.
     if (state.battleProcessing) {
         term('battle action in progress, ignored', 'warn');
         return;
@@ -160,18 +157,17 @@ async function battleAction(action) {
             toast(r.error || 'action 실패', 'error');
             return;
         }
-        refreshBattle(r);
 
-        // 적 턴 연출 — 응답이 너무 빨리 와서 ENEMY TURN 표시가 안 보이는 문제 해결.
-        // refreshBattle 내부에서 showPlayerTurn()이 호출되지만,
-        // 그 전에 ENEMY TURN을 0.5초 정도 보여주기 위한 의도적 딜레이.
-        // 전투 종료(r.done)면 어차피 PLAYER/ENEMY TURN 인디케이터 끄므로 딜레이 불필요.
+        // ── ENEMY TURN 연출 (500ms) ──
+        // refreshBattle()이 자동으로 showPlayerTurn()을 호출하기 때문에
+        // refreshBattle 전에 sleep을 해서 ENEMY TURN 표시를 실제로 보이게 함.
+        // 전투 종료 시(r.done)는 어차피 인디케이터 끄므로 딜레이 불필요.
         if (!r.done) {
             await _sleep(500);
-            // refreshBattle이 이미 showPlayerTurn()을 호출했지만, 위 await 동안
-            // showEnemyTurn 상태를 유지하기 위해 다시 호출 (안전망).
-            showPlayerTurn();
         }
+
+        // 상태 갱신 (HP/MP/타깃 등 + showPlayerTurn 자동 호출)
+        refreshBattle(r);
 
         if (r.done) {
             if (r.winner === 'player') {
@@ -190,12 +186,13 @@ async function battleAction(action) {
             document.getElementById('action-bar').classList.remove('your-turn');
             await loadStatus();
         }
+        // r.done이 false인 경우: refreshBattle이 이미 showPlayerTurn 호출했으므로
+        // 별도 처리 불필요. (이전 버전에서 중복 호출하던 부분 제거)
     } finally {
-        // 락 해제 — try/finally로 예외 시에도 보장
+        // 락 해제
         state.battleProcessing = false;
     }
 }
-
 
 // ── 헬퍼: 비동기 sleep ──
 function _sleep(ms) {

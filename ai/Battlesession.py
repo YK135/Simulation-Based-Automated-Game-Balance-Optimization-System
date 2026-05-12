@@ -173,11 +173,24 @@ class BattleSession:
                 return self._state(messages=msgs)
 
         # ── 플레이어 행동 ──────────────────────
+        # 행동 전 기존 버프 ID 집합 스냅샷.
+        # _player_action 안에서 새로 적용되는 버프는 이 스냅샷에 없으므로
+        # 아래 tick 시 제외 — 사용 즉시 1턴 차감되는 문제 방지.
+        pre_action_buff_ids = {id(b) for b in self.player.buffs}
+
         p_result = self._player_action(action, msgs)
 
-        # 플레이어 본인 버프 turn -1 (escape도 행동에 포함)
-        # — 플레이어가 행동 1회 했으니 본인 버프 1턴 소진
+        # ── 플레이어 본인 버프 turn -1 (행동 전에 있던 것만) ──
+        # 새로 적용된 버프(이번 _player_action에서 생성)는 tick에서 제외.
+        # 같은 stat의 기존 버프를 덮어쓴 경우엔 id가 새 객체 → 자연스럽게 제외됨.
+        #
+        # 이번 행동에서 새로 추가/갱신된 버프를 임시로 빼두고, 기존 버프만 tick.
+        new_buffs = [b for b in self.player.buffs if id(b) not in pre_action_buff_ids]
+        old_buffs = [b for b in self.player.buffs if id(b) in pre_action_buff_ids]
+        self.player.buffs = old_buffs
         self.player.tick_buffs()
+        # 새 버프 다시 합치기 (turn 그대로 유지)
+        self.player.buffs.extend(new_buffs)
 
         if p_result == "escaped":
             self.done   = True
@@ -598,100 +611,104 @@ class BattleSession:
         """단일 적의 1회 행동 처리. 기존 _enemy_action 로직을 적 1마리 단위로 분리."""
         # ── 사제 전용 행동 (다른 아군 회복/버프) ──
         # enemy_type이 "사제"면 별도 로직 사용. 일반 EnemyAI 안 거침.
+        # ⚠ return 제거 — 메서드 끝의 tick 처리(buff/debuff 1턴 감소)를
+        #    사제도 동일하게 거쳐야 함 (Codex 지적 반영).
         if getattr(enemy, "enemy_type", "") == "사제":
             self._priest_action(enemy, msgs)
-            return
-        
-        action = self._enemy_ai(enemy, self.player)
+        else:
+            # ── 일반 몬스터 행동 (기존 로직) ──
+            action = self._enemy_ai(enemy, self.player)
 
-        if action.action_type == "attack":
-            dmg, dodge, crit = DamageCalc.physical(
-                enemy.effective_stg(), enemy.luc,
-                self.player.effective_arm(), self.player.luc,
-                skill_mult=1.0,
-                role="monster",
-                attacker=enemy,
-                defender=self.player,
-            )
-            actual = 0 if dodge else int(dmg)
-            if dodge:
-                msgs.append(f"{self.player.name}이(가) {enemy.name}의 공격을 회피했다!")
-            else:
-                self.player.hp -= dmg
-                tag = " (치명타!)" if crit else ""
-                msgs.append(f"{enemy.name} → 공격{tag} | {dmg} 데미지")
-                msgs.append(f"{self.player.name} HP: {max(0, int(self.player.hp))}")
+            if action.action_type == "attack":
+                dmg, dodge, crit = DamageCalc.physical(
+                    enemy.effective_stg(), enemy.luc,
+                    self.player.effective_arm(), self.player.luc,
+                    skill_mult=1.0,
+                    role="monster",
+                    attacker=enemy,
+                    defender=self.player,
+                )
+                actual = 0 if dodge else int(dmg)
+                if dodge:
+                    msgs.append(f"{self.player.name}이(가) {enemy.name}의 공격을 회피했다!")
+                else:
+                    self.player.hp -= dmg
+                    tag = " (치명타!)" if crit else ""
+                    msgs.append(f"{enemy.name} → 공격{tag} | {dmg} 데미지")
+                    msgs.append(f"{self.player.name} HP: {max(0, int(self.player.hp))}")
 
-                # ── 탱커 패시브: 물리 피격 시 MP 회복 ──
-                tanker_msg = self.player.passive_on_hit_received("physical")
-                if tanker_msg:
-                    msgs.append(tanker_msg)
-            self.logs.append(TurnLog(
-                turn=self.turn,
-                actor="enemy",
-                action="attack",
-                action_detail="basic_attack",
-                damage_dealt=actual,
-                hp_after=max(0, self.player.hp),
-                mp_after=enemy.mp,
-                is_dodge=dodge,
-                is_crit=crit,
-            ))
-
-        elif action.action_type == "skill":
-            dmg, mp_lack, debuff_name = execute_skill(
-                action.detail, enemy, self.player
-            )
-            if mp_lack:
+                    # ── 탱커 패시브: 물리 피격 시 MP 회복 ──
+                    tanker_msg = self.player.passive_on_hit_received("physical")
+                    if tanker_msg:
+                        msgs.append(tanker_msg)
                 self.logs.append(TurnLog(
                     turn=self.turn,
                     actor="enemy",
-                    action="skill_failed",
-                    action_detail=f"{action.detail}(mp_lack)",
-                    damage_dealt=0,
+                    action="attack",
+                    action_detail="basic_attack",
+                    damage_dealt=actual,
+                    hp_after=max(0, self.player.hp),
+                    mp_after=enemy.mp,
+                    is_dodge=dodge,
+                    is_crit=crit,
+                ))
+
+            elif action.action_type == "skill":
+                dmg, mp_lack, debuff_name = execute_skill(
+                    action.detail, enemy, self.player
+                )
+                if mp_lack:
+                    self.logs.append(TurnLog(
+                        turn=self.turn,
+                        actor="enemy",
+                        action="skill_failed",
+                        action_detail=f"{action.detail}(mp_lack)",
+                        damage_dealt=0,
+                        hp_after=self.player.hp,
+                        mp_after=enemy.mp,
+                    ))
+                else:
+                    if dmg > 0:
+                        self.player.hp -= dmg
+                        msgs.append(f"{enemy.name} → {action.detail} | {dmg} 데미지")
+                        msgs.append(f"{self.player.name} HP: {max(0, int(self.player.hp))}")
+
+                        # ── 탱커 패시브: 스킬 피격 시 회복 (스킬 타입 따라) ──
+                        skill_meta = SKILL_META.get(action.detail, {})
+                        skill_type = skill_meta.get("type", "physical")
+                        tanker_msg = self.player.passive_on_hit_received(skill_type)
+                        if tanker_msg:
+                            msgs.append(tanker_msg)
+                    elif debuff_name:
+                        msgs.append(f"{enemy.name} → {action.detail} 사용!")
+
+                    self.logs.append(TurnLog(
+                        turn=self.turn,
+                        actor="enemy",
+                        action="skill",
+                        action_detail=action.detail,
+                        damage_dealt=int(dmg) if dmg > 0 else 0,
+                        hp_after=max(0, self.player.hp),
+                        mp_after=enemy.mp,
+                        debuff_applied=debuff_name or "",
+                    ))
+
+            elif action.action_type == "watch":
+                msgs.append(f"{enemy.name}이(가) 기회를 엿보고 있다...")
+                self.logs.append(TurnLog(
+                    turn=self.turn,
+                    actor="enemy",
+                    action="watch",
+                    action_detail="watching",
                     hp_after=self.player.hp,
                     mp_after=enemy.mp,
                 ))
-            else:
-                if dmg > 0:
-                    self.player.hp -= dmg
-                    msgs.append(f"{enemy.name} → {action.detail} | {dmg} 데미지")
-                    msgs.append(f"{self.player.name} HP: {max(0, int(self.player.hp))}")
-
-                    # ── 탱커 패시브: 스킬 피격 시 회복 (스킬 타입 따라) ──
-                    skill_meta = SKILL_META.get(action.detail, {})
-                    skill_type = skill_meta.get("type", "physical")
-                    tanker_msg = self.player.passive_on_hit_received(skill_type)
-                    if tanker_msg:
-                        msgs.append(tanker_msg)
-                elif debuff_name:
-                    msgs.append(f"{enemy.name} → {action.detail} 사용!")
-                self.logs.append(TurnLog(
-                    turn=self.turn,
-                    actor="enemy",
-                    action="skill",
-                    action_detail=action.detail,
-                    damage_dealt=int(dmg) if dmg > 0 else 0,
-                    hp_after=max(0, self.player.hp),
-                    mp_after=enemy.mp,
-                    debuff_applied=debuff_name or "",
-                ))
-
-        elif action.action_type == "watch":
-            msgs.append(f"{enemy.name}이(가) 기회를 엿보고 있다...")
-            self.logs.append(TurnLog(
-                turn=self.turn,
-                actor="enemy",
-                action="watch",
-                action_detail="watching",
-                hp_after=self.player.hp,
-                mp_after=enemy.mp,
-            ))
 
         # ── 이 적의 행동 1회 처리 후 turn 감소 ──
         # · 적 본인의 버프/디버프 1턴 소진
         # · 플레이어 디버프도 적 행동 단위로 1턴 소진
         #   (다대일이면 적 N마리가 행동 → 디버프가 N번 빨리 풀림 — 의도된 동작)
+        # ⚠ 이 블록은 사제/일반 모든 경로에서 반드시 실행됨 (위 if/else 밖에 있음).
         enemy.tick_buffs()
         enemy.tick_debuffs()
         self.player.tick_debuffs()
