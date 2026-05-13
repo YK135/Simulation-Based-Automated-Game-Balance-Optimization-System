@@ -17,13 +17,71 @@ drawPentagonBackground();
 updatePentagon([0.7,0.7,0.7,0.7,0.7], [0.65,0.7,0.7,0.65,0.65]);
 
 // ── 새 게임 모달 ──
+// ═══════════════════════════════════════════════════════════
+// 3단계 시작 모달 이벤트 바인딩
+// ═══════════════════════════════════════════════════════════
+
+// ── 모달 1 (entry): 즉시 / 이메일 플레이 선택 ──
+document.getElementById('btn-entry-instant').onclick = () => {
+    // 게스트 플레이 — 바로 직업 선택 모달로
+    state.isEmailAuth = false;
+    state.userEmail = null;
+    showStartModal('modal-newgame');
+    selectJob(state.selectedJob || '전사');  // 초기 미리보기
+    term('instant play selected (guest)', 'ok');
+};
+
+document.getElementById('btn-entry-email').onclick = () => {
+    // 이메일 인증 플레이 — 이메일 모달로
+    showStartModal('modal-email');
+    setTimeout(() => document.getElementById('input-email').focus(), 100);
+    term('email play selected', 'ok');
+};
+
+// ── 모달 2 (email): 이메일 인증 ──
+document.getElementById('btn-email-send').onclick = sendEmailCode;
+document.getElementById('btn-email-verify').onclick = verifyEmailCode;
+document.getElementById('btn-email-back').onclick = backToEntry;
+
+// 엔터 키 지원: 이메일 입력 후 엔터 → 코드 전송, 코드 입력 후 엔터 → 인증
+document.getElementById('input-email').addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') {
+        e.preventDefault();
+        sendEmailCode();
+    }
+});
+document.getElementById('input-email-code').addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') {
+        e.preventDefault();
+        verifyEmailCode();
+    }
+});
+
+// ── 모달 3 (newgame): 직업 선택 + 닉네임 ──
+// 직업 버튼 4종 — 클릭 시 좌측 초상화/우측 설명 갱신
+document.querySelectorAll('.job-btn').forEach(btn => {
+    btn.onclick = () => selectJob(btn.dataset.job);
+});
+
+// 시작 버튼
 document.getElementById('btn-newgame-confirm').onclick = () => {
     const name = document.getElementById('input-name').value.trim() || 'HERO';
-    const job = document.getElementById('input-job').value;
+    const job  = state.selectedJob || '전사';
     newGame(name, job);
 };
+
+// 닉네임 입력란에서 엔터 → 시작
+document.getElementById('input-name').addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') {
+        e.preventDefault();
+        document.getElementById('btn-newgame-confirm').click();
+    }
+});
+
+// ── 게임 종료 후 NEW GAME 버튼: 처음(entry)으로 돌아가기 ──
+// 이전엔 modal-newgame을 바로 띄웠지만, 이제 시작 플로우 처음부터 다시.
 document.getElementById('btn-restart').onclick = () => {
-    document.getElementById('modal-newgame').classList.add('active');
+    showStartModal('modal-entry');
 };
 
 // ── 탐험 ──

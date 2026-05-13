@@ -19,10 +19,57 @@ let state = {
     exploreTurn: 0,
 
     // ── 비동기 작업 락 (Race condition 방지) ──
-    // exploring:        /explore 응답 대기 중인지 (true면 추가 클릭 무시)
-    // battleProcessing: /battle/action 응답 대기 + 적 턴 연출 중인지
     exploring: false,
     battleProcessing: false,
+
+    // ── 시작 플로우 상태 (3단계 모달) ──
+    // selectedJob:   현재 선택된 직업 (기본 '전사')
+    // isEmailAuth:   이메일 인증 거쳐서 가입했는지 (게스트면 false)
+    // userEmail:     인증 성공한 이메일 (게스트면 null)
+    selectedJob: '전사',
+    isEmailAuth: false,
+    userEmail: null,
+};
+
+const JOB_DATA = {
+    '전사': {
+        name: 'WARRIOR',
+        icon: '⚔',
+        tags: ['균형형', '물리'],
+        description:
+            '높은 HP와 안정적인 물리 데미지를 갖춘 균형형 전사. ' +
+            '초보자에게 가장 적합하며, 모든 상황에서 안정적인 성능을 발휘한다.',
+        passive: '【패시브】 2턴마다 최대 HP 10% 자동 회복',
+        // 이미지로 교체 시 사용:
+        // portrait_image: '/img/portrait_warrior.png'
+    },
+    '마법사': {
+        name: 'MAGE',
+        icon: '✦',
+        tags: ['마법', '효율형'],
+        description:
+            '강력한 마법 공격과 효율적인 MP 관리. ' +
+            '슬라임 같은 마법 약점 적에게 극대화된 데미지를 입힐 수 있다.',
+        passive: '【패시브】 모든 스킬 MP 비용 30% 영구 감소',
+    },
+    '탱커': {
+        name: 'TANKER',
+        icon: '▣',
+        tags: ['방어형', '회복'],
+        description:
+            '높은 방어력과 피격 시 자원 회복. ' +
+            '오래 버티며 적의 공격을 견뎌내는 인내형 직업.',
+        passive: '【패시브】 물리 피격 시 MP 회복 / 마법 피격 시 HP 회복 (각 10%)',
+    },
+    '도적': {
+        name: 'ROGUE',
+        icon: '✧',
+        tags: ['속도형', '치명타'],
+        description:
+            '빠른 행동력과 치명타 특화. ' +
+            '높은 SPD로 선공을 잡고 크리티컬로 단숨에 적을 무력화한다.',
+        passive: '【패시브】 치명타 발생 시 70% 확률로 방어력 50% 무시',
+    },
 };
 
 // ── 이모지 폴백 (이미지 못 넣었을 때 표시용) ──

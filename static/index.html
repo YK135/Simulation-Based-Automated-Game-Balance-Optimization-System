@@ -400,23 +400,136 @@
      ═══════════════════════════════════════════════════════════ -->
 
 <!-- 새 게임 모달 (시작 시 active) -->
-<div id="modal-newgame" class="modal-bg active">
-    <div class="modal">
-        <h2>▶ INITIALIZE PLAYER</h2>
-        <div class="form-row">
-            <label>NAME</label>
-            <input type="text" id="input-name" value="HERO" maxlength="10">
+<!-- ═══════════════════════════════════════════════════════════
+     3단계 시작 모달 플로우
+       1) modal-entry    : 즉시 / 이메일 플레이 선택
+       2) modal-email    : 이메일 + 인증 코드
+       3) modal-newgame  : 직업 선택 + 닉네임 (정사각형)
+     ─────────────────────────────────────────────────────────
+     동시에 하나만 active (Main.js에서 전환 관리)
+     ═══════════════════════════════════════════════════════════ -->
+
+<!-- ───── 모달 1: 시작 화면 (정사각형) ───── -->
+<div id="modal-entry" class="modal-bg active">
+    <div class="modal modal-square">
+        <h2>▶ WELCOME, ADVENTURER</h2>
+        <div class="entry-desc">
+            모험을 시작하기 전에 플레이 방식을 선택하세요.<br>
+            <span style="color:var(--text-muted); font-size:10px;">
+                이메일 인증 시 진행 상황을 저장하고 랭킹에 등록됩니다.
+            </span>
         </div>
-        <div class="form-row">
-            <label>JOB CLASS</label>
-            <select id="input-job">
-                <option value="전사">WARRIOR (전사)</option>
-                <option value="마법사">MAGE (마법사)</option>
-                <option value="탱커">TANKER (탱커)</option>
-                <option value="도적">ROGUE (도적)</option>
-            </select>
+        <div class="entry-options">
+            <button class="entry-option email-play" id="btn-entry-email">
+                <div class="entry-icon">✉</div>
+                <div class="entry-label">EMAIL PLAY</div>
+                <div class="entry-sub">이메일로 플레이<br><span class="entry-hint">진행 저장 + 랭킹</span></div>
+            </button>
+            <button class="entry-option instant-play" id="btn-entry-instant">
+                <div class="entry-icon">▶</div>
+                <div class="entry-label">INSTANT PLAY</div>
+                <div class="entry-sub">즉시 플레이<br><span class="entry-hint">게스트 (로그만 수집)</span></div>
+            </button>
         </div>
-        <button class="btn primary" id="btn-newgame-confirm">▶ START</button>
+    </div>
+</div>
+
+
+<!-- ───── 모달 2: 이메일 인증 (정사각형) ───── -->
+<div id="modal-email" class="modal-bg">
+    <div class="modal modal-square">
+        <h2>✉ EMAIL VERIFICATION</h2>
+
+        <!-- 이메일 입력란 -->
+        <div class="form-row">
+            <label>EMAIL</label>
+            <input type="email" id="input-email" placeholder="your@email.com" autocomplete="email">
+        </div>
+
+        <!-- 코드 입력란 (초기 숨김, 이메일 발송 후 표시) -->
+        <div class="form-row" id="email-code-row" style="display:none;">
+            <label>VERIFICATION CODE (6 DIGITS)</label>
+            <input type="text" id="input-email-code" maxlength="6"
+                   placeholder="------" inputmode="numeric" pattern="[0-9]{6}">
+            <div class="email-code-hint" id="email-code-hint">
+                이메일로 전송된 6자리 코드를 입력하세요.
+            </div>
+        </div>
+
+        <!-- 동의 체크박스 -->
+        <div class="email-consent" id="email-consent-block">
+            <label class="consent-row">
+                <input type="checkbox" id="consent-required-1">
+                <span>[필수] 게임 진행 데이터 수집 및 저장에 동의합니다</span>
+            </label>
+            <label class="consent-row">
+                <input type="checkbox" id="consent-required-2">
+                <span>[필수] 이메일을 통한 인증 메일 수신에 동의합니다</span>
+            </label>
+            <label class="consent-row">
+                <input type="checkbox" id="consent-optional">
+                <span>[선택] 새로운 콘텐츠 알림 수신에 동의합니다</span>
+            </label>
+        </div>
+
+        <!-- 액션 버튼들 (단계별 표시 분기) -->
+        <div class="modal-actions">
+            <button class="btn" id="btn-email-back">◀ BACK</button>
+            <button class="btn primary" id="btn-email-send">▶ 완료 (코드 전송)</button>
+            <button class="btn primary" id="btn-email-verify" style="display:none;">
+                ▶ 인증 완료
+            </button>
+        </div>
+    </div>
+</div>
+
+
+<!-- ───── 모달 3: 직업 선택 + 닉네임 (정사각형) ───── -->
+<div id="modal-newgame" class="modal-bg">
+    <div class="modal modal-square modal-job-select">
+        <h2>▶ SELECT YOUR CLASS</h2>
+
+        <!-- 좌측 초상화 / 우측 설명 -->
+        <div class="job-preview">
+            <div class="job-portrait" id="job-portrait">
+                <!-- 직업별 아이콘 (이미지 교체 시 <img>로 대체) -->
+                <!-- 이미지로 바꾸려면 아래 <div>를 <img id="job-portrait-img" src="..."> 로 -->
+                <div class="job-icon" id="job-icon">⚔</div>
+                <div class="job-name-display" id="job-name-display">WARRIOR</div>
+            </div>
+            <div class="job-description" id="job-description">
+                <!-- JS에서 동적으로 채움 -->
+            </div>
+        </div>
+
+        <!-- 직업 선택 버튼 4종 (가로 일렬) -->
+        <div class="job-buttons">
+            <button class="job-btn active" data-job="전사">
+                <span class="job-btn-icon">⚔</span>
+                <span class="job-btn-label">WARRIOR</span>
+            </button>
+            <button class="job-btn" data-job="마법사">
+                <span class="job-btn-icon">✦</span>
+                <span class="job-btn-label">MAGE</span>
+            </button>
+            <button class="job-btn" data-job="탱커">
+                <span class="job-btn-icon">▣</span>
+                <span class="job-btn-label">TANKER</span>
+            </button>
+            <button class="job-btn" data-job="도적">
+                <span class="job-btn-icon">✧</span>
+                <span class="job-btn-label">ROGUE</span>
+            </button>
+        </div>
+
+        <!-- 닉네임 입력 -->
+        <div class="form-row">
+            <label>NICKNAME</label>
+            <input type="text" id="input-name" value="HERO" maxlength="10" autocomplete="off">
+        </div>
+
+        <!-- 시작 버튼 -->
+        <button class="btn primary" id="btn-newgame-confirm">▶ START ADVENTURE</button>
     </div>
 </div>
 
