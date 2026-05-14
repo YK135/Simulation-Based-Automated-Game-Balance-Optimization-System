@@ -1,33 +1,37 @@
-/* ═══════════════════════════════════════════════════════════
-   state.js — 전역 상태 + 이미지/아이콘 매핑 상수
-
-   - state: 런타임 상태 (player, inBattle 등)
-   - JOB_ICONS / ENEMY_ICONS: 이모지 폴백 (이미지 없을 때)
-   - JOB_PORTRAITS / JOB_SPRITES / ENEMY_SPRITES: 이미지 경로 매핑
-
-   이미지 사용 시:
-     1) static/img/ 폴더에 PNG 배치
-     2) index.html의 해당 자리 <img> 태그 주석 풀기
-     3) 아래 PORTRAITS/SPRITES 매핑은 그대로 활용 가능
-   ═══════════════════════════════════════════════════════════ */
-
 let state = {
     player: null,
     inBattle: false,
     battleState: null,
     aiLevel: 'normal',
     exploreTurn: 0,
- 
-    // ── 비동기 작업 락 (Race condition 방지) ──
+
+    // 비동기 락 (race condition 방지)
     exploring: false,
     battleProcessing: false,
- 
-    // ── 시작 플로우 상태 (3단계 모달) ──
+
+    // 시작 플로우 (3단계 모달)
     selectedJob: '전사',
     isEmailAuth: false,
     userEmail: null,
 };
 
+// ★ 전역 명시화 — CharSprite.js 등 외부 모듈이 window.state로 안전 접근
+window.state = state;
+
+// ═══════════════════════════════════════════════════════════
+// 이모지 폴백 (이미지 없을 때)
+// ═══════════════════════════════════════════════════════════
+const JOB_ICONS = { '전사':'⚔', '마법사':'⚡', '탱커':'🛡', '도적':'🗡' };
+const ENEMY_ICONS = {
+    '고블린':'👺', '박쥐':'🦇', '슬라임':'🟢',
+    '골렘':'🗿', '유령':'👻', '암살자':'🥷',
+    '사제':'⚕',
+    '중간 보스':'👹', '최종 보스':'🐉',
+};
+
+// ═══════════════════════════════════════════════════════════
+// 직업 데이터 매핑 (모달 3 직업 선택용)
+// ═══════════════════════════════════════════════════════════
 const JOB_DATA = {
     '전사': {
         name: 'WARRIOR',
@@ -36,9 +40,7 @@ const JOB_DATA = {
         description:
             '높은 HP와 안정적인 물리 데미지를 갖춘 균형형 전사. ' +
             '초보자에게 가장 적합하며, 모든 상황에서 안정적인 성능을 발휘한다.',
-        passive: '【패시브】 3회 공격마다 최대 HP 10% 자동 회복',
-        // 이미지로 교체 시 사용:
-        // portrait_image: '/img/portrait_warrior.png'
+        passive: '【패시브】 공격 3회마다 최대 HP 10% 자동 회복',
     },
     '마법사': {
         name: 'MAGE',
@@ -69,164 +71,63 @@ const JOB_DATA = {
     },
 };
 
-// ── 이모지 폴백 (이미지 못 넣었을 때 표시용) ──
-const JOB_ICONS = { '전사':'⚔', '마법사':'⚡', '탱커':'🛡', '도적':'🗡' };
-const ENEMY_ICONS = {
-    '고블린':'👺', '박쥐':'🦇', '슬라임':'🟢',
-    '골렘':'🗿', '유령':'👻', '암살자':'🥷',
-    '사제':'⚕',
-    '중간 보스':'👹', '최종 보스':'🐉',
-};
-
 // ═══════════════════════════════════════════════════════════
-// 상태별 이미지 매핑 (3계층)
+// 상태별 이미지 매핑 (실제 존재 파일만)
 // ───────────────────────────────────────────────────────────
-// 1. player_panel  : 좌측 플레이어 패널 (idle / hurt / happy)
-// 2. player_battle : 배틀필드 플레이어 (idle / attack / skill / hurt / dead)
-// 3. enemy_battle  : 배틀필드 몬스터 (idle / attack / skill / hurt / dead)
+// 등록 안 된 직업/몬스터는 getCharImage()가 null 반환 → 이모지 폴백.
+// 새 이미지 추가 시 여기에 등록만 하면 자동 사용됨.
 //
-// 파일 경로 규칙:
-//   /img/{section}/{name}_{state}.png
-//   예: /img/player_panel/warrior_idle.png
-//       /img/player_battle/warrior_attack.png
-//       /img/enemy_battle/goblin_dead.png
-//
-// 이미지 없는 상태:
-//   - getCharImage()가 자동 폴백: 해당 상태 없으면 idle 사용
-//   - idle도 없으면 null 반환 → 이모지(JOB_ICONS/ENEMY_ICONS) 표시
-//
-// 이미지 권장 사이즈:
-//   - player_panel:  256x256 또는 512x512 (정사각형)
-//   - player_battle: 96x96 ~ 256x256 (투명배경 PNG)
-//   - enemy_battle:  96x96 ~ 256x256 (투명배경 PNG)
+// 파일 구조 (실제 존재):
+//   static/img/face/warrior_face_A.png   (idle 얼굴)
+//   static/img/face/warrior_face_B.png   (hurt 얼굴)
+//   static/img/face/warrior_face_C.png   (happy 얼굴)
+//   static/img/battle/warrior_A.png      (배틀 전사)
 // ═══════════════════════════════════════════════════════════
 
 const CHAR_IMAGES = {
 
-    // ── 좌측 플레이어 패널 (3상태) ──
+    // 좌측 플레이어 패널 — 얼굴 (idle/hurt/happy)
     player_panel: {
         '전사': {
             idle:  '/img/face/warrior_face_A.png',
-            hurt:  '/img/player_panel/warrior_hurt.png',
-            happy: '/img/player_panel/warrior_happy.png',
+            hurt:  '/img/face/warrior_face_B.png',
+            happy: '/img/face/warrior_face_C.png',
         },
-        '마법사': {
-            idle:  '/img/face/mage_face_A.png',
-            hurt:  '/img/player_panel/mage_hurt.png',
-            happy: '/img/player_panel/mage_happy.png',
-        },
-        '탱커': {
-            idle:  '/img/face/tanker_face_A.png',
-            hurt:  '/img/player_panel/tanker_hurt.png',
-            happy: '/img/player_panel/tanker_happy.png',
-        },
-        '도적': {
-            idle:  '/img/face/rogue_face_A.png',
-            hurt:  '/img/player_panel/rogue_hurt.png',
-            happy: '/img/player_panel/rogue_happy.png',
-        },
+        // 마법사, 탱커, 도적은 이미지 없음 → 이모지 폴백
     },
 
-    // ── 배틀필드 플레이어 (5상태) ──
+    // 배틀필드 플레이어 — 전신 (idle/attack/skill/hurt/dead)
     player_battle: {
         '전사': {
-            idle:   '/img/player_battle/warrior_idle.png',
-            attack: '/img/player_battle/warrior_attack.png',
-            skill:  '/img/player_battle/warrior_skill.png',
-            hurt:   '/img/player_battle/warrior_hurt.png',
-            dead:   '/img/player_battle/warrior_dead.png',
+            // 전사 배틀 이미지는 1종(A)뿐 — 모든 상태에 같은 이미지 사용
+            // 추후 상태별 이미지 추가 시 여기 경로만 교체
+            idle:   '/img/battle/warrior_A.png',
+            attack: '/img/battle/warrior_A.png',
+            skill:  '/img/battle/warrior_A.png',
+            hurt:   '/img/battle/warrior_A.png',
+            dead:   '/img/battle/warrior_A.png',
         },
-        '마법사': {
-            idle:   '/img/player_battle/mage_idle.png',
-            attack: '/img/player_battle/mage_attack.png',
-            skill:  '/img/player_battle/mage_skill.png',
-            hurt:   '/img/player_battle/mage_hurt.png',
-            dead:   '/img/player_battle/mage_dead.png',
-        },
-        '탱커': {
-            idle:   '/img/player_battle/tanker_idle.png',
-            attack: '/img/player_battle/tanker_attack.png',
-            skill:  '/img/player_battle/tanker_skill.png',
-            hurt:   '/img/player_battle/tanker_hurt.png',
-            dead:   '/img/player_battle/tanker_dead.png',
-        },
-        '도적': {
-            idle:   '/img/player_battle/rogue_idle.png',
-            attack: '/img/player_battle/rogue_attack.png',
-            skill:  '/img/player_battle/rogue_skill.png',
-            hurt:   '/img/player_battle/rogue_hurt.png',
-            dead:   '/img/player_battle/rogue_dead.png',
-        },
+        // 마법사, 탱커, 도적은 이미지 없음 → 이모지 폴백
     },
 
-    // ── 배틀필드 몬스터 (5상태) ──
+    // 배틀필드 몬스터 — 모두 이미지 없음 → 이모지 폴백
     enemy_battle: {
-        '고블린': {
-            idle:   '/img/enemy_battle/goblin_idle.png',
-            attack: '/img/enemy_battle/goblin_attack.png',
-            skill:  '/img/enemy_battle/goblin_skill.png',
-            hurt:   '/img/enemy_battle/goblin_hurt.png',
-            dead:   '/img/enemy_battle/goblin_dead.png',
-        },
-        '박쥐': {
-            idle:   '/img/enemy_battle/bat_idle.png',
-            attack: '/img/enemy_battle/bat_attack.png',
-            skill:  '/img/enemy_battle/bat_skill.png',
-            hurt:   '/img/enemy_battle/bat_hurt.png',
-            dead:   '/img/enemy_battle/bat_dead.png',
-        },
-        '슬라임': {
-            idle:   '/img/enemy_battle/slime_idle.png',
-            attack: '/img/enemy_battle/slime_attack.png',
-            skill:  '/img/enemy_battle/slime_skill.png',
-            hurt:   '/img/enemy_battle/slime_hurt.png',
-            dead:   '/img/enemy_battle/slime_dead.png',
-        },
-        '골렘': {
-            idle:   '/img/enemy_battle/golem_idle.png',
-            attack: '/img/enemy_battle/golem_attack.png',
-            skill:  '/img/enemy_battle/golem_skill.png',
-            hurt:   '/img/enemy_battle/golem_hurt.png',
-            dead:   '/img/enemy_battle/golem_dead.png',
-        },
-        '유령': {
-            idle:   '/img/enemy_battle/ghost_idle.png',
-            attack: '/img/enemy_battle/ghost_attack.png',
-            skill:  '/img/enemy_battle/ghost_skill.png',
-            hurt:   '/img/enemy_battle/ghost_hurt.png',
-            dead:   '/img/enemy_battle/ghost_dead.png',
-        },
-        '암살자': {
-            idle:   '/img/enemy_battle/assassin_idle.png',
-            attack: '/img/enemy_battle/assassin_attack.png',
-            skill:  '/img/enemy_battle/assassin_skill.png',
-            hurt:   '/img/enemy_battle/assassin_hurt.png',
-            dead:   '/img/enemy_battle/assassin_dead.png',
-        },
-        '사제': {
-            idle:   '/img/enemy_battle/priest_idle.png',
-            attack: '/img/enemy_battle/priest_attack.png',
-            skill:  '/img/enemy_battle/priest_skill.png',
-            hurt:   '/img/enemy_battle/priest_hurt.png',
-            dead:   '/img/enemy_battle/priest_dead.png',
-        },
-        '중간 보스': {
-            idle:   '/img/enemy_battle/midboss_idle.png',
-            attack: '/img/enemy_battle/midboss_attack.png',
-            skill:  '/img/enemy_battle/midboss_skill.png',
-            hurt:   '/img/enemy_battle/midboss_hurt.png',
-            dead:   '/img/enemy_battle/midboss_dead.png',
-        },
-        '최종 보스': {
-            idle:   '/img/enemy_battle/finalboss_idle.png',
-            attack: '/img/enemy_battle/finalboss_attack.png',
-            skill:  '/img/enemy_battle/finalboss_skill.png',
-            hurt:   '/img/enemy_battle/finalboss_hurt.png',
-            dead:   '/img/enemy_battle/finalboss_dead.png',
-        },
+        // 추후 몬스터 이미지 추가 시 여기에 등록:
+        // '고블린': { idle: '/img/enemy/goblin_idle.png', ... },
     },
 };
 
+
+// ═══════════════════════════════════════════════════════════
+// 헬퍼: 캐릭터 이미지 경로 조회
+// ───────────────────────────────────────────────────────────
+// section:   'player_panel' | 'player_battle' | 'enemy_battle'
+// name:      직업명 or 몬스터명 (한글)
+// stateName: 'idle' | 'hurt' | 'attack' | 'skill' | 'dead' | 'happy'
+//
+// 반환: 이미지 경로 (string) 또는 null (이미지 없음 → 이모지 폴백)
+// 폴백: 요청 상태 없으면 idle → 그것도 없으면 null
+// ═══════════════════════════════════════════════════════════
 function getCharImage(section, name, stateName) {
     const sectionMap = CHAR_IMAGES[section];
     if (!sectionMap) return null;

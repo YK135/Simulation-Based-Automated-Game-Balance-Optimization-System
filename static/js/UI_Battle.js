@@ -290,44 +290,6 @@ function showEnemyTurn() {
     document.getElementById('action-bar').classList.remove('your-turn');
     document.querySelector('.combatant.player')?.classList.remove('acting');
     document.querySelector('.combatant.enemy')?.classList.add('acting');
-    const atbFill = document.getElementById('atb-fill');
-    const atbCur  = document.getElementById('atb-cur');
-    if (atbFill) {
-        atbFill.style.height = '20%';
-        atbFill.classList.remove('full');
-    }
-    if (atbCur) atbCur.textContent = '20';
-}
-
-const AVAILABLE_JOB_BATTLE_SPRITES = {
-    '전사': 'img/battle/warrior_A.png',
-};
-
-function refreshPlayerCombatantArt(player) {
-    const artEl = document.getElementById('player-combatant-art');
-    if (!artEl) return;
-
-    const spritePath = AVAILABLE_JOB_BATTLE_SPRITES[player.job];
-    if (artEl.tagName === 'IMG') {
-        const fallbackId = 'player-combatant-art-fallback';
-        let fallback = document.getElementById(fallbackId);
-        if (!fallback) {
-            fallback = document.createElement('div');
-            fallback.id = fallbackId;
-            fallback.className = artEl.className;
-            artEl.parentElement.insertBefore(fallback, artEl.nextSibling);
-        }
-
-        fallback.textContent = JOB_ICONS[player.job] || '?';
-        fallback.style.display = spritePath ? 'none' : 'flex';
-        artEl.style.display = spritePath ? 'block' : 'none';
-        if (spritePath && artEl.getAttribute('src') !== spritePath) {
-            artEl.src = spritePath;
-        }
-        return;
-    }
-
-    artEl.textContent = JOB_ICONS[player.job] || '?';
 }
 
 // 다대일 — 슬롯 클릭으로 타깃 변경
@@ -594,18 +556,25 @@ function _updateBattleSprite(section, slotIdx, name, stateName) {
         ? getCharImage(section, name, stateName)
         : null;
 
-    // 대상 <img> 요소 찾기
+    // 대상 <img> 요소 찾기 (DOM id 규칙: *-img 접미사)
     let imgEl, iconEl;
     if (section === 'player_battle') {
-        imgEl  = document.querySelector('img#player-combatant-art');
-        iconEl = document.querySelector('div#player-combatant-art');
+        imgEl  = document.getElementById('player-combatant-art-img');
+        iconEl = document.getElementById('player-combatant-art');
     } else if (section === 'enemy_battle') {
-        const suffix = slotIdx === 0 ? '' : `-${slotIdx + 1}`;
-        imgEl  = document.querySelector(`img#enemy-art${suffix}`);
-        iconEl = document.querySelector(`div#enemy-art${suffix}`);
+        if (slotIdx === 0) {
+            imgEl  = document.getElementById('enemy-art-img');
+            iconEl = document.getElementById('enemy-art');
+        } else if (slotIdx === 1) {
+            imgEl  = document.getElementById('enemy-art-2-img');
+            iconEl = document.getElementById('enemy-art-2');
+        } else if (slotIdx === 2) {
+            imgEl  = document.getElementById('enemy-art-3-img');
+            iconEl = document.getElementById('enemy-art-3');
+        }
     }
 
-    // <img> 태그가 HTML에 없으면 (이전 버전 index.html) 그냥 종료
+    // <img> 태그가 HTML에 없으면 (이전 버전 index.html) 즉시 종료
     // → 이모지(div)만 표시됨, 깨지지 않음
     if (!imgEl) {
         if (iconEl) iconEl.style.display = '';
