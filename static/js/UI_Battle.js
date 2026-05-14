@@ -129,6 +129,8 @@ function refreshBattle(bs) {
         const nameEl = document.getElementById(`enemy-name${enemyIdSuffix(i)}`);
         const metaEl = document.getElementById(`enemy-meta${enemyIdSuffix(i)}`);
         if (nameEl) nameEl.textContent = en.name + (en.alive ? '' : ' ✖');
+        if (metaEl) metaEl.textContent = `LV ${en.lv ?? '--'} ${en.difficulty_label ? '[' + en.difficulty_label + ']' : ''}`;
+
 
         // HP 바
         const hpEl     = document.getElementById(`enemy-cb-hp${enemyIdSuffix(i)}`);
