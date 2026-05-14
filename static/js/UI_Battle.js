@@ -74,7 +74,7 @@ function refreshBattle(bs) {
 
     // ── 플레이어 슬롯 ──
     const p = state.player;
-    document.getElementById('player-combatant-art').textContent = JOB_ICONS[p.job] || '?';
+    refreshPlayerCombatantArt(p);
     document.getElementById('player-combatant-name').textContent = p.name;
     document.getElementById('player-combatant-meta').textContent = `LV ${p.lv} ${p.job}`;
     document.getElementById('player-cb-hp').style.width = (bs.player_hp/bs.player_maxhp*100) + '%';
@@ -285,6 +285,37 @@ function showEnemyTurn() {
         atbFill.classList.remove('full');
     }
     if (atbCur) atbCur.textContent = '20';
+}
+
+const AVAILABLE_JOB_BATTLE_SPRITES = {
+    '전사': '/img/in_battle_player/warrior_inbattle.png',
+};
+
+function refreshPlayerCombatantArt(player) {
+    const artEl = document.getElementById('player-combatant-art');
+    if (!artEl) return;
+
+    const spritePath = AVAILABLE_JOB_BATTLE_SPRITES[player.job];
+    if (artEl.tagName === 'IMG') {
+        const fallbackId = 'player-combatant-art-fallback';
+        let fallback = document.getElementById(fallbackId);
+        if (!fallback) {
+            fallback = document.createElement('div');
+            fallback.id = fallbackId;
+            fallback.className = artEl.className;
+            artEl.parentElement.insertBefore(fallback, artEl.nextSibling);
+        }
+
+        fallback.textContent = JOB_ICONS[player.job] || '?';
+        fallback.style.display = spritePath ? 'none' : 'flex';
+        artEl.style.display = spritePath ? 'block' : 'none';
+        if (spritePath && artEl.getAttribute('src') !== spritePath) {
+            artEl.src = spritePath;
+        }
+        return;
+    }
+
+    artEl.textContent = JOB_ICONS[player.job] || '?';
 }
 
 // 다대일 — 슬롯 클릭으로 타깃 변경

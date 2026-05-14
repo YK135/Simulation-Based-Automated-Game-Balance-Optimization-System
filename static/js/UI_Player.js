@@ -9,7 +9,7 @@ function refreshPlayer() {
     if (!state.player) return;
     const p = state.player;
     document.getElementById('player-id').textContent = `${p.name} (LV ${p.lv} ${p.job})`;
-    document.getElementById('player-icon').textContent = JOB_ICONS[p.job] || '?';
+    refreshPlayerPortrait(p);
 
     // ── 좌측 게이지: HP/MP/EXP ──
     document.getElementById('hp-cur').textContent = Math.round(p.hp);
@@ -43,6 +43,36 @@ function refreshPlayer() {
 
     // ── 탐험 모드 정보 카드 (인벤토리/스탯/스킬) ──
     refreshExploreInfo();
+}
+
+const AVAILABLE_JOB_PORTRAITS = {
+    '전사': '/img/portrait/warrior.png',
+};
+
+function refreshPlayerPortrait(player) {
+    const img = document.getElementById('player-portrait');
+    if (!img) {
+        const iconEl = document.getElementById('player-icon');
+        if (iconEl) iconEl.textContent = JOB_ICONS[player.job] || '?';
+        return;
+    }
+
+    const fallbackId = 'player-portrait-fallback';
+    let fallback = document.getElementById(fallbackId);
+    if (!fallback) {
+        fallback = document.createElement('div');
+        fallback.id = fallbackId;
+        fallback.className = 'player-art-icon';
+        img.parentElement.appendChild(fallback);
+    }
+
+    const portraitPath = AVAILABLE_JOB_PORTRAITS[player.job];
+    fallback.textContent = JOB_ICONS[player.job] || '?';
+    fallback.style.display = portraitPath ? 'none' : 'block';
+    img.style.display = portraitPath ? 'block' : 'none';
+    if (portraitPath && img.getAttribute('src') !== portraitPath) {
+        img.src = portraitPath;
+    }
 }
 
 // 스킬 이름에 따른 아이콘 매핑
