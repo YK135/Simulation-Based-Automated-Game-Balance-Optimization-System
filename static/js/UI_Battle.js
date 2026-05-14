@@ -288,7 +288,7 @@ function showEnemyTurn() {
 }
 
 const AVAILABLE_JOB_BATTLE_SPRITES = {
-    '전사': '/img/in_battle_player/warrior_inbattle.png',
+    '전사': 'img/battle/warrior_A.png',
 };
 
 function refreshPlayerCombatantArt(player) {

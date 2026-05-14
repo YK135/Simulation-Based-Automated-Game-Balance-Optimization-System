@@ -46,7 +46,7 @@ function refreshPlayer() {
 }
 
 const AVAILABLE_JOB_PORTRAITS = {
-    '전사': '/img/portrait/warrior.png',
+    '전사': 'img/face/warrior_face_A.png',
 };
 
 function refreshPlayerPortrait(player) {
