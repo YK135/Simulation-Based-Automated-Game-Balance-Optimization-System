@@ -13,6 +13,14 @@ async function api(path, body = null) {
         opts.headers = { 'Content-Type': 'application/json' };
         opts.body = JSON.stringify(body);
     }
-    const r = await fetch(API + path, opts);
-    return r.json();
+    try {
+        const r = await fetch(API + path, opts);
+        if (!r.ok) {
+            // 404 등은 정상 응답으로 처리 (콘솔 에러 안 띄움)
+            return { ok: false, error: `HTTP ${r.status}`, status: r.status };
+        }
+        return await r.json();
+    } catch (e) {
+        return { ok: false, error: e.message };
+    }
 }

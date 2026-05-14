@@ -46,13 +46,18 @@ async function newGame(name, job) {
     state.inBattle = false;
     refreshPlayer();
 
-    // ★ 모든 스프라이트 idle로 초기화 (새 게임이면 idle 상태로)
     if (typeof resetAllSprites === 'function') {
-        // 배틀필드는 아직 표시 안 되니까 player_panel만
+        resetAllSprites();
+    } else if (typeof setCharState === 'function') {
         setCharState('player_panel', 'idle');
-    } else {
-        toast('생성 실패: ' + (r.error||'unknown'), 'error');
     }
+
+    document.getElementById('modal-newgame').classList.remove('active');
+    setExploreMode();
+    clearLog();
+    logLine(`▶ ${name} (${job}) 모험 시작!`, 'skill');
+    term(`session created: ${name}/${job}`, 'ok');
+    toast(`Welcome, ${name}!`);
 }
 
 async function explore() {
