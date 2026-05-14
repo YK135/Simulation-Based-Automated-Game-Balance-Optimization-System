@@ -356,3 +356,38 @@ img.combatant-art {
     from { box-shadow: 0 0 8px rgba(45, 212, 191, 0.4); }
     to   { box-shadow: 0 0 20px rgba(45, 212, 191, 0.7); }
 }
+
+/* ═══════════════════════════════════════════════════════════
+   배틀 시퀀스 재생 중 — 액션 패널 시각적 비활성화
+   ─────────────────────────────────────────────────────────
+   showEnemyTurn() 호출 시 #action-bar, #actions-panel에 .processing
+   부착. showPlayerTurn() 시 제거.
+   ═══════════════════════════════════════════════════════════ */
+
+#action-bar.processing,
+#actions-panel.processing {
+    opacity: 0.45;
+    pointer-events: none;   /* 클릭 자체를 차단 */
+    filter: grayscale(40%);
+    transition: opacity 0.2s, filter 0.2s;
+}
+
+/* processing 상태일 때 버튼은 회색 */
+#action-bar.processing button,
+#actions-panel.processing button {
+    cursor: not-allowed;
+    background: var(--bg-darkest, #0a0e14);
+    color: var(--text-muted, #4a5660);
+}
+
+/* 메뉴(스킬/아이템) 강제 닫기용 */
+#action-bar.processing .submenu,
+#actions-panel.processing .submenu {
+    display: none !important;
+}
+
+/* 부드러운 전환 — 너무 갑작스럽지 않게 */
+#action-bar,
+#actions-panel {
+    transition: opacity 0.2s, filter 0.2s;
+}

@@ -271,29 +271,71 @@ function refreshBattle(bs) {
 
 // ATB 시각화: 플레이어 차례 (행동 가능 상태)
 function showPlayerTurn() {
+    // 버튼 활성화
     ['btn-attack','btn-skill','btn-item','btn-escape'].forEach(id => {
-        document.getElementById(id).disabled = false;
+        const btn = document.getElementById(id);
+        if (btn) btn.disabled = false;
     });
+    // 보스전이면 escape 비활성 유지
     if (state.battleState && state.battleState.is_boss) {
-        document.getElementById('btn-escape').disabled = true;
+        const escBtn = document.getElementById('btn-escape');
+        if (escBtn) escBtn.disabled = true;
     }
+
+    // ★ processing 클래스 제거 — 시각적 복귀
+    const actionBar = document.getElementById('action-bar');
+    if (actionBar) {
+        actionBar.classList.add('your-turn');
+        actionBar.classList.remove('processing');
+    }
+    const actionsPanel = document.getElementById('actions-panel');
+    if (actionsPanel) {
+        actionsPanel.classList.remove('processing');
+    }
+
+    // 차례 인디케이터
     const ind = document.getElementById('turn-indicator');
-    ind.className = 'turn-indicator player-turn';
-    ind.textContent = '▶ YOUR TURN';
-    document.getElementById('action-bar').classList.add('your-turn');
+    if (ind) {
+        ind.className = 'turn-indicator player-turn';
+        ind.textContent = '▶ YOUR TURN';
+    }
+
+    // 배틀필드 acting 효과
     document.querySelector('.combatant.player')?.classList.add('acting');
     document.querySelector('.combatant.enemy')?.classList.remove('acting');
 }
 
 // ATB 시각화: 적 차례 (행동 불가)
 function showEnemyTurn() {
+    // 버튼 비활성화 (동작 차단)
     ['btn-attack','btn-skill','btn-item','btn-escape'].forEach(id => {
-        document.getElementById(id).disabled = true;
+        const btn = document.getElementById(id);
+        if (btn) btn.disabled = true;
     });
+
+    // 스킬/아이템 메뉴 닫기
+    document.getElementById('skill-menu')?.classList.remove('active');
+    document.getElementById('item-menu')?.classList.remove('active');
+
+    // ★ 액션 패널 전체에 processing 클래스 — 시각적 비활성화
+    const actionBar = document.getElementById('action-bar');
+    if (actionBar) {
+        actionBar.classList.remove('your-turn');
+        actionBar.classList.add('processing');
+    }
+    const actionsPanel = document.getElementById('actions-panel');
+    if (actionsPanel) {
+        actionsPanel.classList.add('processing');
+    }
+
+    // 차례 인디케이터
     const ind = document.getElementById('turn-indicator');
-    ind.className = 'turn-indicator enemy-turn';
-    ind.textContent = '◀ ENEMY TURN';
-    document.getElementById('action-bar').classList.remove('your-turn');
+    if (ind) {
+        ind.className = 'turn-indicator enemy-turn';
+        ind.textContent = '◀ ENEMY TURN';
+    }
+
+    // 배틀필드 acting 효과
     document.querySelector('.combatant.player')?.classList.remove('acting');
     document.querySelector('.combatant.enemy')?.classList.add('acting');
 }

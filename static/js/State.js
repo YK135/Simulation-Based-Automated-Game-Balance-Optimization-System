@@ -90,8 +90,8 @@ const CHAR_IMAGES = {
     player_panel: {
         '전사': {
             idle:  '/img/face/warrior_face_A.png',
-            hurt:  '/img/face/warrior_face_B.png',
-            happy: '/img/face/warrior_face_C.png',
+            happy:  '/img/face/warrior_face_B.png',
+            hurt: '/img/face/warrior_face_C.png',
         },
         // 마법사, 탱커, 도적은 이미지 없음 → 이모지 폴백
     },
