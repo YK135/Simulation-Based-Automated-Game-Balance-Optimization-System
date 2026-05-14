@@ -339,21 +339,39 @@ def explore():
 
 
 def _start_battle(gs: dict, enemy, is_boss: bool = False) -> dict:
-    """1대1 전투 세션 생성 후 초기 상태 반환"""
+    """
+    1대1 전투 세션 생성 후 초기 상태 반환.
+    enemy는 원본(Unit/_SnapUnit) — exp_reward() 호출 가능한 객체.
+    BattleSession에 enemy_origins=[enemy] 같이 전달해서
+    전투 종료 시 적별 경험치 계산에 사용.
+    """
     p_snap = _player_to_snap(gs["player"], gs["items"])
     e_snap = EntitySnapshot.from_enemy(enemy)
-    gs["battle"] = BattleSession(p_snap, enemy=e_snap, items=gs["items"], is_boss=is_boss)
+    gs["battle"] = BattleSession(
+        p_snap,
+        enemy=e_snap,
+        items=gs["items"],
+        is_boss=is_boss,
+        enemy_origins=[enemy],   # ★ 원본 보존
+    )
     return gs["battle"]._state(messages=[f"{enemy.name}이(가) 나타났다!"])
 
 
 def _start_battle_multi(gs: dict, enemies: list, is_boss: bool = False) -> dict:
     """
-    다대일 전투 세션 생성. enemies는 길이 1~3.
-    초기 메시지로 등장한 모든 몬스터 명시.
+    다대일 전투 세션 생성. enemies는 길이 1~3 — 원본(Unit/_SnapUnit) 리스트.
+    EntitySnapshot으로 변환해서 BattleSession에 넣되,
+    원본은 enemy_origins로 같이 전달 (적별 경험치 계산용).
     """
     p_snap   = _player_to_snap(gs["player"], gs["items"])
     e_snaps  = [EntitySnapshot.from_enemy(e) for e in enemies]
-    gs["battle"] = BattleSession(p_snap, enemies=e_snaps, items=gs["items"], is_boss=is_boss)
+    gs["battle"] = BattleSession(
+        p_snap,
+        enemies=e_snaps,
+        items=gs["items"],
+        is_boss=is_boss,
+        enemy_origins=list(enemies),   # ★ 원본 보존
+    )
 
     # 같은 종류는 묶어서 메시지 표시
     counts = {}
@@ -411,13 +429,66 @@ def battle_action():
             # HP/MP 동기화
             player.hp = result["player_hp"]
             player.mp = result["player_mp"]
-            # 경험치 지급
-            lv_obj  = LV_(player)
-            exp     = randint(45, 60)
-            lv_obj.Get_exp(player, reward_exp=exp)
+
+            # ── 경험치 지급 (적별 합산) ──
+            # BattleSession이 보존해둔 처치 적 원본 리스트 (Unit/_SnapUnit).
+            # EntitySnapshot이 아니라 원본이므로 exp_reward() 호출 가능.
+            defeated = list(getattr(gs["battle"], "defeated_origins", []))
+
+            # 폴백: defeated가 비어있으면 (구버전 호환) 기존 방식.
+            if not defeated:
+                exp_total = randint(45, 60)
+                result["exp_breakdown"] = [{"name": "???", "exp": exp_total}]
+            else:
+                exp_total = 0
+                breakdown = []
+                exp_msgs = []
+                for enemy in defeated:
+                    # 안전망: exp_reward가 없는 객체(=EntitySnapshot)는 폴백 비율
+                    if hasattr(enemy, "exp_reward"):
+                        e_exp = enemy.exp_reward(player.maxexp)
+                    else:
+                        # EntitySnapshot이 들어온 경우 — origins가 비어서 발생.
+                        # 기본 중급 비율(0.34)로 처리.
+                        e_exp = int(player.maxexp * 0.34)
+
+                    exp_total += e_exp
+
+                    # 등급 표시 (보스면 BOSS, 일반이면 등급)
+                    if getattr(enemy, "is_boss", False):
+                        grade_tag = "BOSS"
+                    else:
+                        grade_tag = getattr(enemy, "grade", "중")
+
+                    breakdown.append({
+                        "name":  enemy.name,
+                        "grade": grade_tag,
+                        "exp":   e_exp,
+                    })
+                    exp_msgs.append(f"  {enemy.name}({grade_tag}) 처치 → {e_exp} EXP")
+
+                # 메시지에 적별 경험치 + 합계 추가
+                if len(defeated) > 1:
+                    result["messages"].append("")  # 빈 줄
+                    result["messages"].extend(exp_msgs)
+                    result["messages"].append(f"총 {exp_total} EXP 획득!")
+                else:
+                    result["messages"].append(exp_msgs[0].strip())
+
+                result["exp_breakdown"] = breakdown
+
+            # 레벨업 처리
+            lv_obj = LV_(player)
+            lv_before = player.lv
+            lv_obj.Get_exp(player, reward_exp=exp_total)
             gs["hook"].check_level_up()
-            result["exp_gained"] = exp
+
+            result["exp_gained"] = exp_total
             result["level_up"]   = player.lv
+            if player.lv > lv_before:
+                result["messages"].append(
+                    f"⭐ LEVEL UP! Lv.{lv_before} → Lv.{player.lv}"
+                )
 
         elif winner == "enemy":
             player.hp = 0
@@ -426,13 +497,18 @@ def battle_action():
             player.hp = result["player_hp"]
             player.mp = result["player_mp"]
 
-        # 중간 보스 클리어 체크
-        if gs["battle"].enemy.name == "중간 보스" and winner == "player":
-            gs["mid_boss_cleared"] = True
-            gs["items"].append("HP_L_potion")
-            result["messages"].append("보상: HP_L_potion 획득!")
+        # 중간 보스 클리어 체크 (다대일 호환)
+        if winner == "player":
+            had_midboss = any(
+                getattr(e, "name", "") == "중간 보스"
+                for e in gs["battle"].enemies
+            )
+            if had_midboss:
+                gs["mid_boss_cleared"] = True
+                gs["items"].append("HP_L_potion")
+                result["messages"].append("🎁 보상: HP_L_potion 획득!")
 
-        gs["battle"] = None  # 전투 세션 초기화
+        gs["battle"] = None
         result["player"] = _player_dict(player, gs["items"])
 
     return jsonify({"ok": True, **result})

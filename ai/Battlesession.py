@@ -39,19 +39,25 @@ class BattleSession:
         enemy:  EntitySnapshot = None,
         items:  list = None,
         is_boss: bool = False,
-        enemies: list = None,  # ★ 다대일 전투용: enemy 대신 enemies (리스트) 전달 가능
+        enemies: list = None,
+        enemy_origins: list = None,   # ★ 원본 적 객체 (exp_reward용)
     ):
         """
         BattleSession — 1대1 또는 1대N 전투 세션.
-
+ 
         호환성:
           - 기존 코드는 enemy=... 단수로 호출 (1대1 전투).
           - 다대일은 enemies=[e1, e2, e3] 리스트로 호출 (Phase 2).
           - 내부에서는 항상 self.enemies 리스트로 관리.
           - self.enemy는 첫 번째 살아있는 적을 가리키는 동적 프로퍼티 (구 코드 호환).
+ 
+        enemy_origins (신규):
+          - self.enemies가 EntitySnapshot이라 exp_reward() 호출 불가.
+          - 원본(Unit/_SnapUnit) 객체를 같은 인덱스로 보존해서 전투 종료 시 사용.
+          - None이면 [] — App.py가 폴백 경험치 처리.
         """
         self.player  = copy.deepcopy(player)
-
+ 
         # ── enemies 리스트로 통일 ──
         # 단수 enemy로 호출되면 자동으로 [enemy]로 변환.
         if enemies is not None:
@@ -60,31 +66,50 @@ class BattleSession:
             self.enemies = [copy.deepcopy(enemy)]
         else:
             raise ValueError("BattleSession은 enemy 또는 enemies 중 하나를 받아야 합니다")
-
+ 
         # 각 적에게 인덱스 부여 (UI 슬롯 매핑용: 0=슬롯3, 1=슬롯4, 2=슬롯5)
         for i, e in enumerate(self.enemies):
             e._slot_index = i
-
+ 
+        # ── 원본 적 객체 보존 (★ 신규) ──
+        # self.enemies[i] (EntitySnapshot) ↔ self._origins[i] (Unit/_SnapUnit)
+        # 길이는 self.enemies와 동일해야 함. 부족하면 None으로 패딩.
+        self._origins = list(enemy_origins or [])
+        while len(self._origins) < len(self.enemies):
+            self._origins.append(None)
+ 
+        # ── 기본 전투 상태 필드 ──
         self.items   = list(items or [])
         self.is_boss = is_boss
         self.turn    = 0
         self.done    = False   # 전투 종료 여부
         self.winner  = None    # "player" | "enemy" | "escaped"
-
+ 
         # 행동 로그 — BehaviorAnalyzer 입력용.
         self.logs: list = []
-
+ 
         # 적 AI
         self._enemy_ai = EnemyAI()
-
+ 
         # 현재 타깃 인덱스 (플레이어가 슬롯 클릭으로 변경)
         # 기본값: 첫 번째 살아있는 적
         self._target_idx = 0
+ 
+        # 전사 패시브용 행동 카운터 — 공격 3회마다 발동
+        # (이전 v2 패치에서 추가된 필드 — 유지)
+        self._warrior_action_count = 0
+ 
+        # ── 처치된 적 원본 리스트 (★ 신규) ──
+        # 적이 죽을 때 self._origins[i] 를 여기에 추가.
+        # 형식: [Unit | _SnapUnit | None, ...]
+        # None인 경우는 호출 측이 origins를 안 줬을 때 — App.py가 폴백 처리.
+        self.defeated_origins = []
 
         # 전사 패시브용 행동 카운터 — 공격 3회마다 발동
         # self.turn은 다른 곳에서도 쓰여서 별도로 관리.
         # 플레이어가 실제로 행동한 횟수 (item, escape도 포함 — step과 1:1).
         self._warrior_action_count = 0
+
     # 기존 1대1 코드는 self.enemy 직접 접근. 살아있는 첫 번째 적 반환.
     @property
     def enemy(self):
@@ -198,9 +223,10 @@ class BattleSession:
             msgs.append("도망에 성공했다!")
             return self._state(messages=msgs)
 
+         # ── 플레이어 행동 직후 적 사망 체크 ──
+        self._collect_defeated_origins()
+
         # ── 모든 적 사망 체크 (다대일) ──
-        # 한 마리 죽어도 다른 적이 살아있으면 전투 계속.
-        # 살아있는 적이 한 명도 없을 때만 승리.
         if not self._alive_enemies():
             self.done   = True
             self.winner = "player"
@@ -211,9 +237,10 @@ class BattleSession:
             return self._state(messages=msgs)
 
         # ── 적 행동 ───────────────────────────
-        # 다대일: 모든 살아있는 적이 SPD 내림차순으로 한 번씩 행동.
-        # 콘솔 전투(Act.action)와 동일하게 아이템 사용 후에도 적 턴 진행.
         self._enemy_action(msgs)
+
+        # ── 적 행동 후에도 사망 체크 ──
+        self._collect_defeated_origins()
 
         # 플레이어 사망 체크
         if self.player.hp <= 0:
@@ -223,6 +250,29 @@ class BattleSession:
             return self._state(messages=msgs)
 
         return self._state(messages=msgs)
+
+
+    # ── 헬퍼: 새로 죽은 적의 원본 객체 수집 ──
+    # self.enemies[i].hp <= 0 인 적의 self._origins[i] 를 defeated_origins에 추가.
+    # id(snap) 비교로 중복 방지.
+    def _collect_defeated_origins(self):
+        # 이미 수집된 인덱스 집합 (한 번만 추가)
+        existing_origin_ids = {id(o) for o in self.defeated_origins if o is not None}
+
+        for i, snap in enumerate(self.enemies):
+            if snap.hp <= 0:
+                # 이 인덱스의 origin
+                origin = self._origins[i] if i < len(self._origins) else None
+                if origin is None:
+                    # origin이 없으면 스냅샷 자체 추가 (App.py가 폴백 처리)
+                    # 단, 중복은 막아야 하니 EntitySnapshot으로 id 비교
+                    if id(snap) not in existing_origin_ids:
+                        self.defeated_origins.append(snap)
+                        existing_origin_ids.add(id(snap))
+                else:
+                    if id(origin) not in existing_origin_ids:
+                        self.defeated_origins.append(origin)
+                        existing_origin_ids.add(id(origin))
 
     def get_skills(self) -> list:
         """사용 가능한 스킬 목록 반환"""

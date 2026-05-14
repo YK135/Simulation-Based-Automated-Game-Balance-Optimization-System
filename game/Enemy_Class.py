@@ -53,7 +53,7 @@ class Unit:
         self.enemy_type      = enemy_type or name
 
     def exp_reward(self, player_maxexp: int) -> int:
-        ratio = {"상": 0.9, "중": 0.7, "하": 0.5}.get(self.grade, 0.34)
+        ratio = {"상": 0.7, "중": 0.55, "하": 0.45}.get(self.grade, 0.34)
         return int(player_maxexp * ratio)
 
     def decide_action(self, player) -> str:
@@ -312,13 +312,7 @@ def Make_Random_Monster(player_lv: int) -> Unit:
 def Make_MidBoss(player_lv: int, base_monster_snap=None) -> Unit:
     """
     중간 보스: 오래 버티는 적 (Lv14 전후) — 5차 조정.
-    스펙(5차): hp 1200, mp 100, stg 36, arm 27, sparm 24, sp 28,
-              spd 24, luc 22, debuff_resist 0.30
-    의도: 탱커도 클리어 가능하게.
-      - 4차에서 탱커만 1% (장기전 마모 + 공격 안 통함)
-      - hp 1300→1200 (장기전 단축)
-      - arm 30→27 (탱커 STG 데미지 통하게)
-      - 목표: 모든 직업 40~95% 정도, 탱커 30% 이상
+    ...
     """
     lv = max(1, player_lv)
     unit = Unit(
@@ -336,6 +330,12 @@ def Make_MidBoss(player_lv: int, base_monster_snap=None) -> Unit:
         is_boss      = True,
         debuff_resist = 0.30,
     )
+
+    # ── 중간 보스 전용 경험치 보상 ──
+    # 일반 상급 (0.45 × maxexp) 대신 1.5 × maxexp → 약 1.5레벨업.
+    # 메서드 동적 부여로 Unit 클래스 자체는 안 건드림.
+    unit.exp_reward = lambda player_maxexp: int(player_maxexp * 1.5)
+
     return unit
 
 
