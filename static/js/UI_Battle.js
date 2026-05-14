@@ -72,9 +72,11 @@ function refreshBattle(bs) {
     //   일반 + late  →  battle-bg-normal-late (turn 25~)
     refreshBattleBackground(bs);
 
-    // ── 플레이어 슬롯 ──
+       // ── 플레이어 슬롯 ──
     const p = state.player;
-    refreshPlayerCombatantArt(p);
+    document.getElementById('player-combatant-art').textContent = JOB_ICONS[p.job] || '?';
+    // ★ 배틀필드 플레이어 이미지 갱신 (직업별)
+    _updateBattleSprite('player_battle', null, p.job, 'idle');
     document.getElementById('player-combatant-name').textContent = p.name;
     document.getElementById('player-combatant-meta').textContent = `LV ${p.lv} ${p.job}`;
     document.getElementById('player-cb-hp').style.width = (bs.player_hp/bs.player_maxhp*100) + '%';
@@ -111,15 +113,18 @@ function refreshBattle(bs) {
         slotEl.style.opacity = en.alive ? '1' : '0.3';
         slotEl.style.filter  = en.alive ? '' : 'grayscale(100%)';
 
-        // 아이콘
+        // 아이콘 (이모지)
         const artEl = document.getElementById(`enemy-art${enemyIdSuffix(i)}`);
         if (artEl) artEl.textContent = ENEMY_ICONS[en.name] || '👹';
+
+        // ★ 배틀필드 적 이미지 갱신 (몬스터 종류별)
+        const stateKey = en.alive ? 'idle' : 'dead';
+        _updateBattleSprite('enemy_battle', i, en.name, stateKey);
 
         // 이름/레벨
         const nameEl = document.getElementById(`enemy-name${enemyIdSuffix(i)}`);
         const metaEl = document.getElementById(`enemy-meta${enemyIdSuffix(i)}`);
         if (nameEl) nameEl.textContent = en.name + (en.alive ? '' : ' ✖');
-        if (metaEl) metaEl.textContent = `LV ${en.lv} ${en.difficulty_label ? '['+en.difficulty_label+']' : ''}`;
 
         // HP 바
         const hpEl     = document.getElementById(`enemy-cb-hp${enemyIdSuffix(i)}`);
@@ -565,8 +570,60 @@ function _triggerSpriteStates(bs) {
     }
 }
 
-
 // 헬퍼: 일정 시간 후 setCharState 호출
 function _scheduleSetState(target, state, delay) {
     setTimeout(() => setCharState(target, state), delay);
+}
+// ═══════════════════════════════════════════════════════════
+// 배틀필드 캐릭터 이미지 갱신 헬퍼
+// ───────────────────────────────────────────────────────────
+// section: 'player_battle' | 'enemy_battle'
+// slotIdx: enemy_battle일 때 0/1/2, player_battle일 때 null
+// name:    직업명 or 몬스터명
+// state:   'idle' | 'attack' | 'skill' | 'hurt' | 'dead'
+//
+// 동작:
+//   1. CHAR_IMAGES에서 경로 조회
+//   2. 해당 슬롯의 <img> 가 있으면 src 갱신
+//   3. <img>가 없으면 div(이모지) 그대로 사용 (이미 위에서 textContent 설정함)
+//   4. 이미지 로드 실패하면 자동으로 img 숨기고 div 표시
+// ═══════════════════════════════════════════════════════════
+function _updateBattleSprite(section, slotIdx, name, stateName) {
+    // 이미지 경로 조회
+    const imgPath = (typeof getCharImage === 'function')
+        ? getCharImage(section, name, stateName)
+        : null;
+
+    // 대상 <img> 요소 찾기
+    let imgEl, iconEl;
+    if (section === 'player_battle') {
+        imgEl  = document.querySelector('img#player-combatant-art');
+        iconEl = document.querySelector('div#player-combatant-art');
+    } else if (section === 'enemy_battle') {
+        const suffix = slotIdx === 0 ? '' : `-${slotIdx + 1}`;
+        imgEl  = document.querySelector(`img#enemy-art${suffix}`);
+        iconEl = document.querySelector(`div#enemy-art${suffix}`);
+    }
+
+    // <img> 태그가 HTML에 없으면 (이전 버전 index.html) 그냥 종료
+    // → 이모지(div)만 표시됨, 깨지지 않음
+    if (!imgEl) {
+        if (iconEl) iconEl.style.display = '';
+        return;
+    }
+
+    if (imgPath) {
+        imgEl.src = imgPath;
+        imgEl.style.display = '';
+        imgEl.onerror = function() {
+            this.style.display = 'none';
+            if (iconEl) iconEl.style.display = '';
+        };
+        imgEl.onload = function() {
+            if (iconEl) iconEl.style.display = 'none';
+        };
+    } else {
+        imgEl.style.display = 'none';
+        if (iconEl) iconEl.style.display = '';
+    }
 }

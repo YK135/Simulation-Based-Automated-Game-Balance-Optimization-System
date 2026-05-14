@@ -178,3 +178,35 @@
     color: var(--accent-warn);
     font-weight: 700;
 }
+
+/* ═══════════════════════════════════════════════════════════
+   ▼▼▼ 이미지 안전망 ▼▼▼
+   - src 없거나 404일 때 깨진 이미지 아이콘 숨김
+   - <img> 가 영역을 점유하지 않게 alt 텍스트 처리
+   ═══════════════════════════════════════════════════════════ */
+
+/* src가 비어있는 img 자동 숨김 */
+img.player-art-img[src=\"\"],
+img.player-art-img:not([src]) {
+    display: none !important;
+}
+
+/* alt 텍스트(깨진 이미지 표시) 숨김 */
+img.player-art-img {
+    /* 깨진 이미지 fallback: alt 텍스트가 표시되는 것 방지 */
+    color: transparent;
+    /* 폰트 사이즈를 0으로 만들어 alt가 보이지 않게 */
+    font-size: 0;
+}
+
+/* ═══════════════════════════════════════════════════════════
+   ▼▼▼ 배틀필드 이미지 안전망 ▼▼▼
+   ═══════════════════════════════════════════════════════════ */
+img.combatant-art[src=\"\"],
+img.combatant-art:not([src]) {
+    display: none !important;
+}
+img.combatant-art {
+    color: transparent;
+    font-size: 0;
+}
