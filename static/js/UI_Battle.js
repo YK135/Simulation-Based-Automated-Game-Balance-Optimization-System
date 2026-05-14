@@ -74,9 +74,13 @@ function refreshBattle(bs) {
 
        // ── 플레이어 슬롯 ──
     const p = state.player;
-    document.getElementById('player-combatant-art').textContent = JOB_ICONS[p.job] || '?';
+    // 이모지 폴백 동기화 (이미지 없으면 이게 보임)
+    const playerArtIconEl = document.getElementById('player-combatant-art');
+    if (playerArtIconEl) playerArtIconEl.textContent = JOB_ICONS[p.job] || '?';
+
     // ★ 배틀필드 플레이어 이미지 갱신 (직업별)
-    _updateBattleSprite('player_battle', null, p.job, 'idle');
+    _updateBattleSprite('player_battle', null, p.job, bs.player_hp > 0 ? 'idle' : 'dead');
+
     document.getElementById('player-combatant-name').textContent = p.name;
     document.getElementById('player-combatant-meta').textContent = `LV ${p.lv} ${p.job}`;
     document.getElementById('player-cb-hp').style.width = (bs.player_hp/bs.player_maxhp*100) + '%';
@@ -556,7 +560,7 @@ function _updateBattleSprite(section, slotIdx, name, stateName) {
         ? getCharImage(section, name, stateName)
         : null;
 
-    // 대상 <img> 요소 찾기 (DOM id 규칙: *-img 접미사)
+    // 대상 <img> / <div> 요소 찾기
     let imgEl, iconEl;
     if (section === 'player_battle') {
         imgEl  = document.getElementById('player-combatant-art-img');
@@ -574,8 +578,7 @@ function _updateBattleSprite(section, slotIdx, name, stateName) {
         }
     }
 
-    // <img> 태그가 HTML에 없으면 (이전 버전 index.html) 즉시 종료
-    // → 이모지(div)만 표시됨, 깨지지 않음
+    // <img> 태그가 HTML에 없으면 → 이모지(div)만 표시하고 종료
     if (!imgEl) {
         if (iconEl) iconEl.style.display = '';
         return;
