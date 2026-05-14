@@ -122,10 +122,14 @@ def _player_dict(player, items: list) -> dict:
 # ─────────────────────────────────────────────
 
 @app.route("/api/new_game", methods=["POST"])
+@app.route("/api/newgame",  methods=["POST"])   # ← 별칭 (언더스코어 없는 버전)
 def new_game():
     """
     요청: { "name": "용사", "job": "전사" }
     응답: { "ok": true, "player": {...} }
+ 
+    라우트 별칭: /api/new_game = /api/newgame
+    프론트엔드 일부에서 경로가 혼재해 양쪽 다 처리.
     """
     data = request.get_json() or {}
     name = data.get("name", "용사").strip() or "용사"

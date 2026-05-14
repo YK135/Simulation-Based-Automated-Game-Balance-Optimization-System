@@ -42,20 +42,12 @@
         <div class="panel-title">PLAYER: <span id="player-id">-- (LV --)</span></div>
 
         <div class="player-art">
-            <!-- ════════════════════════════════════════════════════════
-                 ▼▼▼ [이미지 1: 좌측 캐릭터 초상화] ▼▼▼
-                 권장 크기: 정사각형 PNG (256x256 또는 512x512)
-                 파일 위치: static/img/portrait_warrior.png
-                 사용 방법:
-                   1. 아래 player-art-icon div를 주석처리
-                   2. 위의 <img> 태그 주석을 풀고 활성화
-                   3. 직업별 동적 변경: js/state.js의 JOB_PORTRAITS 매핑 활성화
-                      + js/ui-player.js의 refreshPlayer()에서 src 갱신
-                 ════════════════════════════════════════════════════════ -->
-            <!-- <img id="player-portrait" class="player-art-img"
-                      src="/img/portrait_warrior.png" alt="" /> -->
+    <!-- ★ 이미지 슬롯 활성화 — CharSprite.js가 src 동적 갱신 -->
+    <!-- 이미지가 없으면 onerror로 자동 숨김 → 이모지 표시 -->
             <img id="player-portrait" class="player-art-img"
-                      src="img/face/warrior_face_A.png" alt="" />
+                src="" alt=""
+                onerror="this.style.display='none'; document.getElementById('player-icon').style.display='';" />
+            <div class="player-art-icon" id="player-icon">⚔</div>
         </div>
 
         <!-- HP / MP / EXP / ATB 4개 세로 게이지 -->
@@ -176,19 +168,10 @@
             <div class="battle-stage">
                 <!-- ─── 슬롯 1: 플레이어 ─── -->
                 <div class="battle-slot slot-player">
-                    <div class="combatant player">
-                        <!-- ════════════════════════════════════════════════════════
-                             ▼ [이미지: 플레이어 도트 (투명 배경)] ▼
-                             권장 크기: 96x96 PNG (투명배경)
-                             파일 위치: static/img/sprite_warrior.png
-                             사용 방법: <img>로 교체. 직업별 매핑은
-                                      js/state.js의 JOB_SPRITES 활성화 +
-                                      js/ui-battle.js refreshBattle()에서 src 갱신
-                             ════════════════════════════════════════════════════════ -->
-                        <!-- <img class="combatant-art" id="player-combatant-art"
-                                  src="/img/sprite_warrior.png" alt="" /> -->
-                        <img class="combatant-art" id="player-combatant-art" 
-                                    src="img/battle/warrior_A.png" alt=""/>
+                    <img class="combatant-art" id="player-combatant-art-img"
+                            src="" alt=""
+                            onerror="this.style.display='none'; document.getElementById('player-combatant-art').style.display='';" />
+                <div class="combatant-art" id="player-combatant-art">⚔</div>
                         <div class="combatant-name" id="player-combatant-name">-</div>
                         <div class="combatant-meta" id="player-combatant-meta">LV --</div>
                         <div class="combatant-bars">
@@ -219,8 +202,9 @@
                              js/state.js의 ENEMY_SPRITES 매핑 활성화 시
                              refreshBattle()에서 자동으로 종류별 이미지 변경
                              ════════════════════════════════════════════════════════ -->
-                        <!-- <img class="combatant-art" id="enemy-art"
-                                  src="/img/sprite_goblin.png" alt="" /> -->
+                        <img class="combatant-art" id="enemy-art-img"
+                            src="" alt=""
+                            onerror="this.style.display='none'; document.getElementById('enemy-art').style.display='';" />
                         <div class="combatant-art" id="enemy-art">👹</div>
                         <div class="combatant-name" id="enemy-name">--</div>
                         <div class="combatant-meta" id="enemy-meta">LV --</div>
@@ -246,6 +230,9 @@
                         <div class="target-tag enemy-target-tag-2" style="display:none;">▶ TARGET</div>
                         <!-- <img class="combatant-art" id="enemy-art-2"
                                   src="/img/sprite_goblin.png" alt="" /> -->
+                        <img class="combatant-art" id="enemy-art-2-img"
+                             src="" alt=""
+                             onerror="this.style.display='none'; document.getElementById('enemy-art-2').style.display='';" />
                         <div class="combatant-art" id="enemy-art-2">👺</div>
                         <div class="combatant-name" id="enemy-name-2">--</div>
                         <div class="combatant-meta" id="enemy-meta-2">LV --</div>
@@ -263,8 +250,9 @@
                 <div class="battle-slot slot-enemy">
                     <div class="combatant enemy" id="enemy-slot-3" data-slot="2" style="display:none;">
                         <div class="target-tag enemy-target-tag-3" style="display:none;">▶ TARGET</div>
-                        <!-- <img class="combatant-art" id="enemy-art-3"
-                                  src="/img/sprite_goblin.png" alt="" /> -->
+                        <img class="combatant-art" id="enemy-art-3-img"
+                             src="" alt=""
+                             onerror="this.style.display='none'; document.getElementById('enemy-art-3').style.display='';" />
                         <div class="combatant-art" id="enemy-art-3">👺</div>
                         <div class="combatant-name" id="enemy-name-3">--</div>
                         <div class="combatant-meta" id="enemy-meta-3">LV --</div>
@@ -591,6 +579,7 @@
      ═══════════════════════════════════════════════════════════ -->
 <script src="js/Api.js"></script>          <!-- fetch wrapper -->
 <script src="js/State.js"></script>        <!-- 전역 state + 매핑 -->
+<script src="js/CharSprite.js"></script>  
 <script src="js/Utils.js"></script>        <!-- 시계, 토스트, 로그 -->
 <script src="js/Pentagon.js"></script>     <!-- 펜타곤 차트 -->
 <script src="js/UI_Player.js"></script>    <!-- 좌측 패널 -->

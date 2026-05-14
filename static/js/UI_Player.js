@@ -9,7 +9,12 @@ function refreshPlayer() {
     if (!state.player) return;
     const p = state.player;
     document.getElementById('player-id').textContent = `${p.name} (LV ${p.lv} ${p.job})`;
-    refreshPlayerPortrait(p);
+    document.getElementById('player-icon').textContent = JOB_ICONS[p.job] || '?';
+
+    // ── 좌측 패널 캐릭터 이미지 (직업 변경 시 동기화) ──
+    // 이미지가 있으면 <img id=\"player-portrait\"> 사용, 없으면 이모지 폴백.
+    // 평소엔 idle, 피격/레벨업은 setCharState로 별도 트리거.
+    setCharState('player_panel', 'idle');
 
     // ── 좌측 게이지: HP/MP/EXP ──
     document.getElementById('hp-cur').textContent = Math.round(p.hp);

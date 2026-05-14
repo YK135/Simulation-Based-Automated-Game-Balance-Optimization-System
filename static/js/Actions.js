@@ -40,16 +40,16 @@ async function loadStatus() {
 }
 
 async function newGame(name, job) {
-    const r = await api('/new_game', { name, job });
-    if (r.ok) {
-        state.player = r.player;
-        refreshPlayer();
-        document.getElementById('modal-newgame').classList.remove('active');
-        setExploreMode();
-        clearLog();
-        logLine(`▶ ${name} (${job}) 모험 시작!`, 'skill');
-        term(`session created: ${name}/${job}`, 'ok');
-        toast(`Welcome, ${name}!`);
+    const r = await api('/newgame', { name, job });
+    if (!r.ok) { toast(r.error || '게임 시작 실패', 'error'); return; }
+    state.player = r.player;
+    state.inBattle = false;
+    refreshPlayer();
+
+    // ★ 모든 스프라이트 idle로 초기화 (새 게임이면 idle 상태로)
+    if (typeof resetAllSprites === 'function') {
+        // 배틀필드는 아직 표시 안 되니까 player_panel만
+        setCharState('player_panel', 'idle');
     } else {
         toast('생성 실패: ' + (r.error||'unknown'), 'error');
     }
@@ -105,10 +105,14 @@ async function explore() {
             term('item gained');
             if (r.player) { state.player = r.player; refreshPlayer(); }
             toast(`+ ${r.item}`);
+            // ★ 좌측 패널 happy 표정 1.5초
+            showHappyState('player_panel', 1500);
         } else if (r.event === 'rest') {
             logLine('🌙 휴식 장소를 발견했다.', 'heal');
             term('rest event');
             showRestModal();
+            // ★ 휴식 발견도 좋은 이벤트 — happy
+            showHappyState('player_panel', 1500);
         } else if (r.event === 'gameover') {
             logLine('✖ GAME OVER', 'crit');
             term('game over', 'warn');
@@ -174,6 +178,14 @@ async function battleAction(action) {
                 logLine('★ VICTORY!', 'crit');
                 term('battle won', 'ok');
                 toast('승리!');
+                // ★ 승리 시 happy 표정 (좌측 패널)
+                showHappyState('player_panel', 2000);
+
+                // 레벨업 메시지 있으면 더 길게 happy
+                const hasLevelUp = (r.messages || []).some(m => m.includes('LEVEL UP'));
+                if (hasLevelUp) {
+                    showHappyState('player_panel', 3000);
+                }
             } else if (r.winner === 'enemy') {
                 logLine('✖ DEFEAT', 'crit');
                 term('battle lost', 'warn');
