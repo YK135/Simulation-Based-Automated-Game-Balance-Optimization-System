@@ -153,38 +153,44 @@ async function battleAction(action) {
         return;
     }
     state.battleProcessing = true;
-
+ 
     document.getElementById('skill-menu').classList.remove('active');
     document.getElementById('item-menu').classList.remove('active');
-
-    // 적 턴 표시 (즉시)
+ 
+    // 액션 패널 비활성화 + 적 턴 표시
     showEnemyTurn();
-
+ 
     try {
         const r = await api('/battle/action', { action });
         if (!r.ok) {
             toast(r.error || 'action 실패', 'error');
             return;
         }
-
-        // ────────────────────────────────────────
-        // 핵심: 시퀀서로 단계별 재생
-        // ────────────────────────────────────────
-        // 1) 우선 상태(HP/MP/슬롯 위치 등)는 즉시 갱신 — 단, 메시지 출력은 시퀀서가 담당
-        // 2) refreshBattle은 메시지 출력 제외하고 호출하기 위해
-        //    임시로 messages를 빼고 호출 → 시퀀서가 별도로 처리
+ 
+        // 상태 갱신 (HP/MP/슬롯 등) — 메시지는 시퀀서가 출력
         const messages = r.messages || [];
-        const bsForRefresh = { ...r, messages: [] };  // 메시지 제외한 복사본
+        const bsForRefresh = { ...r, messages: [] };
         refreshBattle(bsForRefresh);
-
+ 
+        // ────────────────────────────────────────
+        // ⚠ 주의: refreshBattle 안에서 showPlayerTurn 자동 호출됨.
+        // 우리는 시퀀서가 끝날 때까지 액션을 비활성 유지하려고 하므로
+        // refreshBattle 직후 다시 showEnemyTurn으로 덮어씌움.
+        // ────────────────────────────────────────
+        showEnemyTurn();
+ 
         // 시퀀스 재생 (메시지 + 이미지 + 시간)
         if (typeof playBattleSequence === 'function') {
             await playBattleSequence(action, { ...r, messages });
         } else {
-            // 시퀀서 없으면 폴백 — 일괄 출력
             messages.forEach(m => logLine(m));
         }
-
+ 
+        // ★ 시퀀서 끝난 후 추가 대기 — 사용자가 마지막 메시지 읽을 시간 확보
+        // 시퀀서 마지막 NEXT_TURN_GAP(300ms) + 여기 500ms = 총 800ms 여유.
+        // 너무 길면 답답하니 500ms로 적정 잡음.
+        await new Promise(resolve => setTimeout(resolve, 500));
+ 
         // ── 종료 처리 ──
         if (r.done) {
             if (r.winner === 'player') {
@@ -194,7 +200,6 @@ async function battleAction(action) {
                 if (typeof showHappyState === 'function') {
                     showHappyState('player_panel', 2000);
                 }
-                // 레벨업 시 더 길게
                 if (r.level_up && state.player && r.level_up > state.player.lv) {
                     if (typeof showHappyState === 'function') {
                         showHappyState('player_panel', 3000);
@@ -210,13 +215,15 @@ async function battleAction(action) {
             }
             document.getElementById('turn-indicator').className = 'turn-indicator';
             document.getElementById('action-bar').classList.remove('your-turn');
+            document.getElementById('action-bar').classList.remove('processing');
+            document.getElementById('actions-panel').classList.remove('processing');
             await loadStatus();
         } else {
-            // 전투 계속 — 플레이어 턴 복귀
+            // 전투 계속 — 이제 PlayerTurn 활성화 (시퀀서 + 추가 대기 후)
             showPlayerTurn();
         }
     } finally {
-        // 락 해제 — 시퀀스 완전 종료 후
+        // 락 해제 — 시퀀서 + 추가 대기 모두 끝난 후
         state.battleProcessing = false;
     }
 }

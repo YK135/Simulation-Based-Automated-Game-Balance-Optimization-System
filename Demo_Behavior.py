@@ -1,17 +1,3 @@
-"""
-BehaviorAnalyzer 시연 스크립트
-─────────────────────────────────────────────
-발표에서 보여줄 사용자 행동 패턴 분석 데모.
-
-흐름:
-  1. 가짜 플레이어 4명 시뮬 (각 직업별 다른 플레이 스타일)
-  2. 각각 30번 전투 데이터 수집
-  3. BehaviorAnalyzer가 자동으로 플레이 스타일 분류
-  4. 결과 비교 출력
-
-실행:
-  python3 demo_behavior.py
-"""
 import sys, os, copy, io, contextlib
 from typing import List
 
