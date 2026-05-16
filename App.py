@@ -26,6 +26,7 @@ import os
 import sys
 import copy
 import uuid
+from DB import init_db
 from random import randint, random
 
 from flask import Flask, request, jsonify, session, send_from_directory
@@ -60,6 +61,8 @@ app = Flask(
     static_folder=os.path.join(_THIS_DIR, "static"),
     static_url_path=""
 )
+init_db()  # DB 초기화 (테이블 생성)
+
 app.secret_key = os.environ.get("SECRET_KEY", "dev-secret-change-in-prod")
 
 # ── 게임 세션 저장소 (메모리) ─────────────────
