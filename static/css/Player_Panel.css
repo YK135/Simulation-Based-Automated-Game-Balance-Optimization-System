@@ -1,212 +1,268 @@
 /* ═══════════════════════════════════════════════════════════
-   player-panel.css
-   - 좌측 PLAYER 패널 (캐릭터 초상화 + 게이지 + 능력치 + 스킬북)
-   - HP/MP/EXP/ATB 4개 세로 게이지
+   Player_Panel.css — 좌측 PLAYER 패널
+   ★ 통째 교체용 ★
+
+   구성:
+   1. PLAYER 타이틀
+   2. 캐릭터 초상화 (정사각형, 골드 프레임)
+   3. HP/MP/EXP 세로 게이지 3개
+   4. 능력치 그리드 (2열)
+   5. NEW GAME 버튼
+   ═══════════════════════════════════════════════════════════ */
+
+.player-panel {
+    flex: 1;
+    background:
+        linear-gradient(180deg, rgba(31, 42, 54, 0.85) 0%, rgba(20, 26, 34, 0.9) 100%);
+    backdrop-filter: blur(8px);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    box-shadow: var(--shadow-soft), var(--shadow-inner);
+    padding: 16px;
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+    overflow-y: auto;
+    position: relative;
+}
+
+.player-panel::before {
+    content: '';
+    position: absolute;
+    inset: 4px;
+    border: 1px solid var(--border-subtle);
+    border-radius: 7px;
+    pointer-events: none;
+}
+
+
+/* ═══════════════════════════════════════════════════════════
+   1. PLAYER 타이틀
+   ═══════════════════════════════════════════════════════════ */
+
+.player-header {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding-bottom: 12px;
+    border-bottom: 1px solid var(--border-subtle);
+}
+
+.player-header-icon {
+    font-size: 14px;
+    color: var(--accent-gold);
+    letter-spacing: 0.2em;
+}
+
+.player-header-text {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+}
+
+.player-header-label {
+    font-family: 'Cormorant Garamond', serif;
+    font-size: 10px;
+    color: var(--text-muted);
+    letter-spacing: 0.3em;
+    text-transform: uppercase;
+}
+
+#player-id {
+    font-family: 'Gowun Batang', serif;
+    font-size: 13px;
+    color: var(--text-title);
+    letter-spacing: 0.05em;
+}
+
+
+/* ═══════════════════════════════════════════════════════════
+   2. 캐릭터 초상화
    ═══════════════════════════════════════════════════════════ */
 
 .player-art {
     width: 100%;
-    aspect-ratio: 1.1 / 1;
-    background: linear-gradient(135deg, #1a3140, #0f1d24);
-    border: 1px solid var(--border);
-    border-radius: 3px;
-    display: flex; align-items: center; justify-content: center;
-    margin-bottom: 12px;
+    aspect-ratio: 1 / 1;
+    max-height: 260px;
+    margin: 0 auto;
     position: relative;
-    overflow: hidden;
-}
-.player-art::before {
-    content: '';
-    position: absolute; inset: 0;
     background:
-        radial-gradient(circle at 30% 20%, rgba(45, 212, 191, 0.08), transparent 60%),
-        radial-gradient(circle at 70% 80%, rgba(56, 189, 248, 0.06), transparent 60%);
-}
-.player-art-icon {
-    font-size: 80px;
-    color: var(--accent-cyan);
-    text-shadow: 0 0 20px rgba(45, 212, 191, 0.4);
-    z-index: 1;
+        radial-gradient(ellipse at center, var(--bg-panel-2) 0%, var(--bg-darkest) 80%);
+    border: 1px solid var(--border-gold);
+    border-radius: 6px;
+    overflow: hidden;
+    display: flex;
+    align-items: center;
+    justify-content: center;
 }
 
-/* ═══════════════════════════════════════════════════════════
-   IMAGE SLOTS — 좌측 캐릭터 초상화 PNG 자리
-   - 좌측 초상화: .player-art-img (정사각형 이미지를 영역 가득 채움)
-   - 사용법: index.html의 .player-art 안 <img> 태그 주석을 풀고
-            player-art-icon div를 주석처리
-   ═══════════════════════════════════════════════════════════ */
+.player-art::before {
+    content: '';
+    position: absolute;
+    inset: 4px;
+    border: 1px solid var(--border-subtle);
+    border-radius: 3px;
+    pointer-events: none;
+}
+
+/* 골드 모서리 장식 */
+.player-art::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background:
+        linear-gradient(135deg, var(--accent-gold) 0px, transparent 1px) top left / 16px 16px no-repeat,
+        linear-gradient(225deg, var(--accent-gold) 0px, transparent 1px) top right / 16px 16px no-repeat,
+        linear-gradient(45deg,  var(--accent-gold) 0px, transparent 1px) bottom left / 16px 16px no-repeat,
+        linear-gradient(315deg, var(--accent-gold) 0px, transparent 1px) bottom right / 16px 16px no-repeat;
+    opacity: 0.4;
+    pointer-events: none;
+}
+
 .player-art-img {
     width: 100%;
     height: 100%;
-    object-fit: cover;       /* 영역 가득 (cover) — 비율 잘림 가능 */
-    /* object-fit: contain;  ← 비율 유지 + 여백 두려면 이걸로 변경 */
-    border-radius: 3px;
-    z-index: 1;
-    position: relative;
-    image-rendering: pixelated;  /* 도트 이미지일 경우 선명하게 */
+    object-fit: cover;
+    border-radius: 4px;
+    image-rendering: auto;
 }
 
-/* ── HP/MP/EXP/ATB 세로 게이지 4개 ── */
-.stats-bars {
-    display: flex; gap: 8px;
-    margin-bottom: 12px;
-}
-.stat-bar {
-    flex: 1;
-    display: flex; flex-direction: column; align-items: center;
-}
-.stat-bar-label {
-    font-size: 9px; font-weight: 700;
-    color: var(--text-dim);
-    margin-bottom: 4px;
-    letter-spacing: 0.1em;
-}
-.stat-bar-track {
-    width: 12px; height: 110px;
-    background: var(--bg-darkest);
-    border: 1px solid var(--border);
-    border-radius: 2px;
-    overflow: hidden;
-    display: flex; flex-direction: column-reverse;
-}
-.stat-bar-fill {
-    width: 100%;
-    transition: height 0.4s cubic-bezier(0.4, 0, 0.2, 1);
-}
-.stat-bar-fill.hp  { background: linear-gradient(180deg, #f87171, var(--hp-red)); box-shadow: 0 0 8px rgba(239, 68, 68, 0.4); }
-.stat-bar-fill.mp  { background: linear-gradient(180deg, #60a5fa, var(--mp-blue)); box-shadow: 0 0 8px rgba(59, 130, 246, 0.4); }
-.stat-bar-fill.exp { background: linear-gradient(180deg, #fde047, var(--skill-yellow)); box-shadow: 0 0 8px rgba(250, 204, 21, 0.4); }
-.stat-bar-fill.atb { background: linear-gradient(180deg, #67e8f9, var(--atb-cyan)); box-shadow: 0 0 10px rgba(34, 211, 238, 0.5); }
-
-@keyframes atb-pulse {
-    0%, 100% { box-shadow: 0 0 10px rgba(34, 211, 238, 0.5); }
-    50%      { box-shadow: 0 0 16px rgba(34, 211, 238, 0.8); }
-}
-.stat-bar-fill.atb.full { animation: atb-pulse 1s ease-in-out infinite; }
-
-.stat-bar-values {
-    text-align: center;
-    margin-top: 4px;
-    font-size: 10px;
-    line-height: 1.3;
-}
-.stat-bar-values .cur { color: var(--text-main); font-weight: 700; }
-.stat-bar-values .max { color: var(--text-muted); font-size: 9px; }
-
-/* ── 능력치 표 ── */
-.stat-grid {
-    display: grid;
-    grid-template-columns: 1fr 1fr;
-    gap: 4px 10px;
-    font-size: 10px;
-    margin-top: 8px;
-}
-.stat-row {
-    display: flex; justify-content: space-between;
-    color: var(--text-dim);
-}
-.stat-row .v { color: var(--text-main); font-weight: 700; }
-
-/* ── 스킬북 ── */
-.skill-book {
-    display: grid;
-    grid-template-columns: repeat(5, 1fr);
-    gap: 6px;
-    margin-top: 8px;
-}
-.skill-slot {
-    aspect-ratio: 1;
-    background: var(--bg-darkest);
-    border: 1px solid var(--border);
-    border-radius: 3px;
-    display: flex; align-items: center; justify-content: center;
-    font-size: 16px;
-    color: var(--text-muted);
-    position: relative;
-}
-.skill-slot.learned {
-    color: var(--skill-yellow);
-    border-color: rgba(250, 204, 21, 0.4);
-    background: linear-gradient(135deg, rgba(250, 204, 21, 0.08), transparent);
+.player-art-icon {
+    font-size: 96px;
+    color: var(--accent-gold-dim);
+    text-shadow: 0 0 24px rgba(201, 165, 90, 0.3);
 }
 
-/* ── 좌측 패널 — 버프 / 디버프 칩 ── */
-.player-status {
-    margin-top: 10px;
-    padding-top: 10px;
-    border-top: 1px dashed var(--border);
-    display: flex;
-    flex-direction: column;
-    gap: 6px;
-}
-.player-status:empty {
-    display: none;
-}
-.status-list {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 4px;
-}
-.status-list:empty {
-    display: none;
-}
-.status-chip {
-    font-size: 9px;
-    padding: 3px 7px;
-    border-radius: 2px;
-    font-family: monospace;
-    border: 1px solid;
-    line-height: 1.2;
-}
-.status-chip.buff {
-    color: #67e8f9;
-    background: rgba(45, 212, 191, 0.10);
-    border-color: rgba(45, 212, 191, 0.4);
-}
-.status-chip.debuff {
-    color: #fca5a5;
-    background: rgba(239, 68, 68, 0.10);
-    border-color: rgba(239, 68, 68, 0.4);
-}
-.status-chip .turns {
-    opacity: 0.7;
-    margin-left: 4px;
-}
-
-/* 전투 중 stat-grid 강조 (실효 스탯이 변동할 때) */
-.stat-row.changed .v {
-    color: var(--accent-warn);
-    font-weight: 700;
-}
-
-/* ═══════════════════════════════════════════════════════════
-   ▼▼▼ 이미지 안전망 ▼▼▼
-   - src 없거나 404일 때 깨진 이미지 아이콘 숨김
-   - <img> 가 영역을 점유하지 않게 alt 텍스트 처리
-   ═══════════════════════════════════════════════════════════ */
-
-/* src가 비어있는 img 자동 숨김 */
-img.player-art-img[src=\"\"],
+/* 깨진 이미지 안전망 */
+img.player-art-img[src=""],
 img.player-art-img:not([src]) {
     display: none !important;
 }
-
-/* alt 텍스트(깨진 이미지 표시) 숨김 */
 img.player-art-img {
-    /* 깨진 이미지 fallback: alt 텍스트가 표시되는 것 방지 */
     color: transparent;
-    /* 폰트 사이즈를 0으로 만들어 alt가 보이지 않게 */
     font-size: 0;
 }
+
 
 /* ═══════════════════════════════════════════════════════════
-   ▼▼▼ 배틀필드 이미지 안전망 ▼▼▼
+   3. 세로 게이지 (HP / MP / EXP)
    ═══════════════════════════════════════════════════════════ */
-img.combatant-art[src=\"\"],
-img.combatant-art:not([src]) {
-    display: none !important;
+
+.gauges-row {
+    display: flex;
+    justify-content: space-around;
+    align-items: flex-end;
+    gap: 12px;
+    padding: 12px 8px;
+    background: rgba(13, 17, 23, 0.4);
+    border: 1px solid var(--border-subtle);
+    border-radius: 4px;
 }
-img.combatant-art {
-    color: transparent;
-    font-size: 0;
+
+.gauge-col {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 6px;
+    flex: 1;
+}
+
+.gauge-label {
+    font-family: 'Cormorant Garamond', serif;
+    font-size: 10px;
+    letter-spacing: 0.2em;
+    text-transform: uppercase;
+    color: var(--text-muted);
+}
+
+.gauge-bar {
+    width: 18px;
+    height: 130px;
+    background: var(--bg-darkest);
+    border: 1px solid var(--border);
+    border-radius: 2px;
+    position: relative;
+    overflow: hidden;
+    box-shadow: inset 0 0 6px rgba(0, 0, 0, 0.6);
+}
+
+.gauge-fill {
+    position: absolute;
+    left: 0;
+    bottom: 0;
+    width: 100%;
+    transition: height 0.4s ease;
+    box-shadow: 0 0 6px currentColor;
+}
+
+.gauge-fill.hp  { background: linear-gradient(0deg, var(--hp-color-2) 0%, var(--hp-color) 100%); color: var(--hp-color); }
+.gauge-fill.mp  { background: linear-gradient(0deg, var(--mp-color-2) 0%, var(--mp-color) 100%); color: var(--mp-color); }
+.gauge-fill.exp { background: linear-gradient(0deg, var(--exp-color-2) 0%, var(--exp-color) 100%); color: var(--exp-color); }
+
+.gauge-value {
+    font-family: 'Cormorant Garamond', serif;
+    font-size: 11px;
+    color: var(--text-dim);
+    letter-spacing: 0.05em;
+    text-align: center;
+}
+.gauge-value .v-cur {
+    color: var(--text-title);
+    font-weight: 600;
+}
+
+
+/* ═══════════════════════════════════════════════════════════
+   4. 능력치 그리드
+   ═══════════════════════════════════════════════════════════ */
+
+#stat-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 6px;
+    padding: 10px;
+    background: rgba(13, 17, 23, 0.4);
+    border: 1px solid var(--border-subtle);
+    border-radius: 4px;
+}
+
+.stat-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 4px 8px;
+    background: rgba(31, 42, 54, 0.4);
+    border-radius: 3px;
+    font-family: 'Cormorant Garamond', serif;
+    font-size: 12px;
+    letter-spacing: 0.1em;
+}
+
+.stat-row > span:first-child {
+    color: var(--text-muted);
+    text-transform: uppercase;
+}
+
+.stat-row .v {
+    color: var(--accent-cream);
+    font-weight: 600;
+    font-size: 13px;
+}
+
+
+/* ═══════════════════════════════════════════════════════════
+   5. NEW GAME 영역
+   ═══════════════════════════════════════════════════════════ */
+
+.player-actions {
+    margin-top: auto;
+    padding-top: 12px;
+    border-top: 1px solid var(--border-subtle);
+}
+
+#btn-restart {
+    width: 100%;
+    padding: 12px;
+    font-size: 12px;
+    letter-spacing: 0.2em;
 }

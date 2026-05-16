@@ -1,90 +1,219 @@
 /* ═══════════════════════════════════════════════════════════
-   base.css
-   - CSS 변수 (색상 팔레트)
-   - 리셋 + body
-   - 공통 버튼 (.btn)
-   - 토스트 (.toast)
-   - 공통 애니메이션
+   Base.css — 다크 판타지 RPG 기본 스타일
+   ★ 통째 교체용 ★
+
+   디자인 컨셉:
+   - Frieren 스타일 차분한 다크 판타지
+   - muted dark blue-gray + deep forest green + faded gold + cream
+   - Gowun Batang(한글) + Cormorant Garamond(영문)
+   ═══════════════════════════════════════════════════════════ */
+
+@import url('https://fonts.googleapis.com/css2?family=Gowun+Batang:wght@400;700&family=Cormorant+Garamond:ital,wght@0,400;0,500;0,600;0,700;1,400&display=swap');
+
+
+/* ═══════════════════════════════════════════════════════════
+   색상 팔레트 (CSS Variables)
    ═══════════════════════════════════════════════════════════ */
 
 :root {
-    --bg-darkest:    #0a1419;
-    --bg-dark:       #0f1d24;
-    --bg-panel:      #142632;
-    --bg-panel-2:    #1a3140;
-    --border:        #1e3a4a;
-    --border-active: #2dd4bf;
-    --text-main:     #d6e7ed;
-    --text-dim:      #7a96a3;
-    --text-muted:    #4f6976;
-    --accent-cyan:   #2dd4bf;
-    --accent-blue:   #38bdf8;
-    --accent-warn:   #fbbf24;
-    --hp-red:        #ef4444;
-    --mp-blue:       #3b82f6;
-    --atb-cyan:      #22d3ee;
-    --skill-yellow:  #facc15;
-    --enemy-orange:  #fb923c;
+    /* 배경 (어두운 숲의 밤) */
+    --bg-darkest:    #0d1117;
+    --bg-darker:     #141a22;
+    --bg-dark:       #1a232e;
+    --bg-panel:      #1f2a36;
+    --bg-panel-2:    #243140;
+    --bg-overlay:    rgba(15, 22, 32, 0.85);
+
+    /* 강조색 */
+    --accent-gold:      #c9a55a;
+    --accent-gold-dim:  #8c7340;
+    --accent-green:     #5e8a6d;
+    --accent-green-dim: #3d5a48;
+    --accent-cream:     #d4cdb6;
+
+    /* 상태색 */
+    --hp-color:    #a04848;
+    --hp-color-2:  #6b3030;
+    --mp-color:    #4a6a8a;
+    --mp-color-2:  #2f4660;
+    --exp-color:   #c9a55a;
+    --exp-color-2: #8c7340;
+
+    /* 텍스트 */
+    --text-main:   #d4cdb6;
+    --text-dim:    #9a9079;
+    --text-muted:  #5d5847;
+    --text-title:  #e8e0c4;
+
+    /* 테두리 */
+    --border:        #2d3a4a;
+    --border-gold:   #8c7340;
+    --border-subtle: rgba(201, 165, 90, 0.15);
+
+    /* 메시지 색 (배틀 로그) */
+    --log-damage:  #d68a4c;
+    --log-heal:    #7aa882;
+    --log-crit:    #d4af5a;
+    --log-skill:   #9a8ec4;
+    --log-system:  #8c8a78;
+
+    /* 그림자 */
+    --shadow-soft:  0 4px 16px rgba(0, 0, 0, 0.4);
+    --shadow-deep:  0 8px 32px rgba(0, 0, 0, 0.6);
+    --shadow-inner: inset 0 1px 0 rgba(255, 255, 255, 0.03);
 }
 
-* { box-sizing: border-box; margin: 0; padding: 0; }
+
+/* ═══════════════════════════════════════════════════════════
+   글로벌 리셋 + 폰트
+   ═══════════════════════════════════════════════════════════ */
+
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+}
+
+html, body {
+    height: 100%;
+    width: 100%;
+    overflow: hidden;
+}
 
 body {
-    background: var(--bg-darkest);
+    font-family: 'Gowun Batang', 'Cormorant Garamond', 'Noto Serif KR', serif;
+    font-size: 14px;
     color: var(--text-main);
-    font-family: 'JetBrains Mono', 'D2Coding', 'Menlo', 'Consolas', monospace;
-    font-size: 12px;
-    min-height: 100vh;
-    padding: 12px;
-    background-image:
-        linear-gradient(rgba(45, 212, 191, 0.02) 1px, transparent 1px),
-        linear-gradient(90deg, rgba(45, 212, 191, 0.02) 1px, transparent 1px);
-    background-size: 24px 24px;
+    background: var(--bg-darkest);
+    line-height: 1.5;
+    letter-spacing: 0.01em;
+
+    /* 배경: 어두운 숲의 밤 그라데이션
+       사용자가 배경 이미지를 다운받으면:
+       background-image: url('/img/bg/forest_night.jpg');
+       background-size: cover; background-position: center;
+       background-blend-mode: overlay; */
+    background:
+        radial-gradient(ellipse at top, #1a2530 0%, transparent 50%),
+        radial-gradient(ellipse at bottom, #0f1820 0%, transparent 50%),
+        linear-gradient(180deg, #0d1117 0%, #141a22 50%, #0d1117 100%);
+    background-attachment: fixed;
 }
 
-/* ── 공통 버튼 ── */
-.btn {
-    width: 100%;
-    padding: 8px 12px;
+/* 미세 입자/먼지 효과 (배경 위) */
+body::before {
+    content: '';
+    position: fixed;
+    inset: 0;
+    pointer-events: none;
+    background-image:
+        radial-gradient(circle at 20% 30%, rgba(201, 165, 90, 0.02) 0%, transparent 1%),
+        radial-gradient(circle at 80% 70%, rgba(201, 165, 90, 0.015) 0%, transparent 1%),
+        radial-gradient(circle at 50% 50%, rgba(94, 138, 109, 0.02) 0%, transparent 1.5%);
+    background-size: 200px 200px, 250px 250px, 300px 300px;
+    z-index: 1;
+}
+
+
+/* ═══════════════════════════════════════════════════════════
+   공용 클래스
+   ═══════════════════════════════════════════════════════════ */
+
+.en {
+    font-family: 'Cormorant Garamond', serif;
+    letter-spacing: 0.05em;
+}
+
+.en-caps {
+    font-family: 'Cormorant Garamond', serif;
+    text-transform: uppercase;
+    letter-spacing: 0.15em;
+}
+
+
+/* ═══════════════════════════════════════════════════════════
+   스크롤바
+   ═══════════════════════════════════════════════════════════ */
+
+::-webkit-scrollbar { width: 8px; height: 8px; }
+::-webkit-scrollbar-track {
+    background: rgba(13, 17, 23, 0.4);
+    border-radius: 4px;
+}
+::-webkit-scrollbar-thumb {
+    background: var(--border);
+    border-radius: 4px;
+    border: 1px solid rgba(201, 165, 90, 0.1);
+}
+::-webkit-scrollbar-thumb:hover {
+    background: var(--accent-gold-dim);
+}
+
+
+/* ═══════════════════════════════════════════════════════════
+   공용 버튼
+   ═══════════════════════════════════════════════════════════ */
+
+button, .btn {
+    font-family: 'Cormorant Garamond', 'Gowun Batang', serif;
+    font-size: 14px;
+    letter-spacing: 0.08em;
+    color: var(--text-main);
+    background: linear-gradient(180deg, var(--bg-panel-2) 0%, var(--bg-panel) 100%);
+    border: 1px solid var(--border-gold);
+    border-radius: 4px;
+    padding: 10px 18px;
+    cursor: pointer;
+    transition: all 0.25s ease;
+    position: relative;
+    overflow: hidden;
+}
+
+button:hover:not(:disabled), .btn:hover:not(:disabled) {
+    background: linear-gradient(180deg, var(--accent-green-dim) 0%, var(--bg-panel) 100%);
+    border-color: var(--accent-gold);
+    color: var(--text-title);
+    box-shadow: 0 0 12px rgba(94, 138, 109, 0.3);
+}
+
+button:active:not(:disabled), .btn:active:not(:disabled) {
+    transform: translateY(1px);
+}
+
+button:disabled, .btn:disabled {
+    opacity: 0.4;
+    cursor: not-allowed;
+    border-color: var(--border);
+}
+
+button.primary, .btn.primary {
+    background: linear-gradient(180deg, var(--accent-green-dim) 0%, #2a3f33 100%);
+    border-color: var(--accent-gold);
+    color: var(--text-title);
+}
+button.primary:hover:not(:disabled), .btn.primary:hover:not(:disabled) {
+    background: linear-gradient(180deg, var(--accent-green) 0%, var(--accent-green-dim) 100%);
+    box-shadow: 0 0 16px rgba(94, 138, 109, 0.5);
+}
+
+
+/* ═══════════════════════════════════════════════════════════
+   입력 필드
+   ═══════════════════════════════════════════════════════════ */
+
+input, select, textarea {
+    font-family: 'Cormorant Garamond', 'Gowun Batang', serif;
+    font-size: 14px;
+    color: var(--text-main);
     background: var(--bg-darkest);
     border: 1px solid var(--border);
-    color: var(--text-dim);
-    font-family: inherit;
-    font-size: 11px;
-    letter-spacing: 0.08em;
-    cursor: pointer;
-    transition: all 0.15s;
-    border-radius: 3px;
+    border-radius: 4px;
+    padding: 10px 12px;
+    outline: none;
+    transition: border-color 0.2s;
 }
-.btn:hover:not(:disabled) {
-    border-color: var(--accent-cyan);
-    color: var(--accent-cyan);
-    background: rgba(45, 212, 191, 0.08);
-}
-.btn:disabled { opacity: 0.4; cursor: not-allowed; }
 
-/* ── 토스트 알림 ── */
-.toast {
-    position: fixed;
-    top: 20px; right: 20px;
-    background: var(--bg-panel);
-    border: 1px solid var(--accent-cyan);
-    border-left: 3px solid var(--accent-cyan);
-    padding: 10px 16px;
-    border-radius: 3px;
-    font-size: 11px;
-    z-index: 2000;
-    transform: translateX(110%);
-    transition: transform 0.3s;
-    max-width: 300px;
-}
-.toast.active { transform: translateX(0); }
-.toast.warn   { border-color: var(--accent-warn); border-left-color: var(--accent-warn); }
-.toast.error  { border-color: var(--hp-red); border-left-color: var(--hp-red); }
-
-/* ── AI 밸런싱 표시 (전투 시작 전 placeholder) ── */
-.ai-balancing {
-    text-align: center;
-    padding: 30px;
-    color: var(--accent-cyan);
+input:focus, select:focus, textarea:focus {
+    border-color: var(--accent-gold);
+    box-shadow: 0 0 8px rgba(201, 165, 90, 0.2);
 }

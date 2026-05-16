@@ -1,168 +1,363 @@
 /* ═══════════════════════════════════════════════════════════
-   ai-monitor.css
-   - 우측 AI Monitor 패널
-   - 펜타곤 차트
-   - 시뮬레이터 컨트롤 (HARD/MID/EASY)
-   - 승률 바
-   - 스테이트 튜너
-   - 시스템 터미널
+   AI_Monitor.css — 우측 AI MONITOR 패널 (시각적 더미)
+   ★ 통째 교체용 ★
+
+   4 모듈:
+   1. RADAR CHART (BALANCE STATE)
+   2. SIMULATOR CONTROL
+   3. STATE TUNER (슬라이더)
+   4. SYSTEM TERMINAL
    ═══════════════════════════════════════════════════════════ */
 
-/* ── 펜타곤 차트 ── */
-.pentagon-wrap {
+.ai-monitor-panel {
+    flex: 1;
+    background:
+        linear-gradient(180deg, rgba(31, 42, 54, 0.85) 0%, rgba(20, 26, 34, 0.9) 100%);
+    backdrop-filter: blur(8px);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    box-shadow: var(--shadow-soft), var(--shadow-inner);
+    padding: 16px;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    overflow-y: auto;
     position: relative;
-    aspect-ratio: 1;
-    width: 100%;
-    margin: 6px 0;
 }
-.pentagon-svg { width: 100%; height: 100%; }
-.pentagon-legend {
-    display: flex; justify-content: space-around;
-    font-size: 9px;
-    margin-top: 6px;
-}
-.legend-item {
-    display: flex; align-items: center;
-    gap: 4px;
-    color: var(--text-dim);
-}
-.legend-dot { width: 8px; height: 8px; border-radius: 50%; }
-.legend-dot.ideal   { background: var(--accent-cyan); }
-.legend-dot.current { background: var(--accent-warn); }
 
-.balance-state {
-    margin-top: 8px;
-    font-size: 10px;
-    color: var(--text-dim);
-    text-align: center;
+.ai-monitor-panel::before {
+    content: '';
+    position: absolute;
+    inset: 4px;
+    border: 1px solid var(--border-subtle);
+    border-radius: 7px;
+    pointer-events: none;
 }
-.balance-state .label {
-    color: var(--accent-cyan);
-    font-weight: 700;
+
+
+/* ═══════════════════════════════════════════════════════════
+   모듈 공통
+   ═══════════════════════════════════════════════════════════ */
+
+.ai-module {
+    background: rgba(13, 17, 23, 0.4);
+    border: 1px solid var(--border-subtle);
+    border-radius: 6px;
+    padding: 12px;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.ai-module-title {
+    font-family: 'Cormorant Garamond', serif;
+    font-size: 10px;
+    letter-spacing: 0.3em;
+    text-transform: uppercase;
+    color: var(--accent-gold);
+    padding-bottom: 6px;
+    border-bottom: 1px solid var(--border-subtle);
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+
+/* ═══════════════════════════════════════════════════════════
+   1. RADAR CHART
+   ═══════════════════════════════════════════════════════════ */
+
+.radar-module {
+    min-height: 280px;
+}
+
+.radar-chart-wrap {
+    flex: 1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    position: relative;
+}
+
+.radar-chart {
+    width: 100%;
+    max-width: 240px;
+    height: auto;
+}
+
+.radar-axis {
+    stroke: var(--border);
+    stroke-width: 0.5;
+    fill: none;
+}
+
+.radar-grid {
+    stroke: var(--border-subtle);
+    stroke-width: 0.5;
+    fill: none;
+}
+
+.radar-ideal {
+    fill: rgba(94, 138, 109, 0.1);
+    stroke: var(--accent-green);
+    stroke-width: 1;
+    stroke-dasharray: 3, 3;
+}
+
+.radar-current {
+    fill: rgba(201, 165, 90, 0.15);
+    stroke: var(--accent-gold);
+    stroke-width: 1.5;
+}
+
+.radar-label {
+    font-family: 'Cormorant Garamond', serif;
+    font-size: 9px;
+    letter-spacing: 0.15em;
+    fill: var(--text-dim);
+    text-transform: uppercase;
+}
+
+.radar-legend {
+    display: flex;
+    justify-content: center;
+    gap: 16px;
+    font-size: 9px;
+    color: var(--text-muted);
+    font-family: 'Cormorant Garamond', serif;
+    letter-spacing: 0.15em;
+    text-transform: uppercase;
+}
+
+.radar-legend-item {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+}
+
+.radar-legend-dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+}
+.radar-legend-dot.ideal { background: var(--accent-green); }
+.radar-legend-dot.current { background: var(--accent-gold); }
+
+
+/* ═══════════════════════════════════════════════════════════
+   2. SIMULATOR CONTROL
+   ═══════════════════════════════════════════════════════════ */
+
+.sim-buttons {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 6px;
+}
+
+.sim-btn {
+    padding: 8px;
+    font-family: 'Cormorant Garamond', serif;
+    font-size: 11px;
+    letter-spacing: 0.2em;
+    background: var(--bg-panel);
+    border: 1px solid var(--border);
+}
+
+.sim-btn.start {
+    border-color: var(--accent-green-dim);
+    color: var(--accent-green);
+}
+.sim-btn.stop {
+    border-color: var(--hp-color-2);
+    color: var(--hp-color);
+}
+
+.difficulty-row {
+    display: grid;
+    grid-template-columns: 1fr 1fr 1fr;
+    gap: 4px;
+}
+
+.diff-btn {
+    padding: 6px;
+    font-family: 'Cormorant Garamond', serif;
+    font-size: 10px;
+    letter-spacing: 0.15em;
+    background: var(--bg-panel);
+    border: 1px solid var(--border);
+}
+
+.diff-btn.active {
+    background: rgba(201, 165, 90, 0.1);
+    border-color: var(--accent-gold);
+    color: var(--accent-cream);
+}
+
+
+/* 승률 표시 */
+.win-rates {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+
+.win-rate-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-family: 'Cormorant Garamond', serif;
+    font-size: 10px;
     letter-spacing: 0.1em;
 }
 
-/* ── 시뮬레이터 컨트롤 ── */
-.sim-controls {
-    display: flex;
-    gap: 6px;
-    margin-bottom: 10px;
+.win-rate-label {
+    flex: 0 0 80px;
+    color: var(--text-muted);
+    text-transform: uppercase;
 }
-.sim-controls .btn {
+
+.win-rate-bar {
     flex: 1;
-    padding: 6px;
-    font-size: 10px;
-}
-.sim-controls .btn.start {
-    border-color: var(--accent-cyan);
-    color: var(--accent-cyan);
-    background: rgba(45, 212, 191, 0.1);
-}
-
-/* ── AI Level 토글 (HARD/MID/EASY) ── */
-.ai-level-row {
-    display: flex; align-items: center;
-    gap: 8px;
-    font-size: 10px;
-    margin-bottom: 8px;
-}
-.ai-level-row .lbl { color: var(--text-dim); }
-.ai-level-toggle {
-    display: flex; gap: 4px;
-    margin-left: auto;
-}
-.ai-level-btn {
-    padding: 3px 8px;
-    background: var(--bg-darkest);
-    border: 1px solid var(--border);
-    color: var(--text-dim);
-    font-family: inherit;
-    font-size: 9px;
-    cursor: pointer;
-    border-radius: 2px;
-}
-.ai-level-btn.active {
-    background: rgba(45, 212, 191, 0.15);
-    border-color: var(--accent-cyan);
-    color: var(--accent-cyan);
-}
-
-/* ── 승률 바 ── */
-.winrate-bars {
-    display: flex; flex-direction: column;
-    gap: 4px;
-    margin: 8px 0 6px 0;
-}
-.wr-row {
-    display: flex; align-items: center;
-    gap: 6px; font-size: 9px;
-}
-.wr-label { width: 60px; color: var(--text-dim); }
-.wr-track {
-    flex: 1; height: 10px;
-    background: var(--bg-darkest);
-    border: 1px solid var(--border);
-    border-radius: 2px;
-    overflow: hidden;
-}
-.wr-fill { height: 100%; transition: width 0.5s ease; }
-.wr-fill.player { background: linear-gradient(90deg, #67e8f9, var(--accent-cyan)); }
-.wr-fill.enemy  { background: linear-gradient(90deg, #fca5a5, var(--hp-red)); }
-.wr-pct {
-    width: 36px;
-    text-align: right;
-    font-size: 9px;
-    font-weight: 700;
-}
-
-.sim-stats {
-    font-size: 9px;
-    color: var(--text-dim);
-    text-align: center;
-    margin-top: 4px;
-    border-top: 1px dashed var(--border);
-    padding-top: 6px;
-}
-.sim-stats .v { color: var(--accent-cyan); font-weight: 700; }
-
-/* ── 스테이트 튜너 ── */
-.tuner-row {
-    display: flex; flex-direction: column;
-    gap: 4px;
-    margin-bottom: 8px;
-    font-size: 9px;
-}
-.tuner-row .lbl { color: var(--text-dim); }
-.tuner-bar {
     height: 6px;
     background: var(--bg-darkest);
     border: 1px solid var(--border);
-    border-radius: 2px;
+    border-radius: 1px;
     overflow: hidden;
-}
-.tuner-bar-fill {
-    height: 100%;
-    background: linear-gradient(90deg, var(--accent-cyan), var(--accent-blue));
-    transition: width 0.3s;
 }
 
-/* ── 시스템 터미널 ── */
-.terminal {
-    background: #050a0d;
+.win-rate-fill {
+    height: 100%;
+    transition: width 0.5s ease;
+}
+.win-rate-fill.player { background: var(--accent-green); }
+.win-rate-fill.enemy  { background: var(--hp-color); }
+
+.win-rate-value {
+    flex: 0 0 32px;
+    color: var(--accent-cream);
+    font-weight: 600;
+    text-align: right;
+}
+
+.sim-stats {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 8px;
+    padding-top: 8px;
+    border-top: 1px solid var(--border-subtle);
+}
+
+.sim-stat {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 2px;
+}
+
+.sim-stat-label {
+    font-family: 'Cormorant Garamond', serif;
+    font-size: 9px;
+    color: var(--text-muted);
+    letter-spacing: 0.2em;
+    text-transform: uppercase;
+}
+
+.sim-stat-value {
+    font-family: 'Cormorant Garamond', serif;
+    font-size: 18px;
+    color: var(--accent-cream);
+    font-weight: 600;
+}
+
+
+/* ═══════════════════════════════════════════════════════════
+   3. STATE TUNER (슬라이더)
+   ═══════════════════════════════════════════════════════════ */
+
+.tuner-row {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+
+.tuner-label-row {
+    display: flex;
+    justify-content: space-between;
+    font-family: 'Cormorant Garamond', serif;
+    font-size: 10px;
+    letter-spacing: 0.15em;
+    text-transform: uppercase;
+}
+
+.tuner-label-row .label { color: var(--text-muted); }
+.tuner-label-row .value {
+    color: var(--accent-cream);
+    font-weight: 600;
+}
+
+.tuner-slider {
+    width: 100%;
+    height: 4px;
+    background: var(--bg-darkest);
+    border: 1px solid var(--border);
+    border-radius: 2px;
+    position: relative;
+    cursor: pointer;
+}
+
+.tuner-slider-fill {
+    height: 100%;
+    background: linear-gradient(90deg, var(--accent-green-dim), var(--accent-green));
+    border-radius: 1px;
+    box-shadow: 0 0 4px rgba(94, 138, 109, 0.4);
+}
+
+.tuner-slider-thumb {
+    position: absolute;
+    top: 50%;
+    transform: translate(-50%, -50%);
+    width: 10px;
+    height: 10px;
+    background: var(--accent-gold);
+    border: 1px solid var(--bg-darkest);
+    border-radius: 50%;
+    box-shadow: 0 0 6px rgba(201, 165, 90, 0.5);
+}
+
+.tuner-error {
+    text-align: center;
+    font-family: 'Cormorant Garamond', serif;
+    font-size: 10px;
+    color: var(--text-muted);
+    letter-spacing: 0.1em;
+    padding-top: 4px;
+    border-top: 1px solid var(--border-subtle);
+}
+.tuner-error .err-val {
+    color: var(--accent-gold);
+    font-weight: 600;
+}
+
+
+/* ═══════════════════════════════════════════════════════════
+   4. SYSTEM TERMINAL
+   ═══════════════════════════════════════════════════════════ */
+
+.system-terminal-box {
+    background: rgba(0, 0, 0, 0.4);
     border: 1px solid var(--border);
     border-radius: 3px;
-    padding: 8px;
-    max-height: 100px;
-    overflow-y: auto;
-    font-size: 9px;
-    line-height: 1.5;
-}
-.terminal-line {
-    color: var(--text-dim);
-    white-space: nowrap;
+    padding: 8px 10px;
+    font-family: 'Cormorant Garamond', monospace;
+    font-size: 10px;
+    color: var(--accent-green);
+    letter-spacing: 0.05em;
     overflow: hidden;
     text-overflow: ellipsis;
+    white-space: nowrap;
 }
-.terminal-line .ts { color: var(--text-muted); }
-.terminal-line.ok   { color: #a7f3d0; }
-.terminal-line.warn { color: var(--accent-warn); }
+
+.system-terminal-box .terminal-time {
+    color: var(--text-muted);
+    margin-right: 6px;
+}

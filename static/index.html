@@ -18,6 +18,22 @@
 </head>
 <body>
 
+<!-- ═══════════════════════════════════════════════════════════════════
+     [영역 1]  최상단 — 게임 타이틀 헤더
+     ═══════════════════════════════════════════════════════════════════ -->
+<div id="app">
+    <!-- ── 상단 헤더 (게임 타이틀) ── -->
+    <div class="app-header">
+        <div class="app-title">AI RPG Engine</div>
+        <div class="app-subtitle">시뮬레이션 기반 자동 밸런스 시스템</div>
+    </div>
+
+    <!-- ── 3컬럼 대시보드 ── -->
+    <div class="dashboard">
+        <!-- left-col / center-col / right-col -->
+    </div>
+</div>
+
 <!-- ═══════════════════════════════════════════════════════════
      상단 브랜드 바
      ═══════════════════════════════════════════════════════════ -->
@@ -38,352 +54,351 @@
      LEFT: PLAYER 패널
      ────────────────────────────────────────────────────── -->
 <div class="left-col">
-    <div class="panel">
-        <div class="panel-title">PLAYER: <span id="player-id">-- (LV --)</span></div>
+    <div class="player-panel">
 
+        <!-- 1. PLAYER 타이틀 -->
+        <div class="player-header">
+            <div class="player-header-icon">◆</div>
+            <div class="player-header-text">
+                <div class="player-header-label">Player</div>
+                <div id="player-id">HERO (LV 1 전사)</div>
+            </div>
+        </div>
+
+        <!-- 2. 캐릭터 초상화 -->
         <div class="player-art">
-    <!-- ★ 이미지 슬롯 활성화 — CharSprite.js가 src 동적 갱신 -->
-    <!-- 이미지가 없으면 onerror로 자동 숨김 → 이모지 표시 -->
             <img id="player-portrait" class="player-art-img"
-                src="" alt=""
-                onerror="this.style.display='none'; document.getElementById('player-icon').style.display='';" />
+                 src="" alt=""
+                 onerror="this.style.display='none'; document.getElementById('player-icon').style.display='';" />
             <div class="player-art-icon" id="player-icon">⚔</div>
         </div>
 
-        <!-- HP / MP / EXP / ATB 4개 세로 게이지 -->
-        <div class="stats-bars">
-            <div class="stat-bar">
-                <div class="stat-bar-label">HP</div>
-                <div class="stat-bar-track">
-                    <div id="hp-fill" class="stat-bar-fill hp" style="height:100%"></div>
+        <!-- 3. HP/MP/EXP 세로 게이지 -->
+        <div class="gauges-row">
+            <div class="gauge-col">
+                <div class="gauge-label">HP</div>
+                <div class="gauge-bar">
+                    <div class="gauge-fill hp" id="hp-fill" style="height: 100%;"></div>
                 </div>
-                <div class="stat-bar-values">
-                    <div class="cur" id="hp-cur">--</div>
-                    <div class="max" id="hp-max">--</div>
-                </div>
-            </div>
-            <div class="stat-bar">
-                <div class="stat-bar-label">MP</div>
-                <div class="stat-bar-track">
-                    <div id="mp-fill" class="stat-bar-fill mp" style="height:100%"></div>
-                </div>
-                <div class="stat-bar-values">
-                    <div class="cur" id="mp-cur">--</div>
-                    <div class="max" id="mp-max">--</div>
+                <div class="gauge-value">
+                    <span class="v-cur" id="hp-cur">100</span>
+                    <span> / </span>
+                    <span id="hp-max">100</span>
                 </div>
             </div>
-            <div class="stat-bar">
-                <div class="stat-bar-label">EXP</div>
-                <div class="stat-bar-track">
-                    <div id="exp-fill" class="stat-bar-fill exp" style="height:0%"></div>
+            <div class="gauge-col">
+                <div class="gauge-label">MP</div>
+                <div class="gauge-bar">
+                    <div class="gauge-fill mp" id="mp-fill" style="height: 100%;"></div>
                 </div>
-                <div class="stat-bar-values">
-                    <div class="cur" id="exp-cur">0</div>
-                    <div class="max" id="exp-max">--</div>
+                <div class="gauge-value">
+                    <span class="v-cur" id="mp-cur">30</span>
+                    <span> / </span>
+                    <span id="mp-max">30</span>
+                </div>
+            </div>
+            <div class="gauge-col">
+                <div class="gauge-label">EXP</div>
+                <div class="gauge-bar">
+                    <div class="gauge-fill exp" id="exp-fill" style="height: 0%;"></div>
+                </div>
+                <div class="gauge-value">
+                    <span class="v-cur" id="exp-cur">0</span>
+                    <span> / </span>
+                    <span id="exp-max">100</span>
                 </div>
             </div>
         </div>
 
-        <!-- 능력치 표 (전투 중에는 effective_* 기준으로 갱신) -->
-        <div class="stat-grid" id="stat-grid">
-            <div class="stat-row"><span>STG</span><span class="v">--</span></div>
-            <div class="stat-row"><span>SP</span><span class="v">--</span></div>
-            <div class="stat-row"><span>ARM</span><span class="v">--</span></div>
-            <div class="stat-row"><span>SPARM</span><span class="v">--</span></div>
-            <div class="stat-row"><span>SPD</span><span class="v">--</span></div>
-            <div class="stat-row"><span>LUC</span><span class="v">--</span></div>
+        <!-- 4. 능력치 그리드 (JS가 채움) -->
+        <div id="stat-grid"></div>
+
+        <!-- 5. NEW GAME -->
+        <div class="player-actions">
+            <button id="btn-restart" class="primary">▶ New Game</button>
         </div>
 
-        <!-- ── 버프 / 디버프 영역 (전투 중에만 채워짐) ── -->
-        <div id="player-status" class="player-status">
-            <div id="player-buffs" class="status-list"></div>
-            <div id="player-debuffs" class="status-list"></div>
-        </div>
     </div>
-
-    <button id="btn-restart" class="btn">⚡ NEW GAME</button>
 </div>
 
 <!-- ──────────────────────────────────────────────────────
      CENTER: 배틀 / 탐험
      ────────────────────────────────────────────────────── -->
 <div class="center-col">
-    <div class="battle-zone">
-        <div class="battle-header">
-            <div class="battle-title">LIVE BATTLE: <span class="field-name" id="field-name">FIELD</span></div>
-            <div class="field-name" id="turn-counter">TURN --</div>
-        </div>
 
-        <!-- ═════════════════════ 탐험 모드 ═════════════════════ -->
-        <div id="explore-mode" style="display:none;">
-            <div class="explore-hero">
-                <div class="explore-title">PEACEFUL FIELD</div>
-                <div class="explore-sub">탐험을 시작하세요</div>
-                <button class="btn explore-btn" id="btn-explore">▶ EXPLORE</button>
-                <div class="explore-progress" id="explore-progress">
-                    <div class="ep-row">
-                        <span class="ep-label">진행 턴</span>
-                        <span class="ep-value" id="explore-turn-value">0</span>
-                        <span class="ep-sep">/</span>
-                        <span class="ep-target" id="explore-turn-target">50</span>
-                    </div>
-                    <div class="ep-bar">
-                        <div class="ep-bar-fill" id="explore-turn-fill" style="width:0%"></div>
-                        <div class="ep-marker midboss" style="left:50%;" title="중간 보스 (Turn 25)"></div>
-                    </div>
-                    <div class="ep-hint" id="explore-turn-hint">최종 보스까지 50턴</div>
-                </div>
-            </div>
+    <!-- ━━━━━━━━ 중앙 메인 (탐험/전투 토글) ━━━━━━━━ -->
+    <div class="center-main">
 
-            <div class="explore-info-grid">
-                <div class="explore-card">
-                    <div class="explore-card-title">🎒 INVENTORY</div>
-                    <div id="explore-inventory" class="explore-card-body">
-                        <div class="explore-empty">아이템이 없습니다</div>
-                    </div>
-                </div>
-                <div class="explore-card">
-                    <div class="explore-card-title">✦ SKILLS</div>
-                    <div id="explore-skills" class="explore-card-body">
-                        <div class="explore-empty">학습한 스킬 없음</div>
-                    </div>
-                </div>
+        <!-- 헤더 -->
+        <div class="field-header">
+            <div class="field-title">Live Battle : Field</div>
+            <div class="field-turn">
+                <span>Turn</span>
+                <span class="turn-num" id="explore-turn-display">1</span>
             </div>
         </div>
 
-        <!-- ═════════════════════ 배틀 모드 ═════════════════════ -->
-        <div id="battle-mode" style="display:none;">
-            <!-- ════════════════════════════════════════════════════════
-                 배틀 필드 — 5분할 그리드 구조
-                   슬롯1: 플레이어
-                   슬롯2: 공백 (거리감)
-                   슬롯3~5: 몬스터 (단일전 = 슬롯3, 다대일 = 3+4+5)
+        <!-- ── 탐험 모드 ── -->
+        <div class="mode-explore">
 
-                 ▼▼▼ [배경 이미지: 배틀 필드 배경] ▼▼▼
-                 권장 크기: 가로형 PNG (1280x500, 약 2.5:1 비율)
-                 파일: static/img/bg_field.png
-                 사용 방법: css/battle.css 안 .battle-stage 의
-                          background-image 한 줄 활성화
-                 ════════════════════════════════════════════════════════ -->
-            <div class="battle-stage">
-                <!-- ─── 슬롯 1: 플레이어 ─── -->
-                <div class="battle-slot slot-player">
-                            <div class="combatant player">
-                                <img class="combatant-art" id="player-combatant-art-img"
-                                    src="" alt=""
-                                    onerror="this.style.display='none'; document.getElementById('player-combatant-art').style.display='';" />
-                                <div class="combatant-art" id="player-combatant-art">⚔</div>
-                                <div class="combatant-name" id="player-combatant-name">-</div>
-                                <div class="combatant-meta" id="player-combatant-meta">LV --</div>
-                                <div class="combatant-bars">
-                            <div class="cb-row">
-                                <span class="cb-label">HP</span>
-                                <div class="cb-track"><div id="player-cb-hp" class="cb-fill hp" style="width:100%"></div></div>
-                                <span class="cb-text" id="player-cb-hp-text">--/--</span>
+            <!-- 필드 이미지 + 제목 -->
+            <div class="field-scene">
+                <div class="field-name">Peaceful Field</div>
+                <div class="field-subtitle">탐험을 시작하세요</div>
+            </div>
+
+            <!-- EXPLORE 버튼 + 진행 바 -->
+            <div class="explore-action">
+                <button id="btn-explore">▶ Explore</button>
+                <div class="progression-wrap">
+                    <div class="progression-bar">
+                        <div class="progression-fill" id="explore-progress" style="width: 10%;"></div>
+                        <div class="boss-marker" style="left: 40%;"></div>
+                        <div class="boss-marker" style="left: 90%;"></div>
+                    </div>
+                    <div class="progression-text">
+                        <span>진행 턴 <span id="turn-current">5</span> / 50</span>
+                        <span>중간 보스까지 <span id="mid-boss-eta">20</span>턴 · 최종까지 <span id="final-boss-eta">45</span>턴</span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 인벤토리 + 스킬 (좌우 분할) -->
+            <div class="explore-info-row">
+                <!-- 인벤토리 -->
+                <div class="explore-info-card">
+                    <div class="card-title">Inventory</div>
+                    <div class="card-content" id="inventory-list">
+                        <!-- JS가 채움. 예시:
+                        <div class="inventory-item">
+                            <span class="item-name">HP_S_potion</span>
+                            <span class="item-qty">×2</span>
+                        </div>
+                        -->
+                    </div>
+                </div>
+
+                <!-- 스킬 -->
+                <div class="explore-info-card">
+                    <div class="card-title">Skills</div>
+                    <div class="card-content">
+                        <div class="skill-grid" id="skill-grid">
+                            <!-- JS가 채움. 예시 (9슬롯):
+                            <div class="skill-slot active">
+                                <div class="skill-icon">⚒</div>
+                                <div class="skill-name">강타 I</div>
                             </div>
-                            <div class="cb-row">
-                                <span class="cb-label">MP</span>
-                                <div class="cb-track"><div id="player-cb-mp" class="cb-fill mp" style="width:100%"></div></div>
-                                <span class="cb-text" id="player-cb-mp-text">--/--</span>
-                            </div>
+                            <div class="skill-slot empty"></div>
+                            -->
                         </div>
                     </div>
                 </div>
+            </div>
 
-                <!-- ─── 슬롯 2: 공백 (거리감) ─── -->
-                <div class="battle-slot slot-gap"></div>
+        </div>
 
-                <!-- ─── 슬롯 3: 몬스터 (단일전 메인 위치 / 다대일 슬롯 0) ─── -->
-                <div class="battle-slot slot-enemy">
-                    <div class="combatant enemy" id="enemy-slot-1" data-slot="0">
-                        <div id="target-tag" class="target-tag" style="display:none;">▶ TARGET</div>
-                        <!-- ════════════════════════════════════════════════════════
-                             ▼ [이미지: 몬스터 도트 - 슬롯 3] ▼
-                             권장 크기: 96x96 PNG (투명배경)
-                             js/state.js의 ENEMY_SPRITES 매핑 활성화 시
-                             refreshBattle()에서 자동으로 종류별 이미지 변경
-                             ════════════════════════════════════════════════════════ -->
-                        <img class="combatant-art" id="enemy-art-img"
-                            src="" alt=""
-                            onerror="this.style.display='none'; document.getElementById('enemy-art').style.display='';" />
+        <!-- ── 배틀 모드 (배틀필드 + 액션바) ── -->
+        <div class="mode-battle">
+            <div class="battlefield">
+                <!-- 적 슬롯 3개 -->
+                <div class="battle-slot enemy-slot" id="enemy-slot-1">
+                    <div class="combatant enemy">
+                        <img class="combatant-art" id="enemy-art-img" src="" alt="" />
                         <div class="combatant-art" id="enemy-art">👹</div>
-                        <div class="combatant-name" id="enemy-name">--</div>
+                        <div class="combatant-name" id="enemy-name">-</div>
                         <div class="combatant-meta" id="enemy-meta">LV --</div>
                         <div class="combatant-bars">
-                            <div class="cb-row">
-                                <span class="cb-label">HP</span>
-                                <div class="cb-track"><div id="enemy-cb-hp" class="cb-fill hp" style="width:100%"></div></div>
-                                <span class="cb-text" id="enemy-cb-hp-text">--/--</span>
+                            <div class="cb-bar hp">
+                                <div class="cb-fill" id="enemy-cb-hp" style="width: 100%;"></div>
                             </div>
+                            <div class="cb-text" id="enemy-cb-hp-text">100/100</div>
                         </div>
                     </div>
                 </div>
+                <!-- slot 2, 3은 동일 패턴 — enemy-slot-2, enemy-art-2-img, enemy-art-2, enemy-name-2, ... -->
 
-                <!-- ─── 슬롯 4: 추가 몬스터 (다대일 슬롯 1) ─── -->
-                <div class="battle-slot slot-enemy">
-                    <!-- ════════════════════════════════════════════════════════
-                         ▼ [이미지: 몬스터 도트 - 슬롯 4 (다대일)] ▼
-                         권장 크기: 96x96 PNG (투명배경)
-                         단일전에서는 display:none.
-                         다대일 (enemies.length >= 2) 일 때 자동 표시.
-                         ════════════════════════════════════════════════════════ -->
-                    <div class="combatant enemy" id="enemy-slot-2" data-slot="1" style="display:none;">
-                        <div class="target-tag enemy-target-tag-2" style="display:none;">▶ TARGET</div>
-                        <!-- <img class="combatant-art" id="enemy-art-2"
-                                  src="/img/sprite_goblin.png" alt="" /> -->
-                        <img class="combatant-art" id="enemy-art-2-img"
-                             src="" alt=""
-                             onerror="this.style.display='none'; document.getElementById('enemy-art-2').style.display='';" />
-                        <div class="combatant-art" id="enemy-art-2">👺</div>
-                        <div class="combatant-name" id="enemy-name-2">--</div>
-                        <div class="combatant-meta" id="enemy-meta-2">LV --</div>
-                        <div class="combatant-bars">
-                            <div class="cb-row">
-                                <span class="cb-label">HP</span>
-                                <div class="cb-track"><div id="enemy-cb-hp-2" class="cb-fill hp" style="width:100%"></div></div>
-                                <span class="cb-text" id="enemy-cb-hp-text-2">--/--</span>
-                            </div>
-                        </div>
-                    </div>
-                </div>
+                <!-- 턴 인디케이터 -->
+                <div class="turn-indicator" id="turn-indicator">▶ Your Turn</div>
 
-                <!-- ─── 슬롯 5: 추가 몬스터 (다대일 슬롯 2) ─── -->
-                <div class="battle-slot slot-enemy">
-                    <div class="combatant enemy" id="enemy-slot-3" data-slot="2" style="display:none;">
-                        <div class="target-tag enemy-target-tag-3" style="display:none;">▶ TARGET</div>
-                        <img class="combatant-art" id="enemy-art-3-img"
-                             src="" alt=""
-                             onerror="this.style.display='none'; document.getElementById('enemy-art-3').style.display='';" />
-                        <div class="combatant-art" id="enemy-art-3">👺</div>
-                        <div class="combatant-name" id="enemy-name-3">--</div>
-                        <div class="combatant-meta" id="enemy-meta-3">LV --</div>
+                <!-- 플레이어 슬롯 -->
+                <div class="battle-slot slot-player">
+                    <div class="combatant player">
+                        <img class="combatant-art" id="player-combatant-art-img" src="" alt="" />
+                        <div class="combatant-art" id="player-combatant-art">⚔</div>
+                        <div class="combatant-name" id="player-combatant-name">-</div>
+                        <div class="combatant-meta" id="player-combatant-meta">LV --</div>
                         <div class="combatant-bars">
-                            <div class="cb-row">
-                                <span class="cb-label">HP</span>
-                                <div class="cb-track"><div id="enemy-cb-hp-3" class="cb-fill hp" style="width:100%"></div></div>
-                                <span class="cb-text" id="enemy-cb-hp-text-3">--/--</span>
+                            <div class="cb-bar hp">
+                                <div class="cb-fill" id="player-cb-hp" style="width: 100%;"></div>
                             </div>
+                            <div class="cb-text" id="player-cb-hp-text">100/100</div>
+                            <div class="cb-bar mp">
+                                <div class="cb-fill" id="player-cb-mp" style="width: 100%;"></div>
+                            </div>
+                            <div class="cb-text" id="player-cb-mp-text">30/30</div>
                         </div>
                     </div>
                 </div>
             </div>
+
+            <!-- 액션 바 -->
+            <div id="action-bar" class="your-turn">
+                <button id="btn-attack">⚔ Attack</button>
+                <button id="btn-skill">✦ Skill</button>
+                <button id="btn-item">▣ Item</button>
+                <button id="btn-escape">▶ Escape</button>
+            </div>
         </div>
+
     </div>
 
-    <!-- 배틀 로그 + 액션 패널 -->
-    <div class="panel">
-        <div class="panel-title">BATTLE LOG</div>
-        <div id="log-area" class="log-area">
-            <div class="log-line system">[--:--:--] 시스템 대기 중...</div>
+    <!-- ━━━━━━━━ 중앙 하단 — 배틀 로그 ━━━━━━━━ -->
+    <div class="center-log battle-log-panel">
+        <div class="battle-log-header">
+            <div class="battle-log-title">Battle Log</div>
         </div>
-
-        <!-- ════════════════════════════════════════════════════════
-             PLAYER ACTIONS — 배틀 시에만 표시 (탐험 모드에선 숨김)
-             refreshBattle() / state.inBattle 변경 시 display 토글
-             ════════════════════════════════════════════════════════ -->
-        <div id="actions-panel" style="display:none;">
-            <div class="panel-title">PLAYER ACTIONS</div>
-
-            <div class="turn-indicator" id="turn-indicator">▶ YOUR TURN</div>
-
-            <div class="submenu" id="skill-menu">
-                <div class="submenu-title">SELECT SKILL</div>
-                <div class="submenu-list" id="skill-list"></div>
-            </div>
-            <div class="submenu" id="item-menu">
-                <div class="submenu-title">SELECT ITEM</div>
-                <div class="submenu-list" id="item-list"></div>
-            </div>
-
-            <div class="action-bar" id="action-bar">
-                <button id="btn-attack" class="action-btn attack" disabled>ATTACK</button>
-                <button id="btn-skill"  class="action-btn skill"  disabled>SKILLS [F1]</button>
-                <button id="btn-item"   class="action-btn item"   disabled>ITEMS [F2]</button>
-                <button id="btn-escape" class="action-btn escape" disabled>ESCAPE</button>
-            </div>
-        </div>
+        <div id="battle-log"></div>
     </div>
+
 </div>
 
 <!-- ──────────────────────────────────────────────────────
      RIGHT: AI Monitor 패널
      ────────────────────────────────────────────────────── -->
 <div class="right-col">
-    <div class="panel">
-        <div class="panel-title">AI MONITOR: BALANCE STATE</div>
-        <div class="pentagon-wrap">
-            <svg class="pentagon-svg" viewBox="0 0 220 220">
-                <g id="pentagon-bg"></g>
-                <g id="pentagon-labels"></g>
-                <polygon id="pentagon-ideal" fill="rgba(45, 212, 191, 0.15)"
-                         stroke="#2dd4bf" stroke-width="1.5" stroke-dasharray="4 2"/>
-                <polygon id="pentagon-current" fill="rgba(251, 191, 36, 0.2)"
-                         stroke="#fbbf24" stroke-width="2"/>
-            </svg>
-        </div>
-        <div class="pentagon-legend">
-            <div class="legend-item"><div class="legend-dot ideal"></div>IDEAL</div>
-            <div class="legend-item"><div class="legend-dot current"></div>CURRENT</div>
-        </div>
-        <div class="balance-state">
-            CURRENT STATE: <span class="label" id="balance-label">[INIT]</span>
-        </div>
-    </div>
+    <div class="ai-monitor-panel">
 
-    <div class="panel">
-        <div class="panel-title">SIMULATOR CONTROL</div>
-        <div class="sim-controls">
-            <button class="btn start" id="btn-sim-start">▶ START SIM</button>
-            <button class="btn" id="btn-sim-stop">■ STOP</button>
-        </div>
-        <div class="ai-level-row">
-            <span class="lbl">AI LEVEL:</span>
-            <div class="ai-level-toggle">
-                <button class="ai-level-btn" data-level="hard">HARD</button>
-                <button class="ai-level-btn active" data-level="normal">MID</button>
-                <button class="ai-level-btn" data-level="easy">EASY</button>
+        <!-- ── 모듈 1: RADAR CHART ── -->
+        <div class="ai-module radar-module">
+            <div class="ai-module-title">
+                <span>AI Monitor · Balance State</span>
+            </div>
+            <div class="radar-chart-wrap">
+                <svg class="radar-chart" viewBox="0 0 200 200">
+                    <!-- 그리드 (5각형 동심원) -->
+                    <polygon class="radar-grid" points="100,30 167,75 144,160 56,160 33,75" />
+                    <polygon class="radar-grid" points="100,53 145,86 130,148 70,148 55,86" />
+                    <polygon class="radar-grid" points="100,77 122,98 115,135 85,135 78,98" />
+
+                    <!-- 축 -->
+                    <line class="radar-axis" x1="100" y1="100" x2="100" y2="30" />
+                    <line class="radar-axis" x1="100" y1="100" x2="167" y2="75" />
+                    <line class="radar-axis" x1="100" y1="100" x2="144" y2="160" />
+                    <line class="radar-axis" x1="100" y1="100" x2="56" y2="160" />
+                    <line class="radar-axis" x1="100" y1="100" x2="33" y2="75" />
+
+                    <!-- 이상값 (점선 녹색) -->
+                    <polygon class="radar-ideal" points="100,40 160,77 140,155 60,155 40,77" />
+
+                    <!-- 현재값 (실선 골드) -->
+                    <polygon class="radar-current" points="100,55 150,82 135,145 65,150 50,82" />
+
+                    <!-- 라벨 -->
+                    <text class="radar-label" x="100" y="22" text-anchor="middle">Power</text>
+                    <text class="radar-label" x="175" y="78" text-anchor="start">Defense</text>
+                    <text class="radar-label" x="155" y="175" text-anchor="middle">Speed</text>
+                    <text class="radar-label" x="45" y="175" text-anchor="middle">Time</text>
+                    <text class="radar-label" x="25" y="78" text-anchor="end">Resource</text>
+                </svg>
+            </div>
+            <div class="radar-legend">
+                <div class="radar-legend-item">
+                    <div class="radar-legend-dot ideal"></div>
+                    <span>Ideal</span>
+                </div>
+                <div class="radar-legend-item">
+                    <div class="radar-legend-dot current"></div>
+                    <span>Current</span>
+                </div>
             </div>
         </div>
-        <div class="winrate-bars">
-            <div class="wr-row">
-                <div class="wr-label">WIN: PLAYER</div>
-                <div class="wr-track"><div id="wr-player" class="wr-fill player" style="width:0%"></div></div>
-                <div class="wr-pct" id="wr-player-pct">0%</div>
-            </div>
-            <div class="wr-row">
-                <div class="wr-label">WIN: ENEMY</div>
-                <div class="wr-track"><div id="wr-enemy" class="wr-fill enemy" style="width:0%"></div></div>
-                <div class="wr-pct" id="wr-enemy-pct">0%</div>
-            </div>
-        </div>
-        <div class="sim-stats">
-            AVG TURNS: <span id="sim-avg-turns" class="v">--</span> &nbsp;|&nbsp;
-            ITER: <span id="sim-iter" class="v">--</span>
-        </div>
-    </div>
 
-    <div class="panel">
-        <div class="panel-title">STATE TUNER</div>
-        <div class="tuner-row">
-            <div class="lbl">MONSTER HP <span style="color:var(--text-muted)">(±5%)</span></div>
-            <div class="tuner-bar"><div id="tuner-hp" class="tuner-bar-fill" style="width:50%"></div></div>
+        <!-- ── 모듈 2: SIMULATOR CONTROL ── -->
+        <div class="ai-module">
+            <div class="ai-module-title">
+                <span>Simulator</span>
+            </div>
+            <div class="sim-buttons">
+                <button class="sim-btn start">▶ Start Sim</button>
+                <button class="sim-btn stop">■ Stop</button>
+            </div>
+            <div class="difficulty-row">
+                <button class="diff-btn">Hard</button>
+                <button class="diff-btn active">Mid</button>
+                <button class="diff-btn">Easy</button>
+            </div>
+            <div class="win-rates">
+                <div class="win-rate-row">
+                    <span class="win-rate-label">Win Player</span>
+                    <div class="win-rate-bar">
+                        <div class="win-rate-fill player" style="width: 55%;"></div>
+                    </div>
+                    <span class="win-rate-value">55%</span>
+                </div>
+                <div class="win-rate-row">
+                    <span class="win-rate-label">Win Enemy</span>
+                    <div class="win-rate-bar">
+                        <div class="win-rate-fill enemy" style="width: 45%;"></div>
+                    </div>
+                    <span class="win-rate-value">45%</span>
+                </div>
+            </div>
+            <div class="sim-stats">
+                <div class="sim-stat">
+                    <div class="sim-stat-label">Avg Turns</div>
+                    <div class="sim-stat-value">14</div>
+                </div>
+                <div class="sim-stat">
+                    <div class="sim-stat-label">Iterations</div>
+                    <div class="sim-stat-value">8</div>
+                </div>
+            </div>
         </div>
-        <div class="tuner-row">
-            <div class="lbl">PLAYER DMG <span style="color:var(--text-muted)">(±3%)</span></div>
-            <div class="tuner-bar"><div id="tuner-dmg" class="tuner-bar-fill" style="width:50%"></div></div>
-        </div>
-        <div class="sim-stats">
-            <span id="error-margin">±0%</span> ERROR MARGIN
-        </div>
-    </div>
 
-    <div class="panel" style="padding:8px;">
-        <div class="panel-title" style="margin-bottom:6px;">SYSTEM TERMINAL</div>
-        <div class="terminal" id="terminal">
-            <div class="terminal-line">[init] dashboard ready</div>
+        <!-- ── 모듈 3: STATE TUNER ── -->
+        <div class="ai-module">
+            <div class="ai-module-title">
+                <span>State Tuner</span>
+            </div>
+            <div class="tuner-row">
+                <div class="tuner-label-row">
+                    <span class="label">Monster HP</span>
+                    <span class="value">+12%</span>
+                </div>
+                <div class="tuner-slider">
+                    <div class="tuner-slider-fill" style="width: 62%;"></div>
+                    <div class="tuner-slider-thumb" style="left: 62%;"></div>
+                </div>
+            </div>
+            <div class="tuner-row">
+                <div class="tuner-label-row">
+                    <span class="label">Player Dmg</span>
+                    <span class="value">−8%</span>
+                </div>
+                <div class="tuner-slider">
+                    <div class="tuner-slider-fill" style="width: 42%;"></div>
+                    <div class="tuner-slider-thumb" style="left: 42%;"></div>
+                </div>
+            </div>
+            <div class="tuner-error">
+                Error Margin: <span class="err-val">±4.7%</span>
+            </div>
         </div>
+
+        <!-- ── 모듈 4: SYSTEM TERMINAL ── -->
+        <div class="ai-module">
+            <div class="ai-module-title">
+                <span>System</span>
+            </div>
+            <div class="system-terminal-box">
+                <span class="terminal-time">[02:59:43]</span>
+                <span>rest: train</span>
+            </div>
+        </div>
+
     </div>
 </div>
+
 </div><!-- /.dashboard -->
 
 <!-- ═══════════════════════════════════════════════════════════

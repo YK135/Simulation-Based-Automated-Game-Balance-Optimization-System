@@ -91,11 +91,29 @@ function refreshExploreTurn() {
 
 // 평시 모드로 UI 전환 — 탐험 보이기 + 배틀/액션 패널 숨김
 function setExploreMode() {
-    document.getElementById('explore-mode').style.display = 'block';
-    document.getElementById('battle-mode').style.display = 'none';
-    document.getElementById('actions-panel').style.display = 'none';
-    refreshExploreTurn();
-    refreshExploreBackground();   // 단계별 배경 클래스 토글
+    // ★ 안전 가드: 요소 없으면 무시. 옛 ID + 새 클래스 양쪽 시도.
+ 
+    // 1) 옛 구조: #explore-mode / #battle-mode (ID로 직접 토글)
+    const oldExplore = document.getElementById('explore-mode');
+    const oldBattle  = document.getElementById('battle-mode');
+    if (oldExplore) oldExplore.style.display = 'block';
+    if (oldBattle)  oldBattle.style.display  = 'none';
+ 
+    // 2) 새 구조: body에 battle-mode 클래스 토글 (CSS가 .mode-explore /
+    //    .mode-battle 표시 제어)
+    document.body.classList.remove('battle-mode');
+ 
+    // 3) 액션 패널 숨김 (있을 때만)
+    const actions = document.getElementById('actions-panel');
+    if (actions) actions.style.display = 'none';
+ 
+    // 4) 탐험 모드 부가 처리 — 함수 존재 여부 체크
+    if (typeof refreshExploreTurn === 'function') {
+        try { refreshExploreTurn(); } catch(e) { console.warn('refreshExploreTurn:', e); }
+    }
+    if (typeof refreshExploreBackground === 'function') {
+        try { refreshExploreBackground(); } catch(e) { console.warn('refreshExploreBackground:', e); }
+    }
 }
 
 // 탐험 진행 턴에 따라 배경 클래스 자동 전환
