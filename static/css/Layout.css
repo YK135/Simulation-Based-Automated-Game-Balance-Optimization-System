@@ -1,161 +1,58 @@
 /* ═══════════════════════════════════════════════════════════
-   Layout.css — 3컬럼 그리드 (높이 통일)
-   ★ 통째 교체용 ★
+   layout.css
+   - 상단 브랜드 바
+   - 3컬럼 대시보드 그리드
+   - 공통 .panel 컨테이너
    ═══════════════════════════════════════════════════════════ */
 
-#app {
-    position: relative;
-    z-index: 2;
-    height: 100vh;
-    width: 100vw;
-    padding: 16px;
-    display: flex;
-    flex-direction: column;
-    gap: 12px;
-}
-
-/* 상단 헤더 */
-.app-header {
+.topbar {
     display: flex;
     justify-content: space-between;
     align-items: center;
-    padding: 0 12px;
-    height: 48px;
-    flex-shrink: 0;
-}
-
-.app-title {
-    font-family: 'Cormorant Garamond', serif;
-    font-size: 22px;
-    font-weight: 600;
-    color: var(--text-title);
-    letter-spacing: 0.25em;
-    text-transform: uppercase;
-}
-
-.app-subtitle {
-    font-family: 'Gowun Batang', serif;
-    font-size: 11px;
-    color: var(--text-muted);
-    letter-spacing: 0.15em;
-}
-
-
-/* ═══════════════════════════════════════════════════════════
-   대시보드 - 3컬럼 그리드
-   ───────────────────────────────────────────────────────────
-   좌 320 | 중앙 1fr | 우 340
-   세 컬럼의 높이가 grid-template-rows: 1fr 로 통일됨.
-   ═══════════════════════════════════════════════════════════ */
-
-.dashboard {
-    flex: 1;
-    display: grid;
-    grid-template-columns: 320px 1fr 340px;
-    grid-template-rows: 1fr;
-    gap: 12px;
-    min-height: 0;
-}
-
-/* 각 컬럼 — 같은 높이 보장 */
-.left-col,
-.center-col,
-.right-col {
-    min-width: 0;
-    min-height: 0;
-    display: flex;
-    flex-direction: column;
-    gap: 12px;
-    overflow: hidden;
-}
-
-
-/* 중앙 컬럼 내부 — 위(전투/탐험) + 아래(로그) */
-.center-main {
-    flex: 1;
-    min-height: 0;
-    display: flex;
-    flex-direction: column;
-}
-
-.center-log {
-    height: 200px;
-    flex-shrink: 0;
-}
-
-
-/* ═══════════════════════════════════════════════════════════
-   터미널 (#term)
-   ═══════════════════════════════════════════════════════════ */
-
-#term {
-    height: 32px;
     padding: 8px 14px;
-    background: rgba(13, 17, 23, 0.6);
+    margin-bottom: 12px;
+    background: var(--bg-panel);
     border: 1px solid var(--border);
     border-radius: 4px;
-    font-family: 'Cormorant Garamond', monospace;
-    font-size: 11px;
-    color: var(--text-muted);
-    letter-spacing: 0.1em;
-    display: flex;
-    align-items: center;
-    gap: 12px;
-    flex-shrink: 0;
 }
-
-#term .term-prompt {
-    color: var(--accent-gold);
-    font-weight: 600;
+.brand {
+    display: flex; align-items: center; gap: 10px;
+    font-size: 14px; font-weight: 700;
+    letter-spacing: 0.04em;
+    color: var(--accent-cyan);
 }
-
-
-/* ═══════════════════════════════════════════════════════════
-   토스트 (우상단 알림)
-   ═══════════════════════════════════════════════════════════ */
-
-#toast-container {
-    position: fixed;
-    top: 24px;
-    right: 24px;
-    z-index: 1000;
-    display: flex;
-    flex-direction: column;
-    gap: 8px;
+.brand-icon {
+    width: 26px; height: 26px;
+    border: 2px solid var(--accent-cyan);
+    border-radius: 3px;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 14px;
 }
-
-.toast {
-    padding: 12px 20px;
-    background: var(--bg-overlay);
-    backdrop-filter: blur(12px);
-    border: 1px solid var(--border-gold);
-    border-radius: 4px;
-    color: var(--text-title);
+.clock {
     font-size: 13px;
-    box-shadow: var(--shadow-deep);
-    animation: toastIn 0.3s ease-out;
+    color: var(--text-dim);
+    letter-spacing: 0.08em;
 }
 
-.toast.warn { border-color: var(--exp-color); }
-.toast.error { border-color: var(--hp-color); }
-
-@keyframes toastIn {
-    from { transform: translateX(20px); opacity: 0; }
-    to { transform: translateX(0); opacity: 1; }
+.dashboard {
+    display: grid;
+    grid-template-columns: 280px 1fr 320px;
+    gap: 12px;
 }
 
-
-/* ═══════════════════════════════════════════════════════════
-   반응형 (작은 화면)
-   ═══════════════════════════════════════════════════════════ */
-
-@media (max-width: 1280px) {
-    .dashboard { grid-template-columns: 280px 1fr 300px; }
+.panel {
+    background: var(--bg-panel);
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    padding: 12px;
+    margin-bottom: 12px;
 }
-
-@media (max-width: 1024px) {
-    .dashboard {
-        grid-template-columns: 260px 1fr 280px;
-        gap: 8px;
-    }
+.panel-title {
+    font-size: 10px;
+    font-weight: 700;
+    letter-spacing: 0.15em;
+    color: var(--accent-cyan);
+    margin-bottom: 10px;
+    padding-bottom: 6px;
+    border-bottom: 1px dashed var(--border);
 }

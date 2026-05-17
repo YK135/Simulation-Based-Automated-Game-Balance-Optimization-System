@@ -1,3 +1,12 @@
+/* ═══════════════════════════════════════════════════════════
+   pentagon.js — AI Monitor 펜타곤 차트
+   - drawPentagonBackground: 5겹 배경 + 축선 + 라벨
+   - pentagonPoints: 5개 좌표 계산
+   - updatePentagon: 이상치/현재치 갱신
+
+   축: POWER / DEFENSE / SPEED / TIME / RESOURCE
+   ═══════════════════════════════════════════════════════════ */
+
 function pentagonPoints(cx, cy, r, values=null) {
     const pts = [];
     for (let i = 0; i < 5; i++) {
@@ -14,11 +23,6 @@ function drawPentagonBackground() {
     const labels = ['POWER', 'DEFENSE', 'SPEED', 'TIME', 'RESOURCE'];
     const bgGroup = document.getElementById('pentagon-bg');
     const lblGroup = document.getElementById('pentagon-labels');
-
-    // ★ null 안전 가드 — 새 UI에 펜타곤 요소가 없으면 조용히 종료.
-    //   Main.js의 후속 이벤트 바인딩이 정상 실행되도록 보장.
-    if (!bgGroup || !lblGroup) return;
-
     bgGroup.innerHTML = '';
     lblGroup.innerHTML = '';
 
@@ -61,11 +65,8 @@ function drawPentagonBackground() {
 }
 
 function updatePentagon(idealVals, currentVals) {
-    // ★ null 안전 가드 — 새 UI에 동적 펜타곤 요소가 없으면 조용히 종료
-    const idealEl   = document.getElementById('pentagon-ideal');
-    const currentEl = document.getElementById('pentagon-current');
-    if (!idealEl || !currentEl) return;
-
-    idealEl.setAttribute('points', pentagonPoints(110, 110, 80, idealVals));
-    currentEl.setAttribute('points', pentagonPoints(110, 110, 80, currentVals));
+    document.getElementById('pentagon-ideal').setAttribute(
+        'points', pentagonPoints(110, 110, 80, idealVals));
+    document.getElementById('pentagon-current').setAttribute(
+        'points', pentagonPoints(110, 110, 80, currentVals));
 }

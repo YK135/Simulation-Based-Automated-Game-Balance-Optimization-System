@@ -1,267 +1,244 @@
 /* ═══════════════════════════════════════════════════════════
-   Explore.css — 탐험 모드 (PEACEFUL FIELD + 인벤토리 + 스킬)
-   ★ 통째 교체용 ★
+   explore.css
+   - 탐험 모드 (배틀 안 할 때)
+   - 진행 턴 progress 바
+   - 인벤토리/스킬 카드 그리드
+   - 인벤토리 클릭 가능 항목
    ═══════════════════════════════════════════════════════════ */
 
-.mode-explore,
-.mode-battle {
+#explore-mode {
+    min-height: 320px;
     display: flex;
     flex-direction: column;
-    gap: 12px;
-    flex: 1;
-    min-height: 0;
+    padding: 4px;
+    border-radius: 3px;
+    background-size: cover;
+    background-position: center;
+    background-repeat: no-repeat;
+    transition: background-image 0.6s ease;
+
+    /* ═══════════════════════════════════════════════════════════════
+       ▼▼▼ 탐험 필드 배경 자리 (4종) ▼▼▼
+       JS가 #explore-mode에 단계 클래스를 토글 (state.exploreTurn 기반):
+         .explore-bg-early-normal   →  turn 0~22, 일반 탐험
+         .explore-bg-pre-midboss    →  turn 23~24, 중간 보스 임박 (긴장감)
+         .explore-bg-late-normal    →  turn 25~47, 후반 탐험 (어두운 느낌)
+         .explore-bg-pre-finalboss  →  turn 48~49, 최종 보스 임박 (붉은 톤)
+
+       ▶ 권장 이미지 사이즈 (가로형 PNG/JPG):
+         900px × 400px (약 2.25:1 비율)
+         - 탐험 영역은 배틀 화면보다 약간 작음
+         - EXPLORE 버튼/진행바/카드가 위에 깔리므로
+           배경은 분위기 표현용 (디테일 너무 강하지 않게)
+         - 위에 어두운 그라데이션 자동 오버레이 (가독성용)
+
+       ▶ 파일 경로:
+         static/img/bg_explore_early.png
+         static/img/bg_explore_pre_midboss.png
+         static/img/bg_explore_late.png
+         static/img/bg_explore_pre_finalboss.png
+       ═══════════════════════════════════════════════════════════════ */
 }
 
-.mode-explore { display: flex; }
-.mode-battle { display: none; }
-
-body.battle-mode .mode-explore { display: none; }
-body.battle-mode .mode-battle { display: flex; }
-
-
-/* ═══════════════════════════════════════════════════════════
-   필드 이미지 (PEACEFUL FIELD)
-   ═══════════════════════════════════════════════════════════ */
-
-.field-scene {
-    position: relative;
-    width: 100%;
-    aspect-ratio: 16 / 7;
-    max-height: 280px;
-    /* 사용자가 필드 이미지를 다운받으면 background-image 활성화:
-       background-image: url('/img/bg/peaceful_field.jpg');
-       background-size: cover;
-       background-position: center; */
-    background:
-        radial-gradient(ellipse at 30% 40%, rgba(94, 138, 109, 0.2) 0%, transparent 60%),
-        radial-gradient(ellipse at 70% 60%, rgba(201, 165, 90, 0.1) 0%, transparent 60%),
-        linear-gradient(180deg, #1a2530 0%, #0d1a1f 100%);
-    border: 1px solid var(--border-gold);
-    border-radius: 6px;
-    overflow: hidden;
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    justify-content: center;
-    gap: 12px;
+/* ── 단계별 탐험 배경 (이미지 적용 시 주석 풀기) ── */
+/*
+#explore-mode.explore-bg-early-normal {
+    background-image: linear-gradient(rgba(10,20,25,0.55), rgba(10,20,25,0.75)),
+                      url('/img/bg_explore_early.png');
 }
-
-.field-scene::before {
-    content: '';
-    position: absolute;
-    inset: 0;
-    background: linear-gradient(180deg, rgba(13, 17, 23, 0.3) 0%, rgba(13, 17, 23, 0.6) 100%);
-    pointer-events: none;
+#explore-mode.explore-bg-pre-midboss {
+    background-image: linear-gradient(rgba(10,20,25,0.55), rgba(10,20,25,0.75)),
+                      url('/img/bg_explore_pre_midboss.png');
 }
+#explore-mode.explore-bg-late-normal {
+    background-image: linear-gradient(rgba(10,20,25,0.55), rgba(10,20,25,0.75)),
+                      url('/img/bg_explore_late.png');
+}
+#explore-mode.explore-bg-pre-finalboss {
+    background-image: linear-gradient(rgba(10,20,25,0.6), rgba(50,15,20,0.8)),
+                      url('/img/bg_explore_pre_finalboss.png');
+}
+*/
 
-.field-name {
-    position: relative;
-    font-family: 'Cormorant Garamond', serif;
-    font-size: 28px;
-    font-weight: 600;
-    letter-spacing: 0.3em;
-    text-transform: uppercase;
-    color: var(--accent-cream);
-    text-shadow: 0 2px 12px rgba(0, 0, 0, 0.8);
+.explore-hero {
     text-align: center;
+    padding: 18px 0 12px 0;
+    border-bottom: 1px dashed var(--border);
+    margin-bottom: 14px;
 }
-
-.field-subtitle {
-    position: relative;
-    font-family: 'Gowun Batang', serif;
-    font-size: 13px;
+.explore-title {
+    font-size: 14px;
+    color: var(--accent-cyan);
+    margin-bottom: 8px;
+    letter-spacing: 0.15em;
+}
+.explore-sub {
+    font-size: 11px;
     color: var(--text-dim);
-    letter-spacing: 0.1em;
-    text-shadow: 0 2px 8px rgba(0, 0, 0, 0.8);
-    text-align: center;
+    margin-bottom: 14px;
+}
+.explore-btn {
+    width: auto;
+    display: inline-block;
+    padding: 9px 28px;
+    border-color: var(--accent-cyan);
+    color: var(--accent-cyan);
+    background: rgba(45, 212, 191, 0.1);
+    font-weight: 700;
+}
+.explore-btn:hover:not(:disabled) {
+    background: rgba(45, 212, 191, 0.2);
 }
 
-
-/* ═══════════════════════════════════════════════════════════
-   EXPLORE 버튼 + 진행 바
-   ═══════════════════════════════════════════════════════════ */
-
-.explore-action {
+/* ── 진행 턴 표시 (중간/최종 보스까지 진행 상황) ── */
+.explore-progress {
+    margin-top: 14px;
+    padding: 10px 16px;
+    max-width: 380px;
+    margin-left: auto;
+    margin-right: auto;
+}
+.ep-row {
     display: flex;
-    flex-direction: column;
-    align-items: center;
-    gap: 10px;
-    padding: 12px 0;
+    align-items: baseline;
+    justify-content: center;
+    gap: 4px;
+    font-size: 11px;
+    margin-bottom: 6px;
+    letter-spacing: 0.05em;
 }
+.ep-label { color: var(--text-dim); margin-right: 6px; }
+.ep-value {
+    color: var(--accent-cyan);
+    font-weight: 700;
+    font-size: 16px;
+}
+.ep-sep { color: var(--text-muted); }
+.ep-target { color: var(--text-dim); font-size: 12px; }
 
-#btn-explore {
-    width: 180px;
-    padding: 14px;
-    font-family: 'Cormorant Garamond', serif;
-    font-size: 13px;
-    letter-spacing: 0.3em;
-    text-transform: uppercase;
-    background: linear-gradient(180deg, var(--accent-green-dim) 0%, #2a3f33 100%);
-    border: 1px solid var(--accent-gold-dim);
-    color: var(--accent-cream);
-}
-#btn-explore:hover:not(:disabled) {
-    background: linear-gradient(180deg, var(--accent-green) 0%, var(--accent-green-dim) 100%);
-    border-color: var(--accent-gold);
-    box-shadow: 0 0 16px rgba(94, 138, 109, 0.4);
-}
-
-.progression-wrap {
-    width: 100%;
-    max-width: 420px;
-    display: flex;
-    flex-direction: column;
-    gap: 6px;
-    margin: 0 auto;
-}
-
-.progression-bar {
-    width: 100%;
+.ep-bar {
+    position: relative;
     height: 8px;
     background: var(--bg-darkest);
     border: 1px solid var(--border);
-    border-radius: 4px;
-    position: relative;
-    overflow: hidden;
+    border-radius: 2px;
+    overflow: visible;
+    margin-bottom: 6px;
 }
-
-.progression-fill {
+.ep-bar-fill {
     height: 100%;
-    background: linear-gradient(90deg, var(--accent-green-dim), var(--accent-green));
+    background: linear-gradient(90deg, var(--accent-cyan), var(--accent-blue));
     transition: width 0.5s ease;
-    box-shadow: 0 0 6px rgba(94, 138, 109, 0.4);
+    box-shadow: 0 0 6px rgba(45, 212, 191, 0.4);
 }
-
-.boss-marker {
+.ep-marker {
     position: absolute;
-    top: 50%;
-    transform: translate(-50%, -50%);
-    width: 8px;
-    height: 8px;
-    background: var(--accent-gold);
-    border-radius: 50%;
-    box-shadow: 0 0 6px rgba(201, 165, 90, 0.6);
-    z-index: 2;
+    top: -3px;
+    width: 2px;
+    height: 14px;
+    background: var(--accent-warn);
+    transform: translateX(-50%);
+    box-shadow: 0 0 4px rgba(251, 191, 36, 0.6);
 }
-
-.progression-text {
-    display: flex;
-    justify-content: space-between;
-    font-family: 'Cormorant Garamond', serif;
-    font-size: 11px;
+.ep-marker.midboss::after {
+    content: '◆';
+    position: absolute;
+    top: -10px;
+    left: 50%;
+    transform: translateX(-50%);
+    color: var(--accent-warn);
+    font-size: 8px;
+}
+.ep-hint {
+    text-align: center;
+    font-size: 9px;
     color: var(--text-muted);
     letter-spacing: 0.1em;
 }
 
-
-/* ═══════════════════════════════════════════════════════════
-   인벤토리 + 스킬 (좌우 분할)
-   ═══════════════════════════════════════════════════════════ */
-
-.explore-info-row {
+/* ── 인벤토리/스탯/스킬 카드 3개 ── */
+.explore-info-grid {
     display: grid;
     grid-template-columns: 1fr 1fr;
     gap: 12px;
     flex: 1;
-    min-height: 0;
 }
-
-.explore-info-card {
-    background: rgba(13, 17, 23, 0.5);
-    border: 1px solid var(--border-subtle);
-    border-radius: 6px;
-    padding: 12px;
-    display: flex;
-    flex-direction: column;
-    overflow: hidden;
-}
-
-.explore-info-card .card-title {
-    font-family: 'Cormorant Garamond', serif;
-    font-size: 11px;
-    letter-spacing: 0.25em;
-    text-transform: uppercase;
-    color: var(--accent-gold);
-    padding-bottom: 8px;
-    border-bottom: 1px solid var(--border-subtle);
-    margin-bottom: 8px;
-}
-
-.card-content {
-    flex: 1;
-    overflow-y: auto;
-    display: flex;
-    flex-direction: column;
-    gap: 4px;
-}
-
-
-/* 인벤토리 아이템 */
-.inventory-item {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    padding: 6px 10px;
-    background: rgba(31, 42, 54, 0.5);
-    border: 1px solid var(--border-subtle);
-    border-radius: 3px;
-    font-family: 'Gowun Batang', serif;
-    font-size: 12px;
-}
-
-.inventory-item .item-name { color: var(--text-main); }
-.inventory-item .item-qty {
-    color: var(--accent-cream);
-    font-family: 'Cormorant Garamond', serif;
-    font-size: 12px;
-    font-weight: 600;
-}
-
-
-/* 스킬 그리드 */
-.skill-grid {
-    display: grid;
-    grid-template-columns: repeat(3, 1fr);
-    gap: 6px;
-}
-
-.skill-slot {
-    aspect-ratio: 1 / 1;
+.explore-card {
     background: var(--bg-darkest);
     border: 1px solid var(--border);
-    border-radius: 4px;
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    justify-content: center;
-    padding: 4px;
-    transition: all 0.2s;
-    cursor: default;
+    border-radius: 3px;
+    padding: 10px 12px;
+    min-height: 100px;
 }
-
-.skill-slot.active {
-    border-color: var(--accent-gold);
-    background: rgba(201, 165, 90, 0.05);
-    box-shadow: 0 0 8px rgba(201, 165, 90, 0.2);
-}
-
-.skill-slot .skill-icon {
-    font-size: 20px;
-    color: var(--accent-gold-dim);
-    margin-bottom: 2px;
-}
-.skill-slot.active .skill-icon { color: var(--accent-gold); }
-
-.skill-slot .skill-name {
-    font-family: 'Gowun Batang', serif;
+.explore-card-title {
     font-size: 10px;
-    color: var(--text-muted);
-    text-align: center;
-    letter-spacing: 0.05em;
+    color: var(--accent-cyan);
+    letter-spacing: 0.1em;
+    font-weight: 700;
+    margin-bottom: 8px;
+    padding-bottom: 4px;
+    border-bottom: 1px dashed var(--border);
 }
-.skill-slot.active .skill-name { color: var(--text-main); }
+.explore-card-body {
+    font-size: 10px;
+    line-height: 1.6;
+}
+.explore-empty {
+    color: var(--text-muted);
+    font-style: italic;
+    text-align: center;
+    padding: 12px 0;
+}
+.explore-stat-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 4px 10px;
+}
+.explore-stat-row {
+    display: flex; justify-content: space-between;
+    color: var(--text-dim);
+}
+.explore-stat-row .v { color: var(--text-main); font-weight: 700; }
 
-.skill-slot.empty {
-    opacity: 0.3;
-    border-style: dashed;
+/* ── 인벤토리 항목 (클릭 가능) ── */
+.inv-item {
+    display: flex;
+    justify-content: space-between;
+    padding: 3px 0;
+    color: var(--text-main);
+}
+.inv-item.clickable {
+    padding: 6px 8px;
+    margin: 2px 0;
+    border-radius: 2px;
+    cursor: pointer;
+    border: 1px solid transparent;
+    transition: all 0.15s;
+}
+.inv-item.clickable:hover {
+    background: rgba(250, 204, 21, 0.10);
+    border-color: rgba(250, 204, 21, 0.4);
+    transform: translateX(2px);
+}
+.inv-item.clickable::after {
+    content: '▶';
+    color: var(--accent-cyan);
+    margin-left: 8px;
+    font-size: 8px;
+    opacity: 0;
+    transition: opacity 0.15s;
+}
+.inv-item.clickable:hover::after { opacity: 1; }
+.inv-item .qty { color: var(--accent-warn); font-weight: 700; }
+
+/* ── 스킬 칩 ── */
+.sk-chip {
+    display: inline-block;
+    padding: 3px 8px;
+    margin: 2px 3px 2px 0;
+    background: rgba(250, 204, 21, 0.12);
+    border: 1px solid rgba(250, 204, 21, 0.4);
+    color: var(--skill-yellow);
+    border-radius: 2px;
+    font-size: 9px;
 }
