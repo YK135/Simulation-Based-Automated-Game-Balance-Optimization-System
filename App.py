@@ -50,6 +50,10 @@ from ai.Simulator      import MonsterFactory
 from core.Balance_Hook import BalanceHook
 from ai.Battlesession import BattleSession   # Flask용 전투 세션
 
+# ── DB ─────────────────────────────────────
+from DB import init_db, get_session as db_session
+from DB.Models import User, Battle
+
 
 # ── Flask 앱 ─────────────────────────────────
 # Flask 앱 초기화.
@@ -65,10 +69,21 @@ init_db()  # DB 초기화 (테이블 생성)
 
 app.secret_key = os.environ.get("SECRET_KEY", "dev-secret-change-in-prod")
 
+# ── DB 초기화 (테이블 자동 생성) ──
+init_db()
+
 # ── 게임 세션 저장소 (메모리) ─────────────────
-# { user_id: { "player": Player, "items": list, "hook": BalanceHook,
-#              "turn": int, "battle": BattleSession | None,
-#              "mid_boss_cleared": bool } }
+# { user_id(uuid): {
+#       "player":          Player,
+#       "items":           list,
+#       "hook":            BalanceHook,
+#       "turn":            int,
+#       "battle":          BattleSession | None,
+#       "mid_boss_cleared":bool,
+#       "last_event":      str,
+#       "db_user_id":      int,         # ★ DB users.id (Phase 2 추가)
+#       "nickname":        str,         # ★ 닉네임 캐싱 (Phase 2 추가)
+#   } }
 GAME_SESSIONS: dict = {}
 
 
@@ -80,6 +95,17 @@ def _get_session() -> dict | None:
     uid = session.get("user_id")
     return GAME_SESSIONS.get(uid)
 
+
+def _get_db_user_id() -> int | None:
+    """
+    현재 세션의 DB user.id 반환.
+    GAME_SESSIONS에 저장된 db_user_id를 우선 사용.
+    없으면 None.
+    """
+    gs = _get_session()
+    if not gs:
+        return None
+    return gs.get("db_user_id")
 
 def _player_to_snap(player, items: list) -> EntitySnapshot:
     skills = list(player.skill.learned_skills) if player.skill else []
@@ -156,6 +182,30 @@ def new_game():
     hook = BalanceHook(player, items, show_graph=False, verbose=False)
 
     # 세션 저장
+    # ── DB에 User 레코드 생성 (게스트) ──
+    # auth_type='guest', email=None, 닉네임=name
+    # 같은 닉네임이라도 매번 새 User 생성 (캡스톤 단계에선 단순화).
+    # 추후 이메일 인증 추가 시 email 기반 중복 체크 가능.
+    db_user_id = None
+    try:
+        with db_session() as db:
+            new_user = User(
+                auth_type='guest',
+                nickname=name,
+                email=None,
+                is_active=True,
+            )
+            db.add(new_user)
+            db.flush()       # commit 전에 id 받기
+            db_user_id = new_user.id
+        print(f"[DB] User created: id={db_user_id}, nickname={name}, job={job}")
+    except Exception as e:
+        # DB 실패해도 게임은 계속 진행 (안전망)
+        # 실서비스에선 여기서 에러 응답하는 게 맞음
+        print(f"[DB] User creation failed: {e}")
+        db_user_id = None
+
+    # ── 메모리 세션 저장 ──
     uid = str(uuid.uuid4())
     session["user_id"] = uid
     GAME_SESSIONS[uid] = {
@@ -166,14 +216,16 @@ def new_game():
         "battle":           None,
         "mid_boss_cleared": False,
         "last_event":       None,
+        "db_user_id":       db_user_id,    # ★ DB users.id 보관
+        "nickname":         name,           # ★ 닉네임 캐싱 (랭킹 표시 등)
     }
 
     return jsonify({
-        "ok":     True,
-        "player": _player_dict(player, items),
-        "message": f"안녕하세요, {name}님! ({job}) 모험을 시작합니다.",
+        "ok":         True,
+        "player":     _player_dict(player, items),
+        "db_user_id": db_user_id,           # ★ 프론트에 user_id 전달 (디버그용)
+        "message":    f"안녕하세요, {name}님! ({job}) 모험을 시작합니다.",
     })
-
 
 # ─────────────────────────────────────────────
 # API: 플레이어 상태
@@ -190,16 +242,18 @@ def status():
         "player": _player_dict(gs["player"], gs["items"]),
         "turn":   gs["turn"],
         "in_battle": gs["battle"] is not None,
+        # ★ user 정보 (Phase 2 추가)
+        "user": {
+            "db_user_id": gs.get("db_user_id"),
+            "nickname":   gs.get("nickname"),
+        },
     }
 
     # 진행 중인 전투가 있으면 전투 상태 페이로드도 포함.
-    # UI가 새로고침 시 한 번의 호출로 전투 화면 복구 가능하게.
-    # (UI는 /api/battle/state를 별도 호출하는 폴백 로직도 함께 갖고 있음)
     if gs["battle"] is not None:
         try:
             payload["battle"] = gs["battle"]._state()
         except Exception:
-            # 전투 상태 직렬화 실패 시 in_battle 플래그만 유지
             pass
 
     return jsonify(payload)
