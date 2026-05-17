@@ -339,8 +339,6 @@ class BattleSession:
             try:
                 target_idx = int(action.split(":", 1)[1])
                 action = "attack"
-                self.skills_used += 1  # DB 저장용 카운터 증가 (Phase 3)
-                return "ok"
             except (ValueError, IndexError):
                 pass
         elif action.startswith("skill:"):
@@ -364,7 +362,9 @@ class BattleSession:
             # 모든 적 사망 (이론상 도달 불가 - step에서 먼저 체크)
             return "ok"
 
+        # ═══════════════════════════════════════════════════════════
         # 기본 공격
+        # ═══════════════════════════════════════════════════════════
         if action == "attack":
             dmg, dodge, crit = DamageCalc.physical(
                 self.player.effective_stg(), self.player.luc,
@@ -394,27 +394,11 @@ class BattleSession:
                 is_dodge=dodge,
                 is_crit=crit,
             ))
+            # 일반 공격은 카운트 안 함 (DB skills_used 대상 X)
 
-            """
-            ═══════════════════════════════════════════════════════════════════
-            ai/Battlesession.py  핵심 패치 ★
-            ═══════════════════════════════════════════════════════════════════
-
-            ✅ 작업 내용:
-            [수정 1] _player_action() 안의 스킬 분기 → AoE 처리 추가
-            [수정 2] _single_enemy_action() 시작부에 사제 분기 추가
-            [추가 3] _priest_action() 메서드 신규 추가
-            """
-            # ═══════════════════════════════════════════════════════════════════
-            # [수정 1]  _player_action() 의 스킬 분기 통째로 교체
-            # ═══════════════════════════════════════════════════════════════════
-            #
-            #   _player_action 메서드 안에서 elif action.startswith("skill:"):
-            #   로 시작하는 블록 전체를 아래 코드로 교체.
-            #   (그 위의 if action == "attack": 블록은 그대로 유지,
-            #    그 아래의 elif action.startswith("item:"): 블록도 그대로 유지)
-
+        # ═══════════════════════════════════════════════════════════
         # 스킬
+        # ═══════════════════════════════════════════════════════════
         elif action.startswith("skill:"):
             skill_name = action[6:]
             meta = SKILL_META.get(skill_name, {})
@@ -501,6 +485,7 @@ class BattleSession:
                     hp_after=max(0, first.hp),
                     mp_after=self.player.mp,
                 ))
+                self.skills_used += 1   # ★ AoE 스킬 사용 성공 (Phase 3)
                 return "ok"
 
             # ── 단일 타깃 스킬 (기존 로직 + buff/heal/shield 메시지 보강) ──
@@ -566,10 +551,15 @@ class BattleSession:
                         mp_after=self.player.mp,
                     ))
 
+                # ★ 단일 스킬 사용 성공 (Phase 3) — else 블록 맨 끝
+                # debuff / buff / heal / shield / 일반 데미지 모두 카운트
+                self.skills_used += 1
+
+        # ═══════════════════════════════════════════════════════════
         # 아이템
+        # ═══════════════════════════════════════════════════════════
         elif action.startswith("item:"):
             item_name = action.split(":", 1)[1]
-            self.items_used += 1  # DB 저장용 카운터 증가 (Phase 3)
             if item_name not in self.items:
                 msgs.append("해당 아이템이 없습니다.")
                 # 실패한 아이템도 기록 (행동 의도 분석용)
@@ -601,8 +591,11 @@ class BattleSession:
                     hp_after=self.enemy.hp,  # 적 HP는 변화 없음
                     mp_after=self.player.mp,
                 ))
+                self.items_used += 1   # ★ 아이템 사용 성공 (Phase 3)
 
+        # ═══════════════════════════════════════════════════════════
         # 도망
+        # ═══════════════════════════════════════════════════════════
         elif action == "escape":
             if self.is_boss:
                 msgs.append("...도망칠 수 없다!")
@@ -644,7 +637,7 @@ class BattleSession:
             msgs.append("알 수 없는 행동입니다.")
 
         return "ok"
-
+    
     # ── 내부: 적 행동 처리 ───────────────────
 
     def _enemy_action(self, msgs: list):
