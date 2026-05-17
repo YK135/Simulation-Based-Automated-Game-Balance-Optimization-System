@@ -90,10 +90,13 @@ class BattleSession:
  
         # 적 AI
         self._enemy_ai = EnemyAI()
- 
+
         # 현재 타깃 인덱스 (플레이어가 슬롯 클릭으로 변경)
-        # 기본값: 첫 번째 살아있는 적
         self._target_idx = 0
+
+        # ★ DB 저장용 액션 카운터 (Phase 3)
+        self.skills_used = 0   # 플레이어가 사용한 스킬 총 횟수
+        self.items_used  = 0   # 플레이어가 사용한 아이템 총 횟수
  
         # 전사 패시브용 행동 카운터 — 공격 3회마다 발동
         # (이전 v2 패치에서 추가된 필드 — 유지)
@@ -336,6 +339,8 @@ class BattleSession:
             try:
                 target_idx = int(action.split(":", 1)[1])
                 action = "attack"
+                self.skills_used += 1  # DB 저장용 카운터 증가 (Phase 3)
+                return "ok"
             except (ValueError, IndexError):
                 pass
         elif action.startswith("skill:"):
@@ -563,7 +568,8 @@ class BattleSession:
 
         # 아이템
         elif action.startswith("item:"):
-            item_name = action[5:]
+            item_name = action.split(":", 1)[1]
+            self.items_used += 1  # DB 저장용 카운터 증가 (Phase 3)
             if item_name not in self.items:
                 msgs.append("해당 아이템이 없습니다.")
                 # 실패한 아이템도 기록 (행동 의도 분석용)

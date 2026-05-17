@@ -107,6 +107,74 @@ def _get_db_user_id() -> int | None:
         return None
     return gs.get("db_user_id")
 
+def _save_battle_to_db(gs: dict, battle, result: dict, winner: str) -> None:
+    """
+    전투 결과를 DB에 저장. 실패해도 게임은 계속 진행.
+
+    Args:
+        gs:     GAME_SESSIONS의 현재 세션 dict
+        battle: BattleSession 객체 (이미 종료 처리 끝난 상태)
+        result: battle.step() 마지막 반환값
+        winner: "player" | "enemy" | "escaped"
+    """
+    import json
+
+    db_user_id = gs.get("db_user_id")
+    if not db_user_id:
+        print("[DB] Battle save skipped: no db_user_id in session")
+        return
+
+    player = gs["player"]
+
+    # ── 적 목록 직렬화 ──
+    enemies_payload = []
+    for e in getattr(battle, "enemies", []):
+        diff = getattr(e, "difficulty", None) or getattr(e, "_difficulty", None)
+        label = e.name
+        if diff:
+            diff_map = {"hard": "상", "normal": "중", "easy": "하"}
+            label = f"{e.name}({diff_map.get(diff, diff)})"
+        enemies_payload.append({
+            "name":       e.name,
+            "lv":         getattr(e, "lv", 1),
+            "difficulty": diff,
+            "label":      label,
+        })
+
+    # ── 결과 매핑 ──
+    db_result = (
+        "win"    if winner == "player"
+        else "lose"   if winner == "enemy"
+        else "escape"
+    )
+
+    # ── DB 저장 ──
+    try:
+        with db_session() as db:
+            new_battle = Battle(
+                user_id        = db_user_id,
+                explore_turn   = gs.get("turn", 0),
+                enemies        = json.dumps(enemies_payload, ensure_ascii=False),
+                is_boss        = bool(getattr(battle, "is_boss", False)),
+                is_multi       = len(getattr(battle, "enemies", [])) > 1,
+                result         = db_result,
+                turns          = result.get("turn", battle.turn),
+                player_job     = player.job,
+                player_lv      = player.lv,
+                hp_remaining   = float(result.get("player_hp", player.hp)),
+                exp_gained     = int(result.get("exp_gained", 0)),
+                skills_used    = getattr(battle, "skills_used", 0),
+                items_used     = getattr(battle, "items_used", 0),
+            )
+            db.add(new_battle)
+            db.flush()
+            print(f"[DB] Battle saved: id={new_battle.id}, user={db_user_id}, "
+                  f"result={db_result}, turns={new_battle.turns}, "
+                  f"enemies={len(enemies_payload)}")
+    except Exception as e:
+        # DB 실패해도 게임은 계속 (안전망)
+        print(f"[DB] Battle save failed: {e}")
+
 def _player_to_snap(player, items: list) -> EntitySnapshot:
     skills = list(player.skill.learned_skills) if player.skill else []
     return EntitySnapshot(
@@ -482,96 +550,49 @@ def battle_action():
     result = battle.step(action)
 
     # 전투 종료 처리
+    # 전투 종료 처리
     if result["done"]:
         player = gs["player"]
         winner = result["winner"]
+        battle = gs["battle"]   # ★ DB 저장 후 None 되므로 미리 잡아둠
 
+        # ── 플레이어 상태 동기화 ──
         if winner == "player":
-            # HP/MP 동기화
             player.hp = result["player_hp"]
             player.mp = result["player_mp"]
-
-            # ── 경험치 지급 (적별 합산) ──
-            # BattleSession이 보존해둔 처치 적 원본 리스트 (Unit/_SnapUnit).
-            # EntitySnapshot이 아니라 원본이므로 exp_reward() 호출 가능.
-            defeated = list(getattr(gs["battle"], "defeated_origins", []))
-
-            # 폴백: defeated가 비어있으면 (구버전 호환) 기존 방식.
-            if not defeated:
-                exp_total = randint(45, 60)
-                result["exp_breakdown"] = [{"name": "???", "exp": exp_total}]
-            else:
-                exp_total = 0
-                breakdown = []
-                exp_msgs = []
-                for enemy in defeated:
-                    # 안전망: exp_reward가 없는 객체(=EntitySnapshot)는 폴백 비율
-                    if hasattr(enemy, "exp_reward"):
-                        e_exp = enemy.exp_reward(player.maxexp)
-                    else:
-                        # EntitySnapshot이 들어온 경우 — origins가 비어서 발생.
-                        # 기본 중급 비율(0.34)로 처리.
-                        e_exp = int(player.maxexp * 0.34)
-
-                    exp_total += e_exp
-
-                    # 등급 표시 (보스면 BOSS, 일반이면 등급)
-                    if getattr(enemy, "is_boss", False):
-                        grade_tag = "BOSS"
-                    else:
-                        grade_tag = getattr(enemy, "grade", "중")
-
-                    breakdown.append({
-                        "name":  enemy.name,
-                        "grade": grade_tag,
-                        "exp":   e_exp,
-                    })
-                    exp_msgs.append(f"  {enemy.name}({grade_tag}) 처치 → {e_exp} EXP")
-
-                # 메시지에 적별 경험치 + 합계 추가
-                if len(defeated) > 1:
-                    result["messages"].append("")  # 빈 줄
-                    result["messages"].extend(exp_msgs)
-                    result["messages"].append(f"총 {exp_total} EXP 획득!")
-                else:
-                    result["messages"].append(exp_msgs[0].strip())
-
-                result["exp_breakdown"] = breakdown
-
-            # 레벨업 처리
-            lv_obj = LV_(player)
-            lv_before = player.lv
-            lv_obj.Get_exp(player, reward_exp=exp_total)
+            # 경험치 지급
+            lv_obj  = LV_(player)
+            exp     = randint(45, 60)
+            lv_obj.Get_exp(player, reward_exp=exp)
             gs["hook"].check_level_up()
-
-            result["exp_gained"] = exp_total
+            result["exp_gained"] = exp
             result["level_up"]   = player.lv
-            if player.lv > lv_before:
-                result["messages"].append(
-                    f"⭐ LEVEL UP! Lv.{lv_before} → Lv.{player.lv}"
-                )
 
         elif winner == "enemy":
             player.hp = 0
+            result["exp_gained"] = 0
 
         elif winner == "escaped":
             player.hp = result["player_hp"]
             player.mp = result["player_mp"]
+            result["exp_gained"] = 0
 
-        # 중간 보스 클리어 체크 (다대일 호환)
-        if winner == "player":
-            had_midboss = any(
-                getattr(e, "name", "") == "중간 보스"
-                for e in gs["battle"].enemies
-            )
-            if had_midboss:
-                gs["mid_boss_cleared"] = True
-                gs["items"].append("HP_L_potion")
-                result["messages"].append("🎁 보상: HP_L_potion 획득!")
+        # ── 중간 보스 클리어 체크 ──
+        if battle.enemy.name == "중간 보스" and winner == "player":
+            gs["mid_boss_cleared"] = True
+            gs["items"].append("HP_L_potion")
+            result["messages"].append("보상: HP_L_potion 획득!")
 
+        # ════════════════════════════════════════════════
+        # ★ DB Battle 레코드 저장 (Phase 3)
+        # ════════════════════════════════════════════════
+        _save_battle_to_db(gs, battle, result, winner)
+
+        # 전투 세션 초기화
         gs["battle"] = None
         result["player"] = _player_dict(player, gs["items"])
 
+    return jsonify({"ok": True, **result})
     return jsonify({"ok": True, **result})
 
 
