@@ -53,6 +53,11 @@ from ai.Battlesession import BattleSession   # Flask용 전투 세션
 # ── DB ─────────────────────────────────────
 from DB import init_db, get_session as db_session
 from DB.Models import User, Battle
+from DB.Queries import (
+    get_score_ranking,
+    get_pioneer_ranking,
+    get_user_rank_position,
+)
 
 
 # ── Flask 앱 ─────────────────────────────────

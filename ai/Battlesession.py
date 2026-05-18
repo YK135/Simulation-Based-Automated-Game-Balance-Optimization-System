@@ -88,15 +88,26 @@ class BattleSession:
         # 행동 로그 — BehaviorAnalyzer 입력용.
         self.logs: list = []
  
-        # 적 AI
+       # 적 AI
         self._enemy_ai = EnemyAI()
 
         # 현재 타깃 인덱스 (플레이어가 슬롯 클릭으로 변경)
         self._target_idx = 0
 
-        # ★ DB 저장용 액션 카운터 (Phase 3)
-        self.skills_used = 0   # 플레이어가 사용한 스킬 총 횟수
-        self.items_used  = 0   # 플레이어가 사용한 아이템 총 횟수
+        # DB 저장용 액션 카운터 (Phase 3)
+        self.skills_used = 0
+        self.items_used  = 0
+
+        # ★ ATB 시스템 (Digital Twin — Battle_Engine과 동일 규칙)
+        # 매 tick: effective_spd() 만큼 누적
+        # 100 이상이면 행동 가능, 행동 후 -= 100
+        self.player_atb: float = 0.0
+        self.enemy_atbs: list  = [0.0 for _ in self.enemies]
+
+        # 적 first_strike 처리 (암살자) — 첫 tick부터 적이 100을 갖고 시작.
+        for i, e in enumerate(self.enemies):
+            if getattr(e, "first_strike", False):
+                self.enemy_atbs[i] = 100.0
  
         # 전사 패시브용 행동 카운터 — 공격 3회마다 발동
         # (이전 v2 패치에서 추가된 필드 — 유지)
@@ -112,6 +123,16 @@ class BattleSession:
         # self.turn은 다른 곳에서도 쓰여서 별도로 관리.
         # 플레이어가 실제로 행동한 횟수 (item, escape도 포함 — step과 1:1).
         self._warrior_action_count = 0
+
+        INIT_ADDITION = 0.0  # 초기 ATB 보정 (예: 선제 공격 적)
+        # ★ ATB 시스템 (Digital Twin — Battle_Engine과 동일 규칙)
+        self.player_atb: float = 0.0
+        self.enemy_atbs: list  = [0.0 for _ in self.enemies]
+
+        # first_strike 처리 (암살자) — 첫 적은 ATB 100으로 시작
+        for i, e in enumerate(self.enemies):
+            if getattr(e, "first_strike", False):
+                self.enemy_atbs[i] = 100.0
 
     # 기존 1대1 코드는 self.enemy 직접 접근. 살아있는 첫 번째 적 반환.
     @property
@@ -142,83 +163,39 @@ class BattleSession:
 
     def step(self, action: str) -> dict:
         """
-        행동 하나 처리 후 결과 반환.
+        ATB 기반 step:
+          1. 플레이어가 행동을 보낸다 → 플레이어는 이미 ATB 100 상태로 가정
+             (UI는 player_atb >= 100일 때만 행동 버튼 활성)
+          2. 플레이어 행동 처리 → player_atb -= 100
+          3. 적 행동 루프: 어떤 적이라도 ATB >= 100이면 행동, 차감.
+             플레이어가 다시 100 도달할 때까지 tick.
+          4. 플레이어 ATB 100 도달 시 응답 반환 → UI에 행동 권한 넘김.
 
-        action 형식:
-          "attack"              — 기본 공격
-          "skill:셰이드 1"      — 스킬 사용
-          "item:HP_M_potion"    — 아이템 사용
-          "escape"              — 도망
-          "status"              — 상태 확인 (턴 소모 없음)
-
-        반환 dict:
-          {
-            "turn":         int,
-            "player_action": {...},   # 플레이어 행동 결과
-            "enemy_action":  {...},   # 적 행동 결과 (없으면 None)
-            "player_hp":    float,
-            "player_mp":    float,
-            "enemy_hp":     float,
-            "items":        list,
-            "done":         bool,
-            "winner":       str | None,
-            "message":      list[str],   # 화면에 보여줄 메시지
-          }
+        반환 dict는 기존과 동일하지만 enemy_actions가 리스트 가능 (적 N번 행동).
         """
         if self.done:
             return self._state(messages=["전투가 이미 종료되었습니다."])
 
         msgs = []
 
-        # ── 상태 확인 (턴 소모 없음) ──────────
+        # ── 상태 확인 (턴 소모 없음) ──
         if action == "status":
             return self._state(messages=["현재 상태를 확인합니다."])
 
         self.turn += 1
 
-        # ── 전사 패시브: 공격 3회마다 maxhp 10% 회복 ──
-        # 시뮬(BattleEngine.run)과 동일 룰 — Digital Twin 원칙.
-        # 발동 시점: 행동 카운터 증가 직후 (이번 행동 전에 회복).
-        # 빈도 변경 이력: 2턴 → 3턴 (시뮬 결과 +76.5%p 과강 → 적정화)
-        if self.player.job == "전사" and self.player.hp > 0:
-            self._warrior_action_count += 1
-            if self._warrior_action_count % 3 == 0:
-                warrior_msg = self.player.passive_on_turn_start()
-                if warrior_msg:
-                    msgs.append(warrior_msg)
+        # ── 전사 패시브: 2턴마다 maxhp 10% 회복 ──
+        if self.player.job == "전사" and self.turn % 2 == 0 and self.player.hp > 0:
+            warrior_msg = self.player.passive_on_turn_start()
+            if warrior_msg:
+                msgs.append(warrior_msg)
 
-        # ── 첫 턴 + first_strike 처리 (암살자) ──
-        # 적이 first_strike=True 이면 플레이어 행동 전에 적이 먼저 공격.
-        # SPD 무관하게 강제 선공. 이후 턴부터는 정상 흐름.
-        if self.turn == 1 and getattr(self.enemy, "first_strike", False):
-            msgs.append(f"{self.enemy.name}이(가) 먼저 기습한다!")
-            self._enemy_action(msgs)
-            # 플레이어 사망 체크 (선공으로 한방 가능)
-            if self.player.hp <= 0:
-                self.done   = True
-                self.winner = "enemy"
-                msgs.append(f"{self.player.name}이(가) 쓰러졌다...")
-                return self._state(messages=msgs)
-
-        # ── 플레이어 행동 ──────────────────────
-        # 행동 전 기존 버프 ID 집합 스냅샷.
-        # _player_action 안에서 새로 적용되는 버프는 이 스냅샷에 없으므로
-        # 아래 tick 시 제외 — 사용 즉시 1턴 차감되는 문제 방지.
-        pre_action_buff_ids = {id(b) for b in self.player.buffs}
-
+        # ────────────────────────────────────────
+        # 1. 플레이어 행동 처리
+        # ────────────────────────────────────────
         p_result = self._player_action(action, msgs)
-
-        # ── 플레이어 본인 버프 turn -1 (행동 전에 있던 것만) ──
-        # 새로 적용된 버프(이번 _player_action에서 생성)는 tick에서 제외.
-        # 같은 stat의 기존 버프를 덮어쓴 경우엔 id가 새 객체 → 자연스럽게 제외됨.
-        #
-        # 이번 행동에서 새로 추가/갱신된 버프를 임시로 빼두고, 기존 버프만 tick.
-        new_buffs = [b for b in self.player.buffs if id(b) not in pre_action_buff_ids]
-        old_buffs = [b for b in self.player.buffs if id(b) in pre_action_buff_ids]
-        self.player.buffs = old_buffs
         self.player.tick_buffs()
-        # 새 버프 다시 합치기 (turn 그대로 유지)
-        self.player.buffs.extend(new_buffs)
+        self.player_atb = max(0.0, self.player_atb - 100.0)
 
         if p_result == "escaped":
             self.done   = True
@@ -226,35 +203,61 @@ class BattleSession:
             msgs.append("도망에 성공했다!")
             return self._state(messages=msgs)
 
-         # ── 플레이어 행동 직후 적 사망 체크 ──
-        self._collect_defeated_origins()
-
         # ── 모든 적 사망 체크 (다대일) ──
         if not self._alive_enemies():
             self.done   = True
             self.winner = "player"
             if len(self.enemies) > 1:
-                msgs.append(f"모든 적을 처치했다!")
+                msgs.append("모든 적을 처치했다!")
             else:
                 msgs.append(f"{self.enemies[0].name}을(를) 처치했다!")
             return self._state(messages=msgs)
 
-        # ── 적 행동 ───────────────────────────
-        self._enemy_action(msgs)
+        # ────────────────────────────────────────
+        # 2. ATB 루프 — 플레이어 차례가 다시 올 때까지
+        # ────────────────────────────────────────
+        # 안전장치: 최대 100회 tick (실제로는 SPD 합산으로 매우 빠르게 도달).
+        # 무한루프 방지용 가드.
+        max_ticks = 100
+        ticks = 0
+        while self.player_atb < 100.0 and ticks < max_ticks:
+            ticks += 1
 
-        # ── 적 행동 후에도 사망 체크 ──
-        self._collect_defeated_origins()
+            # 모든 entity ATB 증가
+            self.player_atb += self.player.effective_spd()
+            for i, e in enumerate(self.enemies):
+                if e.hp > 0:
+                    self.enemy_atbs[i] += e.effective_spd()
 
-        # 플레이어 사망 체크
-        if self.player.hp <= 0:
-            self.done   = True
-            self.winner = "enemy"
-            msgs.append(f"{self.player.name}이(가) 쓰러졌다...")
-            return self._state(messages=msgs)
+            # 행동 가능한 적이 있는지 — ATB 내림차순으로 정렬해서 행동
+            # 한 tick에 여러 적이 100을 넘을 수 있음 → 모두 행동
+            ready_enemies = []
+            for i, e in enumerate(self.enemies):
+                if e.hp > 0 and self.enemy_atbs[i] >= 100.0:
+                    ready_enemies.append((i, e, self.enemy_atbs[i]))
 
+            # ATB 높은 순으로 정렬 (가장 많이 채워진 적부터)
+            ready_enemies.sort(key=lambda x: x[2], reverse=True)
+
+            for idx, enemy, _atb in ready_enemies:
+                if self.player.hp <= 0:
+                    break
+                if enemy.hp <= 0:  # 다른 적 행동 중에 죽었을 수도
+                    continue
+
+                # 적 행동
+                self._single_enemy_action(enemy, msgs)
+                self.enemy_atbs[idx] = max(0.0, self.enemy_atbs[idx] - 100.0)
+
+                # 적 행동 후 플레이어 사망 체크
+                if self.player.hp <= 0:
+                    self.done   = True
+                    self.winner = "enemy"
+                    msgs.append(f"{self.player.name}이(가) 쓰러졌다...")
+                    return self._state(messages=msgs)
+
+        # 플레이어 ATB 100 도달 — 행동 권한을 UI로 넘김
         return self._state(messages=msgs)
-
-
     # ── 헬퍼: 새로 죽은 적의 원본 객체 수집 ──
     # self.enemies[i].hp <= 0 인 적의 self._origins[i] 를 defeated_origins에 추가.
     # id(snap) 비교로 중복 방지.
@@ -962,6 +965,7 @@ class BattleSession:
             en_status = self._pack_status_list(en)
             enemies_payload.append({
                 "slot_index":       i,                        # UI 슬롯 매핑 (0=슬롯3, 1=슬롯4, 2=슬롯5)
+                "atb":              round(self.enemy_atbs[i], 1), # 턴 순서 결정용 ATB (실효값)
                 "name":             en.name,
                 "lv":               en.lv,
                 "alive":            en.hp > 0,
@@ -995,6 +999,7 @@ class BattleSession:
             "player_mp":  round(self.player.mp, 1),
             "player_maxhp": self.player.maxhp,
             "player_maxmp": self.player.maxmp,
+            "player_atb": round(self.player_atb, 1),
             # ── 플레이어 실효 스탯 (UI 좌측 패널이 전투 중에 이걸로 갱신) ──
             "player_effective_stg":   round(self.player.effective_stg(), 1),
             "player_effective_arm":   round(self.player.effective_arm(), 1),

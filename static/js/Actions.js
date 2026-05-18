@@ -40,24 +40,32 @@ async function loadStatus() {
 }
 
 async function newGame(name, job) {
-    const r = await api('/newgame', { name, job });
-    if (!r.ok) { toast(r.error || '게임 시작 실패', 'error'); return; }
-    state.player = r.player;
-    state.inBattle = false;
-    refreshPlayer();
-
-    if (typeof resetAllSprites === 'function') {
-        resetAllSprites();
-    } else if (typeof setCharState === 'function') {
-        setCharState('player_panel', 'idle');
+    // ★ 중복 호출 방지 락
+    // 0.01초 안에 두 번 호출되어 DB에 User 두 개 생성되는 버그 방지.
+    if (state.creatingGame) {
+        console.warn('[newGame] already in progress, ignoring duplicate call');
+        return;
     }
+    state.creatingGame = true;
 
-    document.getElementById('modal-newgame').classList.remove('active');
-    setExploreMode();
-    clearLog();
-    logLine(`▶ ${name} (${job}) 모험 시작!`, 'skill');
-    term(`session created: ${name}/${job}`, 'ok');
-    toast(`Welcome, ${name}!`);
+    try {
+        const r = await api('/new_game', { name, job });
+        if (r.ok) {
+            state.player = r.player;
+            refreshPlayer();
+            document.getElementById('modal-newgame').classList.remove('active');
+            setExploreMode();
+            clearLog();
+            logLine(`▶ ${name} (${job}) 모험 시작!`, 'skill');
+            term(`session created: ${name}/${job}`, 'ok');
+            toast(`Welcome, ${name}!`);
+        } else {
+            toast('생성 실패: ' + (r.error||'unknown'), 'error');
+        }
+    } finally {
+        // 락 해제 (성공/실패 모두)
+        state.creatingGame = false;
+    }
 }
 
 async function explore() {

@@ -13,6 +13,7 @@ let state = {
     selectedJob: '전사',
     isEmailAuth: false,
     userEmail: null,
+    creatingNewGame: false,
 };
 
 // ★ 전역 명시화 — CharSprite.js 등 외부 모듈이 window.state로 안전 접근
