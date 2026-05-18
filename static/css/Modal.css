@@ -152,6 +152,237 @@
 .rest-option.escape-no .rest-label { color: var(--accent-cyan); }
 
 /* ═══════════════════════════════════════════════════════════
+   랭킹 모달
+   ═══════════════════════════════════════════════════════════ */
+
+.ranking-modal {
+    width: 90%;
+    max-width: 600px;
+    max-height: 80vh;
+    display: flex;
+    flex-direction: column;
+    background: var(--bg-darker, #141a22);
+    border: 1px solid var(--accent-gold, #c9a55a);
+    border-radius: 8px;
+    padding: 20px;
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.6);
+}
+
+/* 헤더 ── 화살표 + 제목 */
+.ranking-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 16px;
+    padding-bottom: 12px;
+    border-bottom: 1px solid var(--border-subtle, rgba(201, 165, 90, 0.15));
+    margin-bottom: 16px;
+}
+
+.ranking-header-text {
+    text-align: center;
+    flex: 1;
+}
+
+.ranking-header-text h2 {
+    margin: 0;
+    font-size: 20px;
+    color: var(--accent-gold, #c9a55a);
+    letter-spacing: 0.1em;
+}
+
+.ranking-header-text p {
+    margin: 4px 0 0 0;
+    font-size: 11px;
+    color: var(--text-muted, #5d5847);
+    letter-spacing: 0.1em;
+}
+
+/* 좌우 화살표 */
+.ranking-arrow {
+    width: 36px;
+    height: 36px;
+    background: transparent;
+    border: 1px solid var(--border, #2d3a4a);
+    color: var(--accent-gold, #c9a55a);
+    font-size: 16px;
+    cursor: pointer;
+    border-radius: 50%;
+    transition: all 0.2s;
+}
+.ranking-arrow:hover {
+    background: var(--accent-gold-dim, #8c7340);
+    color: var(--bg-darkest, #0d1117);
+    border-color: var(--accent-gold, #c9a55a);
+    box-shadow: 0 0 8px rgba(201, 165, 90, 0.4);
+}
+
+/* 본문 ── 스크롤 가능 */
+.ranking-body {
+    flex: 1;
+    overflow-y: auto;
+    max-height: 50vh;
+    padding-right: 8px;
+}
+
+.ranking-loading {
+    text-align: center;
+    color: var(--text-muted, #5d5847);
+    padding: 20px;
+    font-style: italic;
+}
+
+.ranking-empty {
+    text-align: center;
+    color: var(--text-muted, #5d5847);
+    padding: 40px 20px;
+    font-style: italic;
+}
+
+
+/* 랭킹 행 */
+.ranking-row {
+    display: grid;
+    grid-template-columns: 60px 1fr 80px 100px;
+    gap: 8px;
+    padding: 10px 12px;
+    border-bottom: 1px solid var(--border-subtle, rgba(201, 165, 90, 0.1));
+    align-items: center;
+    transition: background 0.15s;
+}
+
+.ranking-row:hover:not(.ranking-header-row) {
+    background: rgba(201, 165, 90, 0.05);
+}
+
+/* 헤더 행 */
+.ranking-row.ranking-header-row {
+    font-size: 10px;
+    color: var(--text-muted, #5d5847);
+    letter-spacing: 0.2em;
+    text-transform: uppercase;
+    border-bottom: 1px solid var(--accent-gold-dim, #8c7340);
+    padding: 6px 12px;
+}
+.ranking-row.ranking-header-row:hover {
+    background: transparent;
+}
+
+/* 등수 */
+.rank-col {
+    font-family: 'Cormorant Garamond', serif;
+    font-size: 18px;
+    font-weight: 700;
+    color: var(--text-main, #d4cdb6);
+    text-align: center;
+}
+
+/* 1~3등 색 */
+.ranking-row.gold .rank-col   { color: #d4af37; text-shadow: 0 0 8px rgba(212, 175, 55, 0.4); }
+.ranking-row.silver .rank-col { color: #c0c0c0; }
+.ranking-row.bronze .rank-col { color: #cd7f32; }
+
+.ranking-row.gold {
+    background: linear-gradient(90deg, rgba(212, 175, 55, 0.08) 0%, transparent 100%);
+}
+.ranking-row.silver {
+    background: linear-gradient(90deg, rgba(192, 192, 192, 0.05) 0%, transparent 100%);
+}
+.ranking-row.bronze {
+    background: linear-gradient(90deg, rgba(205, 127, 50, 0.05) 0%, transparent 100%);
+}
+
+/* 닉네임 */
+.nickname-col {
+    color: var(--text-title, #e8e0c4);
+    font-weight: 500;
+    font-size: 14px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+/* 직업 */
+.job-col {
+    color: var(--text-dim, #9a9079);
+    font-size: 12px;
+    text-align: center;
+    letter-spacing: 0.05em;
+}
+
+/* 점수 */
+.score-col {
+    color: var(--accent-cream, #d4cdb6);
+    font-family: 'Cormorant Garamond', monospace;
+    font-size: 14px;
+    font-weight: 700;
+    text-align: right;
+}
+
+/* 날짜 (선구자 랭킹) */
+.date-col {
+    color: var(--text-dim, #9a9079);
+    font-family: 'Cormorant Garamond', monospace;
+    font-size: 11px;
+    text-align: right;
+}
+
+
+/* 내 순위 (점수 랭킹일 때만) */
+.ranking-my-rank {
+    margin-top: 12px;
+    padding: 10px 16px;
+    background: rgba(201, 165, 90, 0.08);
+    border: 1px solid var(--accent-gold-dim, #8c7340);
+    border-radius: 4px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    font-size: 13px;
+}
+
+.my-rank-label {
+    color: var(--text-muted, #5d5847);
+    letter-spacing: 0.15em;
+    text-transform: uppercase;
+    font-size: 10px;
+}
+
+.my-rank-value {
+    color: var(--accent-cream, #d4cdb6);
+    font-weight: 600;
+}
+
+.my-rank-score {
+    color: var(--accent-gold, #c9a55a);
+    margin-left: 8px;
+}
+
+
+/* 푸터 */
+.ranking-footer {
+    margin-top: 12px;
+    padding-top: 12px;
+    border-top: 1px solid var(--border-subtle, rgba(201, 165, 90, 0.15));
+    text-align: center;
+}
+
+.ranking-footer button {
+    padding: 8px 32px;
+    background: transparent;
+    border: 1px solid var(--border, #2d3a4a);
+    color: var(--text-dim, #9a9079);
+    cursor: pointer;
+    border-radius: 4px;
+    transition: all 0.15s;
+}
+.ranking-footer button:hover {
+    background: var(--bg-panel, #1f2a36);
+    border-color: var(--accent-gold-dim, #8c7340);
+    color: var(--text-title, #e8e0c4);
+}
+
+/* ═══════════════════════════════════════════════════════════
    3단계 시작 모달 (정사각형 모달)
    ═══════════════════════════════════════════════════════════ */
 

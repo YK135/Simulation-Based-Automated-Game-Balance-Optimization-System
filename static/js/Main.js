@@ -155,3 +155,9 @@ document.addEventListener('keydown', (e) => {
         term('no session, awaiting input');
     }
 })();
+
+safeBind('btn-ranking', () => {
+    if (typeof openRankingModal === 'function') {
+        openRankingModal();
+    }
+});

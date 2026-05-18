@@ -26,6 +26,7 @@
         <div class="brand-icon">⬢</div>
         RPG AI Balancing Dashboard
     </div>
+    <button id="btn-ranking" class="topbar-btn">🏆 랭킹</button>
     <div id="clock" class="clock">--:--:--</div>
 </div>
 
@@ -33,6 +34,43 @@
      3컬럼 대시보드
      ═══════════════════════════════════════════════════════════ -->
 <div class="dashboard">
+
+<!-- ━━━━━━━━━━━━━━━━━━━━━━━━ 랭킹 모달 ━━━━━━━━━━━━━━━━━━━━━━━━ -->
+<div class="modal-overlay" id="modal-ranking">
+    <div class="modal-content ranking-modal">
+
+        <!-- 헤더 -->
+        <div class="ranking-header">
+            <button class="ranking-arrow ranking-arrow-left"
+                    onclick="toggleRanking()"
+                    title="다른 랭킹 보기">◀</button>
+
+            <div class="ranking-header-text">
+                <h2 id="ranking-title">🏆 점수 랭킹</h2>
+                <p id="ranking-subtitle">플레이 점수 기준 TOP 20</p>
+            </div>
+
+            <button class="ranking-arrow ranking-arrow-right"
+                    onclick="toggleRanking()"
+                    title="다른 랭킹 보기">▶</button>
+        </div>
+
+        <!-- 본문: 랭킹 테이블 -->
+        <div class="ranking-body">
+            <div id="ranking-loading" class="ranking-loading">로딩 중...</div>
+            <div id="ranking-table"></div>
+        </div>
+
+        <!-- 내 순위 (점수 랭킹일 때만 표시) -->
+        <div id="ranking-my-rank" class="ranking-my-rank" style="display:none;"></div>
+
+        <!-- 닫기 버튼 -->
+        <div class="ranking-footer">
+            <button onclick="closeRankingModal()">닫기</button>
+        </div>
+
+    </div>
+</div>
 
 <!-- ──────────────────────────────────────────────────────
      LEFT: PLAYER 패널
@@ -588,6 +626,7 @@
 <script src="js/UI_Explore.js"></script>   <!-- 탐험 모드 -->
 <script src="js/UI_Battle.js"></script>    <!-- 배틀 모드 -->
 <script src="js/Modals.js"></script>       <!-- 휴식/도망 + 시뮬 가시화 -->
+<script src="js/Ranking.js"></script>          <!-- 랭킹 모달 + API 연동 -->
 <script src="js/Actions.js"></script>      <!-- API 호출 액션 -->
 <script src="js/Main.js"></script>         <!-- 부팅 + 이벤트 바인딩 -->
 </body>

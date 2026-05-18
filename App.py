@@ -331,6 +331,58 @@ def status():
 
     return jsonify(payload)
 
+@app.route("/api/ranking", methods=["GET"])
+def ranking():
+    #점수 기반 랭킹 TOP 20.
+    try:
+        limit = int(request.args.get("limit", 20)) # 쿼리 파라미터로 랭킹 수 조절 가능 (예: ?limit=10)
+    except (ValueError, TypeError):
+        limit = 20 # 기본값 20, 잘못된 입력은 무시하고 기본값 사용
+    limit = max(1, min(100, limit))   # 1~100 사이로 제한
+
+    try:
+        with db_session() as db:
+            rankings = get_score_ranking(db, limit=limit)
+
+            # 현재 로그인한 사용자의 랭킹 위치도 같이 반환 (선택)
+            my_rank = None
+            db_user_id = _get_db_user_id()
+            if db_user_id:
+                my_rank = get_user_rank_position(db, db_user_id)
+
+        return jsonify({
+            "ok":       True,
+            "rankings": rankings,
+            "my_rank":  my_rank,
+            "limit":    limit,
+        })
+
+    except Exception as e:
+        print(f"[DB] Ranking query failed: {e}")
+        return jsonify({"ok": False, "error": "랭킹 조회 실패"}), 500
+    
+@app.route("/api/ranking/pioneers", methods=["GET"])
+def ranking_pioneers():
+    # 선구자 랭킹 TOP 10.
+    try:
+        limit = int(request.args.get("limit", 10)) # 쿼리 파라미터로 랭킹 수 조절 가능 (예: ?limit=5)
+    except (ValueError, TypeError):
+        limit = 10 # 기본값 10, 잘못된 입력은 무시하고 기본값 사용
+    limit = max(1, min(50, limit))
+
+    try:
+        with db_session() as db:
+            pioneers = get_pioneer_ranking(db, limit=limit)
+
+        return jsonify({
+            "ok":       True,
+            "pioneers": pioneers,
+            "limit":    limit,
+        })
+
+    except Exception as e:
+        print(f"[DB] Pioneer ranking failed: {e}")
+        return jsonify({"ok": False, "error": "선구자 랭킹 조회 실패"}), 500
 
 # ─────────────────────────────────────────────
 # API: 탐험 (이벤트 결정)
