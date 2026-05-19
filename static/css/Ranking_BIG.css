@@ -1,0 +1,394 @@
+/* ═══════════════════════════════════════════════════════════
+   Ranking_BIG.css — 큰 팝업 랭킹 모달
+   ─────────────────────────────────────────────────────────
+   ★ 통째 교체용 ★
+
+   적용 방법 (둘 중 하나):
+   A. static/css/ 안에 새 파일 Ranking_BIG.css 생성 +
+      index.html의 <head>에 <link rel="stylesheet" href="css/Ranking_BIG.css">
+   B. 기존 Modal.css 끝에 통째 붙여넣기 (기존 ranking 관련 CSS는 위에서 덮어씌워짐)
+   ═══════════════════════════════════════════════════════════ */
+
+
+/* 모달 오버레이 (배경) — 기존 modal-overlay 그대로 사용 */
+.modal-overlay {
+    position: fixed;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.85);
+    z-index: 9999;
+    display: none;
+    align-items: center;
+    justify-content: center;
+    backdrop-filter: blur(4px);
+}
+
+.modal-overlay.active {
+    display: flex;
+}
+
+
+/* ═══════════════════════════════════════════════════════════
+   큰 랭킹 모달 본체
+   ─────────────────────────────────────────────────────────
+   화면의 80% × 80% 크기
+   ═══════════════════════════════════════════════════════════ */
+
+.ranking-modal-big {
+    position: relative;
+    width: 80vw;
+    height: 80vh;
+    max-width: 1200px;
+    max-height: 900px;
+    min-width: 600px;
+    min-height: 500px;
+
+    background: linear-gradient(180deg,
+        rgba(20, 26, 34, 0.98) 0%,
+        rgba(13, 17, 23, 0.98) 100%);
+    border: 1px solid #00ffd0;
+    border-radius: 8px;
+    box-shadow:
+        0 0 40px rgba(0, 255, 208, 0.2),
+        0 16px 48px rgba(0, 0, 0, 0.8);
+
+    display: flex;
+    flex-direction: column;
+    padding: 0;
+    overflow: hidden;
+}
+
+
+/* ═══════════════════════════════════════════════════════════
+   우상단 X 닫기 버튼
+   ═══════════════════════════════════════════════════════════ */
+
+.ranking-close-btn {
+    position: absolute;
+    top: 12px;
+    right: 12px;
+    width: 36px;
+    height: 36px;
+    background: transparent;
+    border: 1px solid #2d3a4a;
+    color: #00ffd0;
+    font-size: 18px;
+    font-weight: 700;
+    cursor: pointer;
+    border-radius: 4px;
+    transition: all 0.15s;
+    z-index: 10;
+    line-height: 1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.ranking-close-btn:hover {
+    background: rgba(255, 64, 64, 0.15);
+    border-color: #ff5050;
+    color: #ff7070;
+    box-shadow: 0 0 12px rgba(255, 80, 80, 0.3);
+}
+
+
+/* ═══════════════════════════════════════════════════════════
+   헤더 (좌우 화살표 + 제목)
+   ═══════════════════════════════════════════════════════════ */
+
+.ranking-big-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 24px;
+    padding: 24px 32px 20px;
+    border-bottom: 1px solid rgba(0, 255, 208, 0.2);
+    flex-shrink: 0;
+}
+
+.ranking-big-title-wrap {
+    flex: 1;
+    text-align: center;
+}
+
+.ranking-big-title-wrap h2 {
+    margin: 0;
+    font-size: 28px;
+    color: #00ffd0;
+    letter-spacing: 0.15em;
+    font-weight: 700;
+    text-shadow: 0 0 12px rgba(0, 255, 208, 0.3);
+}
+
+.ranking-big-title-wrap p {
+    margin: 6px 0 0 0;
+    font-size: 12px;
+    color: #7a96a3;
+    letter-spacing: 0.2em;
+    text-transform: uppercase;
+}
+
+/* 좌우 화살표 — 큰 사이즈 */
+.ranking-arrow {
+    width: 48px;
+    height: 48px;
+    background: rgba(0, 255, 208, 0.05);
+    border: 1px solid rgba(0, 255, 208, 0.3);
+    color: #00ffd0;
+    font-size: 22px;
+    cursor: pointer;
+    border-radius: 50%;
+    transition: all 0.2s;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.ranking-arrow:hover {
+    background: rgba(0, 255, 208, 0.15);
+    border-color: #00ffd0;
+    box-shadow: 0 0 16px rgba(0, 255, 208, 0.4);
+    transform: scale(1.05);
+}
+
+.ranking-arrow:active {
+    transform: scale(0.95);
+}
+
+
+/* ═══════════════════════════════════════════════════════════
+   본문 (스크롤 가능)
+   ═══════════════════════════════════════════════════════════ */
+
+.ranking-big-body {
+    flex: 1;
+    overflow-y: auto;
+    padding: 24px 32px;
+    min-height: 0;
+}
+
+/* 스크롤바 스타일 */
+.ranking-big-body::-webkit-scrollbar {
+    width: 10px;
+}
+.ranking-big-body::-webkit-scrollbar-track {
+    background: rgba(13, 17, 23, 0.4);
+    border-radius: 5px;
+}
+.ranking-big-body::-webkit-scrollbar-thumb {
+    background: rgba(0, 255, 208, 0.3);
+    border-radius: 5px;
+}
+.ranking-big-body::-webkit-scrollbar-thumb:hover {
+    background: rgba(0, 255, 208, 0.5);
+}
+
+
+.ranking-loading {
+    text-align: center;
+    color: #7a96a3;
+    padding: 60px 20px;
+    font-size: 14px;
+    font-style: italic;
+    letter-spacing: 0.1em;
+}
+
+.ranking-empty {
+    text-align: center;
+    color: #5d6770;
+    padding: 100px 20px;
+    font-size: 15px;
+    font-style: italic;
+}
+
+
+/* ═══════════════════════════════════════════════════════════
+   랭킹 행 (테이블)
+   ═══════════════════════════════════════════════════════════ */
+
+.ranking-row {
+    display: grid;
+    grid-template-columns: 80px 1fr 120px 160px;
+    gap: 16px;
+    padding: 14px 20px;
+    border-bottom: 1px solid rgba(0, 255, 208, 0.08);
+    align-items: center;
+    transition: background 0.15s;
+}
+
+.ranking-row:hover:not(.ranking-header-row) {
+    background: rgba(0, 255, 208, 0.05);
+}
+
+/* 헤더 행 */
+.ranking-row.ranking-header-row {
+    font-size: 11px;
+    color: #7a96a3;
+    letter-spacing: 0.3em;
+    text-transform: uppercase;
+    border-bottom: 2px solid rgba(0, 255, 208, 0.3);
+    padding: 12px 20px;
+    background: rgba(0, 255, 208, 0.03);
+    margin-bottom: 4px;
+    position: sticky;
+    top: 0;
+    z-index: 5;
+}
+.ranking-row.ranking-header-row:hover {
+    background: rgba(0, 255, 208, 0.03);
+}
+
+/* 등수 컬럼 */
+.rank-col {
+    font-family: 'Cormorant Garamond', 'Georgia', serif;
+    font-size: 24px;
+    font-weight: 700;
+    color: #e8e0c4;
+    text-align: center;
+}
+
+/* 1~3등 색상 */
+.ranking-row.gold .rank-col {
+    color: #ffd700;
+    text-shadow: 0 0 12px rgba(255, 215, 0, 0.5);
+}
+.ranking-row.silver .rank-col {
+    color: #c0c0c0;
+    text-shadow: 0 0 8px rgba(192, 192, 192, 0.4);
+}
+.ranking-row.bronze .rank-col {
+    color: #cd7f32;
+    text-shadow: 0 0 8px rgba(205, 127, 50, 0.4);
+}
+
+.ranking-row.gold {
+    background: linear-gradient(90deg,
+        rgba(255, 215, 0, 0.08) 0%,
+        rgba(255, 215, 0, 0.02) 50%,
+        transparent 100%);
+}
+.ranking-row.silver {
+    background: linear-gradient(90deg,
+        rgba(192, 192, 192, 0.06) 0%,
+        transparent 100%);
+}
+.ranking-row.bronze {
+    background: linear-gradient(90deg,
+        rgba(205, 127, 50, 0.06) 0%,
+        transparent 100%);
+}
+
+/* 닉네임 */
+.nickname-col {
+    color: #e8e0c4;
+    font-weight: 500;
+    font-size: 16px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+/* 직업 */
+.job-col {
+    color: #9aa6b2;
+    font-size: 13px;
+    text-align: center;
+    letter-spacing: 0.1em;
+}
+
+/* 점수 */
+.score-col {
+    color: #00ffd0;
+    font-family: 'Cormorant Garamond', monospace;
+    font-size: 18px;
+    font-weight: 700;
+    text-align: right;
+    text-shadow: 0 0 8px rgba(0, 255, 208, 0.3);
+}
+
+/* 날짜 (선구자) */
+.date-col {
+    color: #9aa6b2;
+    font-family: 'Cormorant Garamond', monospace;
+    font-size: 13px;
+    text-align: right;
+}
+
+
+/* ═══════════════════════════════════════════════════════════
+   내 순위 표시 (하단)
+   ═══════════════════════════════════════════════════════════ */
+
+.ranking-my-rank {
+    margin: 0 32px 24px;
+    padding: 14px 20px;
+    background: rgba(0, 255, 208, 0.08);
+    border: 1px solid rgba(0, 255, 208, 0.3);
+    border-radius: 4px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    font-size: 14px;
+    flex-shrink: 0;
+}
+
+.my-rank-label {
+    color: #7a96a3;
+    letter-spacing: 0.2em;
+    text-transform: uppercase;
+    font-size: 11px;
+    font-weight: 700;
+}
+
+.my-rank-value {
+    color: #e8e0c4;
+    font-weight: 600;
+    font-size: 16px;
+}
+
+.my-rank-score {
+    color: #00ffd0;
+    margin-left: 12px;
+    font-family: 'Cormorant Garamond', monospace;
+}
+
+
+/* ═══════════════════════════════════════════════════════════
+   반응형 (작은 화면)
+   ═══════════════════════════════════════════════════════════ */
+
+@media (max-width: 768px) {
+    .ranking-modal-big {
+        width: 95vw;
+        height: 90vh;
+        min-width: unset;
+    }
+
+    .ranking-big-header {
+        padding: 16px 20px 12px;
+        gap: 12px;
+    }
+
+    .ranking-big-title-wrap h2 {
+        font-size: 20px;
+    }
+
+    .ranking-arrow {
+        width: 36px;
+        height: 36px;
+        font-size: 16px;
+    }
+
+    .ranking-big-body {
+        padding: 16px 20px;
+    }
+
+    .ranking-row {
+        grid-template-columns: 50px 1fr 70px 100px;
+        gap: 8px;
+        padding: 10px 12px;
+    }
+
+    .rank-col { font-size: 18px; }
+    .nickname-col { font-size: 13px; }
+    .score-col { font-size: 14px; }
+}

@@ -37,37 +37,37 @@
 
 <!-- ━━━━━━━━━━━━━━━━━━━━━━━━ 랭킹 모달 ━━━━━━━━━━━━━━━━━━━━━━━━ -->
 <div class="modal-overlay" id="modal-ranking">
-    <div class="modal-content ranking-modal">
+    <div class="ranking-modal-big">
 
-        <!-- 헤더 -->
-        <div class="ranking-header">
+        <!-- 우상단 X 닫기 버튼 -->
+        <button class="ranking-close-btn"
+                onclick="closeRankingModal()"
+                title="닫기">✕</button>
+
+        <!-- 헤더 (좌우 화살표 + 제목) -->
+        <div class="ranking-big-header">
             <button class="ranking-arrow ranking-arrow-left"
                     onclick="toggleRanking()"
-                    title="다른 랭킹 보기">◀</button>
+                    title="다른 랭킹">◀</button>
 
-            <div class="ranking-header-text">
+            <div class="ranking-big-title-wrap">
                 <h2 id="ranking-title">🏆 점수 랭킹</h2>
                 <p id="ranking-subtitle">플레이 점수 기준 TOP 20</p>
             </div>
 
             <button class="ranking-arrow ranking-arrow-right"
                     onclick="toggleRanking()"
-                    title="다른 랭킹 보기">▶</button>
+                    title="다른 랭킹">▶</button>
         </div>
 
-        <!-- 본문: 랭킹 테이블 -->
-        <div class="ranking-body">
+        <!-- 본문 (스크롤 가능) -->
+        <div class="ranking-big-body">
             <div id="ranking-loading" class="ranking-loading">로딩 중...</div>
             <div id="ranking-table"></div>
         </div>
 
-        <!-- 내 순위 (점수 랭킹일 때만 표시) -->
+        <!-- 내 순위 (점수 랭킹 한정) -->
         <div id="ranking-my-rank" class="ranking-my-rank" style="display:none;"></div>
-
-        <!-- 닫기 버튼 -->
-        <div class="ranking-footer">
-            <button onclick="closeRankingModal()">닫기</button>
-        </div>
 
     </div>
 </div>

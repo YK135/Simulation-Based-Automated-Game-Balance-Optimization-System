@@ -56,3 +56,116 @@
     padding-bottom: 6px;
     border-bottom: 1px dashed var(--border);
 }
+
+/* ═══════════════════════════════════════════════════════════
+   3패널 높이 통일 패치
+   ─────────────────────────────────────────────────────────
+   현재 Layout.css 끝부분에 추가하면 됨 (CSS 우선순위로 덮어쓰기).
+   ═══════════════════════════════════════════════════════════ */
+
+/* ── 전체 #app 컨테이너 ── */
+#app {
+    height: 100vh;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+}
+
+/* ── 상단 topbar 영역 (있다면) ── */
+.topbar,
+.app-header {
+    flex-shrink: 0;
+}
+
+/* ── 대시보드 그리드 — 3컬럼 + 같은 높이 ── */
+.dashboard,
+.main-grid,
+.layout-grid {
+    flex: 1;
+    display: grid;
+    grid-template-columns: 320px 1fr 340px;
+    grid-template-rows: 1fr;   /* ★ 한 줄 그리드 — 모든 컬럼 같은 높이 */
+    gap: 12px;
+    min-height: 0;             /* flex 자식이 grid 안에서 안 잘리게 */
+    padding: 0 16px 16px;
+}
+
+
+/* ── 각 컬럼 — flex column, 100% 높이 ── */
+.left-col,
+.center-col,
+.right-col,
+.left-panel,
+.center-panel,
+.right-panel {
+    height: 100%;
+    min-height: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    overflow: hidden;
+}
+
+
+/* ── 좌측 플레이어 패널 — 컬럼 전체 높이 차지 ── */
+.player-panel {
+    flex: 1;
+    min-height: 0;
+    overflow-y: auto;
+}
+
+
+/* ── 중앙: 메인 영역 + 배틀 로그 ── */
+.center-main,
+.field-main {
+    flex: 1;       /* 메인 영역이 가능한 만큼 차지 */
+    min-height: 0;
+    overflow-y: auto;
+}
+
+.center-log,
+.battle-log-panel,
+.battle-log-wrap {
+    flex-shrink: 0;
+    height: 240px;        /* 배틀 로그 고정 높이 */
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+}
+
+.battle-log-panel #battle-log,
+.battle-log-wrap #battle-log {
+    flex: 1;
+    overflow-y: auto;
+    min-height: 0;
+}
+
+
+/* ── 우측 AI 모니터 패널 ── */
+.ai-monitor-panel,
+.right-panel {
+    flex: 1;
+    min-height: 0;
+    overflow-y: auto;
+}
+
+
+/* ═══════════════════════════════════════════════════════════
+   미세 조정 — 작은 화면 대응
+   ═══════════════════════════════════════════════════════════ */
+
+@media (max-width: 1280px) {
+    .dashboard, .main-grid, .layout-grid {
+        grid-template-columns: 280px 1fr 300px;
+    }
+    .center-log, .battle-log-panel, .battle-log-wrap {
+        height: 200px;
+    }
+}
+
+@media (max-width: 1024px) {
+    .dashboard, .main-grid, .layout-grid {
+        grid-template-columns: 260px 1fr 280px;
+        gap: 8px;
+    }
+}
