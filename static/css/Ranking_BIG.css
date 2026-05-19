@@ -1,36 +1,17 @@
 /* ═══════════════════════════════════════════════════════════
-   Ranking_BIG.css — 큰 팝업 랭킹 모달
+   Ranking_BIG.css — 큰 팝업 랭킹 모달 (수정 버전)
    ─────────────────────────────────────────────────────────
    ★ 통째 교체용 ★
 
-   적용 방법 (둘 중 하나):
-   A. static/css/ 안에 새 파일 Ranking_BIG.css 생성 +
-      index.html의 <head>에 <link rel="stylesheet" href="css/Ranking_BIG.css">
-   B. 기존 Modal.css 끝에 통째 붙여넣기 (기존 ranking 관련 CSS는 위에서 덮어씌워짐)
+   🐛 버그 수정:
+   - .modal-overlay 셀렉터 제거 (Modal.css의 .modal-bg가 처리)
+   - HTML의 클래스를 .modal-bg로 바꾸면 자동으로 position: fixed 적용
    ═══════════════════════════════════════════════════════════ */
-
-
-/* 모달 오버레이 (배경) — 기존 modal-overlay 그대로 사용 */
-.modal-overlay {
-    position: fixed;
-    inset: 0;
-    background: rgba(0, 0, 0, 0.85);
-    z-index: 9999;
-    display: none;
-    align-items: center;
-    justify-content: center;
-    backdrop-filter: blur(4px);
-}
-
-.modal-overlay.active {
-    display: flex;
-}
 
 
 /* ═══════════════════════════════════════════════════════════
    큰 랭킹 모달 본체
-   ─────────────────────────────────────────────────────────
-   화면의 80% × 80% 크기
+   화면의 80% × 80% 크기, modal-bg 안에 중앙 정렬됨
    ═══════════════════════════════════════════════════════════ */
 
 .ranking-modal-big {
@@ -45,7 +26,7 @@
     background: linear-gradient(180deg,
         rgba(20, 26, 34, 0.98) 0%,
         rgba(13, 17, 23, 0.98) 100%);
-    border: 1px solid #00ffd0;
+    border: 1px solid var(--accent-cyan, #00ffd0);
     border-radius: 8px;
     box-shadow:
         0 0 40px rgba(0, 255, 208, 0.2),
@@ -69,8 +50,8 @@
     width: 36px;
     height: 36px;
     background: transparent;
-    border: 1px solid #2d3a4a;
-    color: #00ffd0;
+    border: 1px solid var(--border, #2d3a4a);
+    color: var(--accent-cyan, #00ffd0);
     font-size: 18px;
     font-weight: 700;
     cursor: pointer;
@@ -81,6 +62,7 @@
     display: flex;
     align-items: center;
     justify-content: center;
+    padding: 0;
 }
 
 .ranking-close-btn:hover {
@@ -113,7 +95,7 @@
 .ranking-big-title-wrap h2 {
     margin: 0;
     font-size: 28px;
-    color: #00ffd0;
+    color: var(--accent-cyan, #00ffd0);
     letter-spacing: 0.15em;
     font-weight: 700;
     text-shadow: 0 0 12px rgba(0, 255, 208, 0.3);
@@ -122,7 +104,7 @@
 .ranking-big-title-wrap p {
     margin: 6px 0 0 0;
     font-size: 12px;
-    color: #7a96a3;
+    color: var(--text-muted, #7a96a3);
     letter-spacing: 0.2em;
     text-transform: uppercase;
 }
@@ -133,7 +115,7 @@
     height: 48px;
     background: rgba(0, 255, 208, 0.05);
     border: 1px solid rgba(0, 255, 208, 0.3);
-    color: #00ffd0;
+    color: var(--accent-cyan, #00ffd0);
     font-size: 22px;
     cursor: pointer;
     border-radius: 50%;
@@ -141,11 +123,13 @@
     display: flex;
     align-items: center;
     justify-content: center;
+    padding: 0;
+    flex-shrink: 0;
 }
 
 .ranking-arrow:hover {
     background: rgba(0, 255, 208, 0.15);
-    border-color: #00ffd0;
+    border-color: var(--accent-cyan, #00ffd0);
     box-shadow: 0 0 16px rgba(0, 255, 208, 0.4);
     transform: scale(1.05);
 }
@@ -166,10 +150,8 @@
     min-height: 0;
 }
 
-/* 스크롤바 스타일 */
-.ranking-big-body::-webkit-scrollbar {
-    width: 10px;
-}
+/* 스크롤바 */
+.ranking-big-body::-webkit-scrollbar { width: 10px; }
 .ranking-big-body::-webkit-scrollbar-track {
     background: rgba(13, 17, 23, 0.4);
     border-radius: 5px;
@@ -185,7 +167,7 @@
 
 .ranking-loading {
     text-align: center;
-    color: #7a96a3;
+    color: var(--text-muted, #7a96a3);
     padding: 60px 20px;
     font-size: 14px;
     font-style: italic;
@@ -194,7 +176,7 @@
 
 .ranking-empty {
     text-align: center;
-    color: #5d6770;
+    color: var(--text-muted, #5d6770);
     padding: 100px 20px;
     font-size: 15px;
     font-style: italic;
@@ -222,7 +204,7 @@
 /* 헤더 행 */
 .ranking-row.ranking-header-row {
     font-size: 11px;
-    color: #7a96a3;
+    color: var(--text-muted, #7a96a3);
     letter-spacing: 0.3em;
     text-transform: uppercase;
     border-bottom: 2px solid rgba(0, 255, 208, 0.3);
@@ -242,7 +224,7 @@
     font-family: 'Cormorant Garamond', 'Georgia', serif;
     font-size: 24px;
     font-weight: 700;
-    color: #e8e0c4;
+    color: var(--text-main, #e8e0c4);
     text-align: center;
 }
 
@@ -279,7 +261,7 @@
 
 /* 닉네임 */
 .nickname-col {
-    color: #e8e0c4;
+    color: var(--text-main, #e8e0c4);
     font-weight: 500;
     font-size: 16px;
     overflow: hidden;
@@ -289,7 +271,7 @@
 
 /* 직업 */
 .job-col {
-    color: #9aa6b2;
+    color: var(--text-dim, #9aa6b2);
     font-size: 13px;
     text-align: center;
     letter-spacing: 0.1em;
@@ -297,7 +279,7 @@
 
 /* 점수 */
 .score-col {
-    color: #00ffd0;
+    color: var(--accent-cyan, #00ffd0);
     font-family: 'Cormorant Garamond', monospace;
     font-size: 18px;
     font-weight: 700;
@@ -307,7 +289,7 @@
 
 /* 날짜 (선구자) */
 .date-col {
-    color: #9aa6b2;
+    color: var(--text-dim, #9aa6b2);
     font-family: 'Cormorant Garamond', monospace;
     font-size: 13px;
     text-align: right;
@@ -332,7 +314,7 @@
 }
 
 .my-rank-label {
-    color: #7a96a3;
+    color: var(--text-muted, #7a96a3);
     letter-spacing: 0.2em;
     text-transform: uppercase;
     font-size: 11px;
@@ -340,20 +322,20 @@
 }
 
 .my-rank-value {
-    color: #e8e0c4;
+    color: var(--text-main, #e8e0c4);
     font-weight: 600;
     font-size: 16px;
 }
 
 .my-rank-score {
-    color: #00ffd0;
+    color: var(--accent-cyan, #00ffd0);
     margin-left: 12px;
     font-family: 'Cormorant Garamond', monospace;
 }
 
 
 /* ═══════════════════════════════════════════════════════════
-   반응형 (작은 화면)
+   반응형
    ═══════════════════════════════════════════════════════════ */
 
 @media (max-width: 768px) {
@@ -362,32 +344,20 @@
         height: 90vh;
         min-width: unset;
     }
-
     .ranking-big-header {
         padding: 16px 20px 12px;
         gap: 12px;
     }
-
-    .ranking-big-title-wrap h2 {
-        font-size: 20px;
-    }
-
+    .ranking-big-title-wrap h2 { font-size: 20px; }
     .ranking-arrow {
-        width: 36px;
-        height: 36px;
-        font-size: 16px;
+        width: 36px; height: 36px; font-size: 16px;
     }
-
-    .ranking-big-body {
-        padding: 16px 20px;
-    }
-
+    .ranking-big-body { padding: 16px 20px; }
     .ranking-row {
         grid-template-columns: 50px 1fr 70px 100px;
         gap: 8px;
         padding: 10px 12px;
     }
-
     .rank-col { font-size: 18px; }
     .nickname-col { font-size: 13px; }
     .score-col { font-size: 14px; }

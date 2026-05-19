@@ -1,26 +1,52 @@
 /* ═══════════════════════════════════════════════════════════
-   layout.css
-   - 상단 브랜드 바
-   - 3컬럼 대시보드 그리드
-   - 공통 .panel 컨테이너
+   Layout.css — 통째 교체용 (수정)
+   ─────────────────────────────────────────────────────────
+   🐛 수정 내용:
+   - 기존: #app 컨테이너 가정했으나 HTML에 #app 없음 → 높이 통일 X
+   - 수정: body를 flex column으로 — 같은 효과
+   - .dashboard의 grid-template-rows: 1fr 적용 보장
+   ═══════════════════════════════════════════════════════════ */
+
+html, body {
+    height: 100%;
+    margin: 0;
+    padding: 0;
+}
+
+body {
+    /* body를 직접 flex column으로 사용 (#app 래퍼 없음) */
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    padding: 12px;
+    box-sizing: border-box;
+    gap: 12px;
+}
+
+
+/* ═══════════════════════════════════════════════════════════
+   상단 topbar
    ═══════════════════════════════════════════════════════════ */
 
 .topbar {
+    flex-shrink: 0;
     display: flex;
     justify-content: space-between;
     align-items: center;
     padding: 8px 14px;
-    margin-bottom: 12px;
+    margin-bottom: 0;
     background: var(--bg-panel);
     border: 1px solid var(--border);
     border-radius: 4px;
 }
+
 .brand {
     display: flex; align-items: center; gap: 10px;
     font-size: 14px; font-weight: 700;
     letter-spacing: 0.04em;
     color: var(--accent-cyan);
 }
+
 .brand-icon {
     width: 26px; height: 26px;
     border: 2px solid var(--accent-cyan);
@@ -28,25 +54,73 @@
     display: flex; align-items: center; justify-content: center;
     font-size: 14px;
 }
+
 .clock {
     font-size: 13px;
     color: var(--text-dim);
     letter-spacing: 0.08em;
 }
 
+/* 랭킹 버튼 (상단) */
+.topbar-btn {
+    background: rgba(0, 255, 208, 0.05);
+    border: 1px solid rgba(0, 255, 208, 0.4);
+    color: var(--accent-cyan);
+    padding: 6px 16px;
+    font-size: 12px;
+    letter-spacing: 0.1em;
+    cursor: pointer;
+    border-radius: 4px;
+    transition: all 0.15s;
+}
+.topbar-btn:hover {
+    background: rgba(0, 255, 208, 0.15);
+    box-shadow: 0 0 12px rgba(0, 255, 208, 0.3);
+}
+
+
+/* ═══════════════════════════════════════════════════════════
+   대시보드 그리드 — 3컬럼 + 같은 높이
+   ═══════════════════════════════════════════════════════════ */
+
 .dashboard {
+    flex: 1;                       /* body의 남은 공간 모두 차지 */
     display: grid;
     grid-template-columns: 280px 1fr 320px;
+    grid-template-rows: 1fr;       /* ★ 한 줄 — 세 컬럼 같은 높이 */
     gap: 12px;
+    min-height: 0;                 /* flex 자식이 grid 안에서 안 잘리게 */
 }
+
+
+/* ═══════════════════════════════════════════════════════════
+   각 컬럼 — flex column, 100% 높이
+   ═══════════════════════════════════════════════════════════ */
+
+.left-col,
+.center-col,
+.right-col {
+    height: 100%;
+    min-height: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    overflow: hidden;
+}
+
+
+/* ═══════════════════════════════════════════════════════════
+   .panel 공통 — 컬럼 안에서 늘어남
+   ═══════════════════════════════════════════════════════════ */
 
 .panel {
     background: var(--bg-panel);
     border: 1px solid var(--border);
     border-radius: 4px;
     padding: 12px;
-    margin-bottom: 12px;
+    margin-bottom: 0;              /* 기존 12px → 0 (gap으로 처리) */
 }
+
 .panel-title {
     font-size: 10px;
     font-weight: 700;
@@ -57,115 +131,74 @@
     border-bottom: 1px dashed var(--border);
 }
 
+
 /* ═══════════════════════════════════════════════════════════
-   3패널 높이 통일 패치
-   ─────────────────────────────────────────────────────────
-   현재 Layout.css 끝부분에 추가하면 됨 (CSS 우선순위로 덮어쓰기).
+   좌측 컬럼 — 플레이어 패널이 전체 차지
    ═══════════════════════════════════════════════════════════ */
 
-/* ── 전체 #app 컨테이너 ── */
-#app {
-    height: 100vh;
+.left-col > .panel {
+    flex: 1;
+    min-height: 0;
+    overflow-y: auto;
     display: flex;
     flex-direction: column;
-    overflow: hidden;
-}
-
-/* ── 상단 topbar 영역 (있다면) ── */
-.topbar,
-.app-header {
-    flex-shrink: 0;
-}
-
-/* ── 대시보드 그리드 — 3컬럼 + 같은 높이 ── */
-.dashboard,
-.main-grid,
-.layout-grid {
-    flex: 1;
-    display: grid;
-    grid-template-columns: 320px 1fr 340px;
-    grid-template-rows: 1fr;   /* ★ 한 줄 그리드 — 모든 컬럼 같은 높이 */
-    gap: 12px;
-    min-height: 0;             /* flex 자식이 grid 안에서 안 잘리게 */
-    padding: 0 16px 16px;
-}
-
-
-/* ── 각 컬럼 — flex column, 100% 높이 ── */
-.left-col,
-.center-col,
-.right-col,
-.left-panel,
-.center-panel,
-.right-panel {
-    height: 100%;
-    min-height: 0;
-    display: flex;
-    flex-direction: column;
-    gap: 12px;
-    overflow: hidden;
-}
-
-
-/* ── 좌측 플레이어 패널 — 컬럼 전체 높이 차지 ── */
-.player-panel {
-    flex: 1;
-    min-height: 0;
-    overflow-y: auto;
-}
-
-
-/* ── 중앙: 메인 영역 + 배틀 로그 ── */
-.center-main,
-.field-main {
-    flex: 1;       /* 메인 영역이 가능한 만큼 차지 */
-    min-height: 0;
-    overflow-y: auto;
-}
-
-.center-log,
-.battle-log-panel,
-.battle-log-wrap {
-    flex-shrink: 0;
-    height: 240px;        /* 배틀 로그 고정 높이 */
-    overflow: hidden;
-    display: flex;
-    flex-direction: column;
-}
-
-.battle-log-panel #battle-log,
-.battle-log-wrap #battle-log {
-    flex: 1;
-    overflow-y: auto;
-    min-height: 0;
-}
-
-
-/* ── 우측 AI 모니터 패널 ── */
-.ai-monitor-panel,
-.right-panel {
-    flex: 1;
-    min-height: 0;
-    overflow-y: auto;
 }
 
 
 /* ═══════════════════════════════════════════════════════════
-   미세 조정 — 작은 화면 대응
+   중앙 컬럼 — 메인 + 배틀 로그
+   ═══════════════════════════════════════════════════════════ */
+
+/* 중앙의 첫 패널 (메인 게임 영역) */
+.center-col > .panel:first-child,
+.center-col > .panel:not(:last-child) {
+    flex: 1;
+    min-height: 0;
+    overflow-y: auto;
+}
+
+/* 중앙의 마지막 패널 (배틀 로그) — 고정 높이 */
+.center-col > .panel:last-child {
+    flex-shrink: 0;
+    height: 220px;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+}
+
+.center-col > .panel:last-child #battle-log,
+.center-col > .panel:last-child #log-area {
+    flex: 1;
+    overflow-y: auto;
+    min-height: 0;
+}
+
+
+/* ═══════════════════════════════════════════════════════════
+   우측 컬럼 — AI 모니터 (여러 panel 누적 가능)
+   ═══════════════════════════════════════════════════════════ */
+
+.right-col {
+    overflow-y: auto;              /* 우측은 내용 많으면 스크롤 */
+}
+
+
+/* ═══════════════════════════════════════════════════════════
+   반응형 (작은 화면)
    ═══════════════════════════════════════════════════════════ */
 
 @media (max-width: 1280px) {
-    .dashboard, .main-grid, .layout-grid {
-        grid-template-columns: 280px 1fr 300px;
+    .dashboard {
+        grid-template-columns: 260px 1fr 300px;
     }
-    .center-log, .battle-log-panel, .battle-log-wrap {
-        height: 200px;
+    .center-col > .panel:last-child {
+        height: 180px;
     }
 }
 
 @media (max-width: 1024px) {
-    .dashboard, .main-grid, .layout-grid {
-        grid-template-columns: 260px 1fr 280px;
+    .dashboard {
+        grid-template-columns: 240px 1fr 280px;
         gap: 8px;
     }
 }
