@@ -216,7 +216,7 @@ img.combatant-art {
     border: 1px solid var(--border);
     border-radius: 3px;
     padding: 10px 12px;
-    height: 130px;
+    height: 300px;
     overflow-y: auto;
     font-size: 10px;
     line-height: 1.6;
