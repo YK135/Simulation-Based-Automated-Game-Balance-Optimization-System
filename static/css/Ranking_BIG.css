@@ -19,10 +19,8 @@
     position: relative;
     width: 95vw;
     height: 95vh;
-    max-width: 1600px;
-    max-height: 1200px;
-    min-width: 600px;
-    min-height: 500px;
+    max-width: 1000px;
+    max-height: 980px;
 
     background: linear-gradient(180deg,
         rgba(20, 26, 34, 0.98) 0%,
@@ -43,7 +41,6 @@
 /* ═══════════════════════════════════════════════════════════
    우상단 X 닫기 버튼 (확대)
    ═══════════════════════════════════════════════════════════ */
-
 .ranking-close-btn {
     position: absolute;
     top: 16px;
