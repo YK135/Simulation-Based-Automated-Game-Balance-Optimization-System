@@ -391,3 +391,82 @@ img.combatant-art {
 #actions-panel {
     transition: opacity 0.2s, filter 0.2s;
 }
+
+/* ═══════════════════════════════════════════════════════════
+   ATB 바 (HP/MP 바와 동일 구조, 색만 다름)
+   ─────────────────────────────────────────────────────────
+   플레이어: 사이안 (cyber 톤)
+   적: 주황 (구분)
+   100% 도달 시 글로우 효과
+   ═══════════════════════════════════════════════════════════ */
+
+/* ATB 트랙 — 살짝 더 가늘게 */
+.cb-track.atb-track {
+    height: 5px;
+    border-color: rgba(0, 255, 208, 0.2);
+}
+
+/* 플레이어 ATB — 사이안 */
+.cb-fill.atb {
+    background: linear-gradient(90deg,
+        rgba(0, 255, 208, 0.4) 0%,
+        var(--accent-cyan, #00ffd0) 100%);
+    box-shadow: inset 0 0 4px rgba(255,255,255,0.2);
+    transition: width 0.3s ease;
+}
+
+/* 적 ATB — 주황 */
+.cb-fill.atb-enemy {
+    background: linear-gradient(90deg,
+        rgba(251, 146, 60, 0.4) 0%,
+        rgba(251, 146, 60, 0.9) 100%);
+    box-shadow: inset 0 0 4px rgba(255,255,255,0.2);
+    transition: width 0.3s ease;
+}
+
+/* 100% 도달 시 펄스 글로우 — 행동 임박 표시 */
+.cb-fill.atb.full,
+.cb-fill.atb-enemy.full {
+    animation: atb-ready-pulse 0.8s ease-in-out infinite;
+}
+
+@keyframes atb-ready-pulse {
+    0%, 100% {
+        box-shadow: 0 0 4px rgba(0, 255, 208, 0.5);
+    }
+    50% {
+        box-shadow: 0 0 12px rgba(0, 255, 208, 0.9);
+    }
+}
+
+.cb-fill.atb-enemy.full {
+    animation-name: atb-ready-pulse-enemy;
+}
+
+@keyframes atb-ready-pulse-enemy {
+    0%, 100% {
+        box-shadow: 0 0 4px rgba(251, 146, 60, 0.5);
+    }
+    50% {
+        box-shadow: 0 0 12px rgba(251, 146, 60, 0.9);
+    }
+}
+
+/* ATB 라벨 — 작게 */
+.cb-row.atb-row .cb-label {
+    color: var(--accent-cyan, #00ffd0);
+    font-size: 8px;
+    letter-spacing: 0.1em;
+}
+
+/* ATB 텍스트 — 수치 작게 */
+.cb-row.atb-row .cb-text {
+    color: var(--accent-cyan, #00ffd0);
+    font-size: 9px;
+    font-family: 'Cormorant Garamond', monospace;
+}
+
+.cb-row.atb-row.enemy .cb-label,
+.cb-row.atb-row.enemy .cb-text {
+    color: rgba(251, 146, 60, 0.9);
+}

@@ -202,3 +202,42 @@ body {
         gap: 8px;
     }
 }
+
+/* ═══════════════════════════════════════════════════════════
+   topbar 우측 그룹 (랭킹 버튼 + 시계)
+   ─────────────────────────────────────────────────────────
+   .topbar의 justify-content: space-between으로
+   좌측 .brand ←→ 우측 .topbar-right 분리.
+   ═══════════════════════════════════════════════════════════ */
+
+.topbar-right {
+    display: flex;
+    align-items: center;
+    gap: 14px;             /* 랭킹 버튼과 시계 사이 간격 */
+}
+
+
+/* ═══════════════════════════════════════════════════════════
+   랭킹 버튼 — 우측 그룹 안에서
+   ═══════════════════════════════════════════════════════════ */
+
+.topbar-btn {
+    background: rgba(0, 255, 208, 0.05);
+    border: 1px solid rgba(0, 255, 208, 0.4);
+    color: var(--accent-cyan, #00ffd0);
+    padding: 6px 14px;
+    font-size: 12px;
+    letter-spacing: 0.1em;
+    cursor: pointer;
+    border-radius: 4px;
+    transition: all 0.15s;
+    font-weight: 600;
+}
+.topbar-btn:hover {
+    background: rgba(0, 255, 208, 0.15);
+    box-shadow: 0 0 12px rgba(0, 255, 208, 0.3);
+    transform: translateY(-1px);
+}
+.topbar-btn:active {
+    transform: translateY(0);
+}

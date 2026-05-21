@@ -76,11 +76,7 @@ function refreshBattle(bs) {
     const p = state.player;
     // 이모지 폴백 동기화 (이미지 없으면 이게 보임)
     const playerArtIconEl = document.getElementById('player-combatant-art');
-    if (playerArtIconEl) playerArtIconEl.textContent = JOB_ICONS[p.job] || '?';
-
-    // ★ 배틀필드 플레이어 이미지 갱신 (직업별)
-    _updateBattleSprite('player_battle', null, p.job, bs.player_hp > 0 ? 'idle' : 'dead');
-
+    document.getElementById('player-combatant-art').textContent = JOB_ICONS[p.job] || '?';
     document.getElementById('player-combatant-name').textContent = p.name;
     document.getElementById('player-combatant-meta').textContent = `LV ${p.lv} ${p.job}`;
     document.getElementById('player-cb-hp').style.width = (bs.player_hp/bs.player_maxhp*100) + '%';
@@ -88,6 +84,23 @@ function refreshBattle(bs) {
     document.getElementById('player-cb-mp').style.width = (bs.player_mp/bs.player_maxmp*100) + '%';
     document.getElementById('player-cb-mp-text').textContent = `${Math.round(bs.player_mp)}/${bs.player_maxmp}`;
 
+    // ★ 플레이어 ATB 바 갱신
+    const playerAtb = bs.player_atb !== undefined ? bs.player_atb : 0;
+    const playerAtbPct = Math.min(100, Math.max(0, playerAtb));
+    const playerAtbEl = document.getElementById('player-cb-atb');
+    const playerAtbTextEl = document.getElementById('player-cb-atb-text');
+    if (playerAtbEl) {
+        playerAtbEl.style.width = playerAtbPct + '%';
+        // 100% 도달 시 펄스 글로우
+        if (playerAtbPct >= 100) {
+            playerAtbEl.classList.add('full');
+        } else {
+            playerAtbEl.classList.remove('full');
+        }
+    }
+    if (playerAtbTextEl) {
+        playerAtbTextEl.textContent = Math.round(playerAtb);
+    }
     // ── 적 슬롯 (다대일 지원) ──
     // bs.enemies는 항상 배열 (1대1이면 길이 1, 다대일이면 2~3)
     // 각 슬롯에 대응되는 ID 매핑:
@@ -137,6 +150,23 @@ function refreshBattle(bs) {
         const hpTextEl = document.getElementById(`enemy-cb-hp-text${enemyIdSuffix(i)}`);
         if (hpEl)     hpEl.style.width = (en.hp / en.maxhp * 100) + '%';
         if (hpTextEl) hpTextEl.textContent = `${Math.round(en.hp)}/${en.maxhp}`;
+
+        // ★ ATB 바 갱신
+        const enemyAtb = en.atb !== undefined ? en.atb : 0;
+        const enemyAtbPct = Math.min(100, Math.max(0, enemyAtb));
+        const atbEl     = document.getElementById(`enemy-cb-atb${enemyIdSuffix(i)}`);
+        const atbTextEl = document.getElementById(`enemy-cb-atb-text${enemyIdSuffix(i)}`);
+        if (atbEl) {
+            atbEl.style.width = enemyAtbPct + '%';
+            if (enemyAtbPct >= 100 && en.alive) {
+                atbEl.classList.add('full');
+            } else {
+                atbEl.classList.remove('full');
+            }
+        }
+        if (atbTextEl) {
+            atbTextEl.textContent = en.alive ? Math.round(enemyAtb) : '--';
+        }
 
         // 타깃 표시 (현재 선택된 슬롯에만)
         const targetTag = i === 0

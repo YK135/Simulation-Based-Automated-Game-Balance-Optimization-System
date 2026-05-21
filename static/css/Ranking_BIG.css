@@ -1,25 +1,26 @@
 /* ═══════════════════════════════════════════════════════════
-   Ranking_BIG.css — 큰 팝업 랭킹 모달 (수정 버전)
+   Ranking_BIG.css — 큰 팝업 랭킹 모달 (크기 확대 버전)
    ─────────────────────────────────────────────────────────
    ★ 통째 교체용 ★
 
-   🐛 버그 수정:
-   - .modal-overlay 셀렉터 제거 (Modal.css의 .modal-bg가 처리)
-   - HTML의 클래스를 .modal-bg로 바꾸면 자동으로 position: fixed 적용
+   변경:
+   - 모달 크기: 80vw × 80vh → 95vw × 95vh
+   - max-width: 1200px → 1600px
+   - max-height: 900px → 1200px
+   - 내부 폰트/패딩도 약간 크게
    ═══════════════════════════════════════════════════════════ */
 
 
 /* ═══════════════════════════════════════════════════════════
-   큰 랭킹 모달 본체
-   화면의 80% × 80% 크기, modal-bg 안에 중앙 정렬됨
+   큰 랭킹 모달 본체 (확대)
    ═══════════════════════════════════════════════════════════ */
 
 .ranking-modal-big {
     position: relative;
-    width: 80vw;
-    height: 80vh;
-    max-width: 1200px;
-    max-height: 900px;
+    width: 95vw;
+    height: 95vh;
+    max-width: 1600px;
+    max-height: 1200px;
     min-width: 600px;
     min-height: 500px;
 
@@ -29,8 +30,8 @@
     border: 1px solid var(--accent-cyan, #00ffd0);
     border-radius: 8px;
     box-shadow:
-        0 0 40px rgba(0, 255, 208, 0.2),
-        0 16px 48px rgba(0, 0, 0, 0.8);
+        0 0 60px rgba(0, 255, 208, 0.25),
+        0 24px 64px rgba(0, 0, 0, 0.85);
 
     display: flex;
     flex-direction: column;
@@ -40,19 +41,19 @@
 
 
 /* ═══════════════════════════════════════════════════════════
-   우상단 X 닫기 버튼
+   우상단 X 닫기 버튼 (확대)
    ═══════════════════════════════════════════════════════════ */
 
 .ranking-close-btn {
     position: absolute;
-    top: 12px;
-    right: 12px;
-    width: 36px;
-    height: 36px;
+    top: 16px;
+    right: 16px;
+    width: 44px;
+    height: 44px;
     background: transparent;
     border: 1px solid var(--border, #2d3a4a);
     color: var(--accent-cyan, #00ffd0);
-    font-size: 18px;
+    font-size: 22px;
     font-weight: 700;
     cursor: pointer;
     border-radius: 4px;
@@ -69,20 +70,20 @@
     background: rgba(255, 64, 64, 0.15);
     border-color: #ff5050;
     color: #ff7070;
-    box-shadow: 0 0 12px rgba(255, 80, 80, 0.3);
+    box-shadow: 0 0 16px rgba(255, 80, 80, 0.4);
 }
 
 
 /* ═══════════════════════════════════════════════════════════
-   헤더 (좌우 화살표 + 제목)
+   헤더 (좌우 화살표 + 제목) — 확대
    ═══════════════════════════════════════════════════════════ */
 
 .ranking-big-header {
     display: flex;
     align-items: center;
     justify-content: space-between;
-    gap: 24px;
-    padding: 24px 32px 20px;
+    gap: 32px;
+    padding: 32px 48px 24px;
     border-bottom: 1px solid rgba(0, 255, 208, 0.2);
     flex-shrink: 0;
 }
@@ -94,16 +95,16 @@
 
 .ranking-big-title-wrap h2 {
     margin: 0;
-    font-size: 28px;
+    font-size: 36px;
     color: var(--accent-cyan, #00ffd0);
     letter-spacing: 0.15em;
     font-weight: 700;
-    text-shadow: 0 0 12px rgba(0, 255, 208, 0.3);
+    text-shadow: 0 0 16px rgba(0, 255, 208, 0.4);
 }
 
 .ranking-big-title-wrap p {
-    margin: 6px 0 0 0;
-    font-size: 12px;
+    margin: 8px 0 0 0;
+    font-size: 14px;
     color: var(--text-muted, #7a96a3);
     letter-spacing: 0.2em;
     text-transform: uppercase;
@@ -111,12 +112,12 @@
 
 /* 좌우 화살표 — 큰 사이즈 */
 .ranking-arrow {
-    width: 48px;
-    height: 48px;
+    width: 56px;
+    height: 56px;
     background: rgba(0, 255, 208, 0.05);
     border: 1px solid rgba(0, 255, 208, 0.3);
     color: var(--accent-cyan, #00ffd0);
-    font-size: 22px;
+    font-size: 26px;
     cursor: pointer;
     border-radius: 50%;
     transition: all 0.2s;
@@ -130,7 +131,7 @@
 .ranking-arrow:hover {
     background: rgba(0, 255, 208, 0.15);
     border-color: var(--accent-cyan, #00ffd0);
-    box-shadow: 0 0 16px rgba(0, 255, 208, 0.4);
+    box-shadow: 0 0 20px rgba(0, 255, 208, 0.4);
     transform: scale(1.05);
 }
 
@@ -140,25 +141,25 @@
 
 
 /* ═══════════════════════════════════════════════════════════
-   본문 (스크롤 가능)
+   본문 (스크롤 가능) — 확대
    ═══════════════════════════════════════════════════════════ */
 
 .ranking-big-body {
     flex: 1;
     overflow-y: auto;
-    padding: 24px 32px;
+    padding: 32px 48px;
     min-height: 0;
 }
 
 /* 스크롤바 */
-.ranking-big-body::-webkit-scrollbar { width: 10px; }
+.ranking-big-body::-webkit-scrollbar { width: 12px; }
 .ranking-big-body::-webkit-scrollbar-track {
     background: rgba(13, 17, 23, 0.4);
-    border-radius: 5px;
+    border-radius: 6px;
 }
 .ranking-big-body::-webkit-scrollbar-thumb {
     background: rgba(0, 255, 208, 0.3);
-    border-radius: 5px;
+    border-radius: 6px;
 }
 .ranking-big-body::-webkit-scrollbar-thumb:hover {
     background: rgba(0, 255, 208, 0.5);
@@ -168,8 +169,8 @@
 .ranking-loading {
     text-align: center;
     color: var(--text-muted, #7a96a3);
-    padding: 60px 20px;
-    font-size: 14px;
+    padding: 80px 20px;
+    font-size: 16px;
     font-style: italic;
     letter-spacing: 0.1em;
 }
@@ -177,21 +178,21 @@
 .ranking-empty {
     text-align: center;
     color: var(--text-muted, #5d6770);
-    padding: 100px 20px;
-    font-size: 15px;
+    padding: 120px 20px;
+    font-size: 17px;
     font-style: italic;
 }
 
 
 /* ═══════════════════════════════════════════════════════════
-   랭킹 행 (테이블)
+   랭킹 행 (테이블) — 확대
    ═══════════════════════════════════════════════════════════ */
 
 .ranking-row {
     display: grid;
-    grid-template-columns: 80px 1fr 120px 160px;
-    gap: 16px;
-    padding: 14px 20px;
+    grid-template-columns: 100px 1fr 140px 200px;
+    gap: 20px;
+    padding: 18px 28px;
     border-bottom: 1px solid rgba(0, 255, 208, 0.08);
     align-items: center;
     transition: background 0.15s;
@@ -203,12 +204,12 @@
 
 /* 헤더 행 */
 .ranking-row.ranking-header-row {
-    font-size: 11px;
+    font-size: 13px;
     color: var(--text-muted, #7a96a3);
     letter-spacing: 0.3em;
     text-transform: uppercase;
     border-bottom: 2px solid rgba(0, 255, 208, 0.3);
-    padding: 12px 20px;
+    padding: 16px 28px;
     background: rgba(0, 255, 208, 0.03);
     margin-bottom: 4px;
     position: sticky;
@@ -222,7 +223,7 @@
 /* 등수 컬럼 */
 .rank-col {
     font-family: 'Cormorant Garamond', 'Georgia', serif;
-    font-size: 24px;
+    font-size: 30px;
     font-weight: 700;
     color: var(--text-main, #e8e0c4);
     text-align: center;
@@ -231,31 +232,31 @@
 /* 1~3등 색상 */
 .ranking-row.gold .rank-col {
     color: #ffd700;
-    text-shadow: 0 0 12px rgba(255, 215, 0, 0.5);
+    text-shadow: 0 0 16px rgba(255, 215, 0, 0.6);
 }
 .ranking-row.silver .rank-col {
     color: #c0c0c0;
-    text-shadow: 0 0 8px rgba(192, 192, 192, 0.4);
+    text-shadow: 0 0 10px rgba(192, 192, 192, 0.5);
 }
 .ranking-row.bronze .rank-col {
     color: #cd7f32;
-    text-shadow: 0 0 8px rgba(205, 127, 50, 0.4);
+    text-shadow: 0 0 10px rgba(205, 127, 50, 0.5);
 }
 
 .ranking-row.gold {
     background: linear-gradient(90deg,
-        rgba(255, 215, 0, 0.08) 0%,
-        rgba(255, 215, 0, 0.02) 50%,
+        rgba(255, 215, 0, 0.1) 0%,
+        rgba(255, 215, 0, 0.03) 50%,
         transparent 100%);
 }
 .ranking-row.silver {
     background: linear-gradient(90deg,
-        rgba(192, 192, 192, 0.06) 0%,
+        rgba(192, 192, 192, 0.08) 0%,
         transparent 100%);
 }
 .ranking-row.bronze {
     background: linear-gradient(90deg,
-        rgba(205, 127, 50, 0.06) 0%,
+        rgba(205, 127, 50, 0.08) 0%,
         transparent 100%);
 }
 
@@ -263,7 +264,7 @@
 .nickname-col {
     color: var(--text-main, #e8e0c4);
     font-weight: 500;
-    font-size: 16px;
+    font-size: 18px;
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
@@ -272,7 +273,7 @@
 /* 직업 */
 .job-col {
     color: var(--text-dim, #9aa6b2);
-    font-size: 13px;
+    font-size: 15px;
     text-align: center;
     letter-spacing: 0.1em;
 }
@@ -281,17 +282,17 @@
 .score-col {
     color: var(--accent-cyan, #00ffd0);
     font-family: 'Cormorant Garamond', monospace;
-    font-size: 18px;
+    font-size: 22px;
     font-weight: 700;
     text-align: right;
-    text-shadow: 0 0 8px rgba(0, 255, 208, 0.3);
+    text-shadow: 0 0 10px rgba(0, 255, 208, 0.3);
 }
 
 /* 날짜 (선구자) */
 .date-col {
     color: var(--text-dim, #9aa6b2);
     font-family: 'Cormorant Garamond', monospace;
-    font-size: 13px;
+    font-size: 15px;
     text-align: right;
 }
 
@@ -301,15 +302,15 @@
    ═══════════════════════════════════════════════════════════ */
 
 .ranking-my-rank {
-    margin: 0 32px 24px;
-    padding: 14px 20px;
+    margin: 0 48px 32px;
+    padding: 18px 28px;
     background: rgba(0, 255, 208, 0.08);
     border: 1px solid rgba(0, 255, 208, 0.3);
     border-radius: 4px;
     display: flex;
     justify-content: space-between;
     align-items: center;
-    font-size: 14px;
+    font-size: 16px;
     flex-shrink: 0;
 }
 
@@ -317,19 +318,19 @@
     color: var(--text-muted, #7a96a3);
     letter-spacing: 0.2em;
     text-transform: uppercase;
-    font-size: 11px;
+    font-size: 13px;
     font-weight: 700;
 }
 
 .my-rank-value {
     color: var(--text-main, #e8e0c4);
     font-weight: 600;
-    font-size: 16px;
+    font-size: 18px;
 }
 
 .my-rank-score {
     color: var(--accent-cyan, #00ffd0);
-    margin-left: 12px;
+    margin-left: 14px;
     font-family: 'Cormorant Garamond', monospace;
 }
 
@@ -338,19 +339,39 @@
    반응형
    ═══════════════════════════════════════════════════════════ */
 
+@media (max-width: 1280px) {
+    .ranking-big-header {
+        padding: 24px 32px 18px;
+        gap: 20px;
+    }
+    .ranking-big-title-wrap h2 { font-size: 28px; }
+    .ranking-arrow {
+        width: 48px; height: 48px; font-size: 22px;
+    }
+    .ranking-big-body { padding: 24px 32px; }
+    .ranking-row {
+        grid-template-columns: 80px 1fr 120px 160px;
+        gap: 16px;
+        padding: 14px 20px;
+    }
+    .rank-col { font-size: 24px; }
+    .nickname-col { font-size: 16px; }
+    .score-col { font-size: 18px; }
+}
+
 @media (max-width: 768px) {
     .ranking-modal-big {
-        width: 95vw;
-        height: 90vh;
+        width: 98vw;
+        height: 95vh;
         min-width: unset;
     }
     .ranking-big-header {
         padding: 16px 20px 12px;
         gap: 12px;
     }
-    .ranking-big-title-wrap h2 { font-size: 20px; }
+    .ranking-big-title-wrap h2 { font-size: 22px; }
     .ranking-arrow {
-        width: 36px; height: 36px; font-size: 16px;
+        width: 38px; height: 38px; font-size: 18px;
     }
     .ranking-big-body { padding: 16px 20px; }
     .ranking-row {
@@ -358,7 +379,7 @@
         gap: 8px;
         padding: 10px 12px;
     }
-    .rank-col { font-size: 18px; }
-    .nickname-col { font-size: 13px; }
-    .score-col { font-size: 14px; }
+    .rank-col { font-size: 20px; }
+    .nickname-col { font-size: 14px; }
+    .score-col { font-size: 15px; }
 }
