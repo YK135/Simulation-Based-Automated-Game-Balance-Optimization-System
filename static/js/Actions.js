@@ -155,50 +155,41 @@ async function explore() {
 }
 
 async function battleAction(action) {
-    // ── 연타 방지 락 ──
+    // 중복 호출 방지 락
     if (state.battleProcessing) {
-        term('battle action in progress, ignored', 'warn');
+        console.warn("[battleAction] already processing, ignoring:", action);
         return;
     }
     state.battleProcessing = true;
- 
-    document.getElementById('skill-menu').classList.remove('active');
-    document.getElementById('item-menu').classList.remove('active');
- 
-    // 액션 패널 비활성화 + 적 턴 표시
-    showEnemyTurn();
- 
+
     try {
         const r = await api('/battle/action', { action });
         if (!r.ok) {
-            toast(r.error || 'action 실패', 'error');
+            toast(r.error || '행동 실패', 'error');
             return;
         }
- 
-        // 상태 갱신 (HP/MP/슬롯 등) — 메시지는 시퀀서가 출력
-        const messages = r.messages || [];
-        const bsForRefresh = { ...r, messages: [] };
-        refreshBattle(bsForRefresh);
- 
-        // ────────────────────────────────────────
-        // ⚠ 주의: refreshBattle 안에서 showPlayerTurn 자동 호출됨.
-        // 우리는 시퀀서가 끝날 때까지 액션을 비활성 유지하려고 하므로
-        // refreshBattle 직후 다시 showEnemyTurn으로 덮어씌움.
-        // ────────────────────────────────────────
-        showEnemyTurn();
- 
-        // 시퀀스 재생 (메시지 + 이미지 + 시간)
-        if (typeof playBattleSequence === 'function') {
-            await playBattleSequence(action, { ...r, messages });
+
+        // ── 시퀀서: 메시지 순차 재생 ──
+        showEnemyTurn();   // 일단 행동 처리 중 — 버튼 비활성화
+
+        if (typeof BattleSequencer !== 'undefined' && BattleSequencer.play) {
+            await BattleSequencer.play(r);
         } else {
-            messages.forEach(m => logLine(m));
+            // 폴백: 메시지 즉시 출력
+            if (r.messages && r.messages.length > 0) {
+                for (const msg of r.messages) {
+                    logLine(msg);
+                    await _sleep(120);
+                }
+            }
         }
- 
-        // ★ 시퀀서 끝난 후 추가 대기 — 사용자가 마지막 메시지 읽을 시간 확보
-        // 시퀀서 마지막 NEXT_TURN_GAP(300ms) + 여기 500ms = 총 800ms 여유.
-        // 너무 길면 답답하니 500ms로 적정 잡음.
-        await new Promise(resolve => setTimeout(resolve, 500));
- 
+
+        // 상태 갱신
+        refreshBattle(r);
+
+        // 너무 빠르면 답답 — 적정 대기
+        await _sleep(300);
+
         // ── 종료 처리 ──
         if (r.done) {
             if (r.winner === 'player') {
@@ -226,12 +217,26 @@ async function battleAction(action) {
             document.getElementById('action-bar').classList.remove('processing');
             document.getElementById('actions-panel').classList.remove('processing');
             await loadStatus();
+            return;
+        }
+
+        // ── ★ A1: next_actor에 따라 다음 동작 결정 ──
+        const nextActor = r.next_actor || "player";
+
+        if (nextActor === "enemy") {
+            // 적 차례 → 0.5초 후 자동으로 step("auto") 호출 (재귀)
+            // 락은 해제 후 재호출 (이렇게 안 하면 battleProcessing이 true라서 멈춤)
+            state.battleProcessing = false;
+            await _sleep(500);
+            await battleAction("auto");
+            return;   // 재귀 호출이 락 관리하므로 finally 안 가도록
         } else {
-            // 전투 계속 — 이제 PlayerTurn 활성화 (시퀀서 + 추가 대기 후)
+            // 플레이어 차례 — 버튼 활성화
             showPlayerTurn();
         }
+
     } finally {
-        // 락 해제 — 시퀀서 + 추가 대기 모두 끝난 후
+        // 락 해제 (단, 위에서 재귀 호출하지 않은 경우만)
         state.battleProcessing = false;
     }
 }

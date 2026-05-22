@@ -163,101 +163,162 @@ class BattleSession:
 
     def step(self, action: str) -> dict:
         """
-        ATB 기반 step:
-          1. 플레이어가 행동을 보낸다 → 플레이어는 이미 ATB 100 상태로 가정
-             (UI는 player_atb >= 100일 때만 행동 버튼 활성)
-          2. 플레이어 행동 처리 → player_atb -= 100
-          3. 적 행동 루프: 어떤 적이라도 ATB >= 100이면 행동, 차감.
-             플레이어가 다시 100 도달할 때까지 tick.
-          4. 플레이어 ATB 100 도달 시 응답 반환 → UI에 행동 권한 넘김.
+        ATB 기반 단일 행동 처리 (★ A1 변경).
 
-        반환 dict는 기존과 동일하지만 enemy_actions가 리스트 가능 (적 N번 행동).
+        흐름:
+          - action == "attack"/"skill:"/"item:"/"escape":
+              플레이어 행동 처리. ATB 0으로 차감. 그 다음 ATB tick 진행해서
+              다음 행동자 결정 + 응답.
+
+          - action == "auto":
+              적 1회 행동 처리. ATB 0으로 차감. 다음 행동자 결정 + 응답.
+              (UI가 next_actor='enemy'일 때 자동 호출)
+
+          - action == "status":
+              상태만 반환 (행동 없음, 턴 소모 없음).
+
+        응답 추가 필드:
+          - next_actor: "player" | "enemy" | "done"
+          - acting_enemy_idx: 다음 행동할 적의 슬롯 인덱스 (next_actor='enemy'일 때)
         """
         if self.done:
-            return self._state(messages=["전투가 이미 종료되었습니다."])
+            return self._state(messages=["전투가 이미 종료되었습니다."], next_actor="done")
 
         msgs = []
 
-        # ── 상태 확인 (턴 소모 없음) ──
+        # ── 상태 확인 (행동 없음) ──
         if action == "status":
-            return self._state(messages=["현재 상태를 확인합니다."])
+            next_actor, idx = self._determine_next_actor()
+            return self._state(messages=["현재 상태를 확인합니다."],
+                               next_actor=next_actor, acting_enemy_idx=idx)
 
+        # ════════════════════════════════════════════════════════
+        # 1. 적 자동 행동 (next_actor='enemy'일 때 UI가 호출)
+        # ════════════════════════════════════════════════════════
+        if action == "auto":
+            # ATB 100 이상인 적 중 가장 ATB 높은 적 찾기
+            acting_idx = -1
+            acting_atb = -1
+            for i, e in enumerate(self.enemies):
+                if e.hp > 0 and self.enemy_atbs[i] >= 100.0:
+                    if self.enemy_atbs[i] > acting_atb:
+                        acting_atb = self.enemy_atbs[i]
+                        acting_idx = i
+
+            if acting_idx < 0:
+                # 적이 행동 준비 안 됨 — ATB tick으로 다음 행동자 결정
+                next_actor, idx = self._determine_next_actor()
+                return self._state(messages=msgs,
+                                   next_actor=next_actor, acting_enemy_idx=idx)
+
+            # 적 1회 행동
+            enemy = self.enemies[acting_idx]
+            self._single_enemy_action(enemy, msgs)
+            self.enemy_atbs[acting_idx] = max(0.0, self.enemy_atbs[acting_idx] - 100.0)
+
+            # 플레이어 사망 체크
+            if self.player.hp <= 0:
+                self.done = True
+                self.winner = "enemy"
+                msgs.append(f"{self.player.name}이(가) 쓰러졌다...")
+                return self._state(messages=msgs, next_actor="done")
+
+            # 다음 행동자 결정 (ATB tick 진행)
+            next_actor, idx = self._determine_next_actor()
+            return self._state(messages=msgs,
+                               next_actor=next_actor, acting_enemy_idx=idx)
+
+        # ════════════════════════════════════════════════════════
+        # 2. 플레이어 행동 (attack / skill: / item: / escape)
+        # ════════════════════════════════════════════════════════
         self.turn += 1
 
-        # ── 전사 패시브: 2턴마다 maxhp 10% 회복 ──
+        # 전사 패시브: 2턴마다 maxhp 10% 회복
         if self.player.job == "전사" and self.turn % 2 == 0 and self.player.hp > 0:
             warrior_msg = self.player.passive_on_turn_start()
             if warrior_msg:
                 msgs.append(warrior_msg)
 
-        # ────────────────────────────────────────
-        # 1. 플레이어 행동 처리
-        # ────────────────────────────────────────
+        # 플레이어 행동 처리
         p_result = self._player_action(action, msgs)
         self.player.tick_buffs()
+
+        # 플레이어 ATB 100 차감
         self.player_atb = max(0.0, self.player_atb - 100.0)
 
+        # 도망 성공
         if p_result == "escaped":
-            self.done   = True
+            self.done = True
             self.winner = "escaped"
             msgs.append("도망에 성공했다!")
-            return self._state(messages=msgs)
+            return self._state(messages=msgs, next_actor="done")
 
-        # ── 모든 적 사망 체크 (다대일) ──
+        # 모든 적 사망 체크
         if not self._alive_enemies():
-            self.done   = True
+            self.done = True
             self.winner = "player"
             if len(self.enemies) > 1:
                 msgs.append("모든 적을 처치했다!")
             else:
                 msgs.append(f"{self.enemies[0].name}을(를) 처치했다!")
-            return self._state(messages=msgs)
+            return self._state(messages=msgs, next_actor="done")
 
-        # ────────────────────────────────────────
-        # 2. ATB 루프 — 플레이어 차례가 다시 올 때까지
-        # ────────────────────────────────────────
-        # 안전장치: 최대 100회 tick (실제로는 SPD 합산으로 매우 빠르게 도달).
-        # 무한루프 방지용 가드.
-        max_ticks = 100
+        # 다음 행동자 결정 (ATB tick 진행)
+        next_actor, idx = self._determine_next_actor()
+        return self._state(messages=msgs,
+                           next_actor=next_actor, acting_enemy_idx=idx)
+
+
+    def _determine_next_actor(self):
+        """
+        ATB tick을 진행해서 다음 행동자 결정.
+        누군가 100 도달할 때까지 tick.
+
+        반환: (next_actor: str, enemy_idx: int)
+          - ("player", -1)
+          - ("enemy", N) — N은 self.enemies 인덱스
+          - ("done", -1) — 모든 적 사망 (이론상 도달 X, 안전망)
+        """
+        max_ticks = 200  # 무한루프 방지
         ticks = 0
-        while self.player_atb < 100.0 and ticks < max_ticks:
+
+        while ticks < max_ticks:
             ticks += 1
 
-            # 모든 entity ATB 증가
+            # 모든 entity ATB 누적
             self.player_atb += self.player.effective_spd()
             for i, e in enumerate(self.enemies):
                 if e.hp > 0:
                     self.enemy_atbs[i] += e.effective_spd()
 
-            # 행동 가능한 적이 있는지 — ATB 내림차순으로 정렬해서 행동
-            # 한 tick에 여러 적이 100을 넘을 수 있음 → 모두 행동
+            # 누가 100 도달했는지 확인
+            player_ready = self.player_atb >= 100.0
+
             ready_enemies = []
             for i, e in enumerate(self.enemies):
                 if e.hp > 0 and self.enemy_atbs[i] >= 100.0:
-                    ready_enemies.append((i, e, self.enemy_atbs[i]))
+                    ready_enemies.append((i, self.enemy_atbs[i]))
 
-            # ATB 높은 순으로 정렬 (가장 많이 채워진 적부터)
-            ready_enemies.sort(key=lambda x: x[2], reverse=True)
+            # 행동 준비 완료된 entity가 있으면 누가 우선인지 결정
+            if player_ready or ready_enemies:
+                # 플레이어 vs 적 — ATB 더 높은 쪽이 우선
+                # (동률이면 적 우선 — RPG 관례)
+                max_enemy_atb = max((atb for _, atb in ready_enemies), default=0)
 
-            for idx, enemy, _atb in ready_enemies:
-                if self.player.hp <= 0:
-                    break
-                if enemy.hp <= 0:  # 다른 적 행동 중에 죽었을 수도
-                    continue
+                if ready_enemies and max_enemy_atb >= self.player_atb:
+                    # 적 행동
+                    # ATB 가장 높은 적
+                    idx = max(ready_enemies, key=lambda x: x[1])[0]
+                    return ("enemy", idx)
+                else:
+                    # 플레이어 행동
+                    return ("player", -1)
 
-                # 적 행동
-                self._single_enemy_action(enemy, msgs)
-                self.enemy_atbs[idx] = max(0.0, self.enemy_atbs[idx] - 100.0)
+            # 아직 아무도 100 못 닿음 — 계속 tick
 
-                # 적 행동 후 플레이어 사망 체크
-                if self.player.hp <= 0:
-                    self.done   = True
-                    self.winner = "enemy"
-                    msgs.append(f"{self.player.name}이(가) 쓰러졌다...")
-                    return self._state(messages=msgs)
+        # max_ticks 초과 (이론상 도달 X)
+        return ("player", -1)
 
-        # 플레이어 ATB 100 도달 — 행동 권한을 UI로 넘김
-        return self._state(messages=msgs)
     # ── 헬퍼: 새로 죽은 적의 원본 객체 수집 ──
     # self.enemies[i].hp <= 0 인 적의 self._origins[i] 를 defeated_origins에 추가.
     # id(snap) 비교로 중복 방지.

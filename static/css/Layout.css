@@ -160,7 +160,7 @@ body {
 /* 중앙의 마지막 패널 (배틀 로그) — 고정 높이 */
 .center-col > .panel:last-child {
     flex-shrink: 0;
-    height: 220px;
+    height: 320px;
     display: flex;
     flex-direction: column;
     overflow: hidden;
@@ -192,7 +192,7 @@ body {
         grid-template-columns: 260px 1fr 300px;
     }
     .center-col > .panel:last-child {
-        height: 180px;
+        height: 260px;
     }
 }
 
