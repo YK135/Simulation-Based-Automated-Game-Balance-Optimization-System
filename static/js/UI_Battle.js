@@ -257,16 +257,21 @@ function refreshBattle(bs) {
         });
     }
 
-    // ── ATB 시뮬 (시각적 효과) ──
-    // 좌측 패널의 ATB 바는 제거됨. 안전하게 null 체크 후 처리.
+    // ── 좌측 패널 ATB 바 갱신 ──
+    // bs.player_atb (0~100+) 값을 받아서 시각적으로 표시.
     const atbFill = document.getElementById('atb-fill');
     const atbCur  = document.getElementById('atb-cur');
+    const leftAtbVal = bs.player_atb !== undefined ? bs.player_atb : 0;
+    const leftAtbPct = Math.min(100, Math.max(0, leftAtbVal));
     if (atbFill) {
-        atbFill.style.height = '100%';
-        atbFill.classList.add('full');
+        atbFill.style.height = leftAtbPct + '%';
+        if (leftAtbPct >= 100) {
+            atbFill.classList.add('full');
+        } else {
+            atbFill.classList.remove('full');
+        }
     }
-    if (atbCur) atbCur.textContent = '100';
-
+    if (atbCur) atbCur.textContent = Math.round(leftAtbVal);
     // ── 펜타곤 차트 ──
     // 다대일이면 살아있는 적들의 평균 능력치 사용 (전체 위협도 표시)
     const aliveEnemies = enemiesArr.filter(e => e.alive);

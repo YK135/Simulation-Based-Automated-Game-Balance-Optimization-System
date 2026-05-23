@@ -191,16 +191,22 @@
                                 <div class="combatant-art" id="player-combatant-art">⚔</div>
                                 <div class="combatant-name" id="player-combatant-name">-</div>
                                 <div class="combatant-meta" id="player-combatant-meta">LV --</div>
-                                <div class="combatant-bars">
-                            <div class="cb-row">
-                                <span class="cb-label">HP</span>
-                                <div class="cb-track"><div id="player-cb-hp" class="cb-fill hp" style="width:100%"></div></div>
-                                <span class="cb-text" id="player-cb-hp-text">--/--</span>
-                            </div>
-                            <div class="cb-row">
-                                <span class="cb-label">MP</span>
-                                <div class="cb-track"><div id="player-cb-mp" class="cb-fill mp" style="width:100%"></div></div>
-                                <span class="cb-text" id="player-cb-mp-text">--/--</span>
+                            <div class="combatant-bars">
+                                <div class="cb-row">
+                                    <span class="cb-label">HP</span>
+                                        <div class="cb-track"><div id="player-cb-hp" class="cb-fill hp" style="width:100%"></div></div>
+                                        <span class="cb-text" id="player-cb-hp-text">--/--</span>
+                                </div>
+                                <div class="cb-row">
+                                    <span class="cb-label">MP</span>
+                                    <div class="cb-track"><div id="player-cb-mp" class="cb-fill mp" style="width:100%"></div></div>
+                                    <span class="cb-text" id="player-cb-mp-text">--/--</span>
+                                </div>
+                                <!-- ★ 플레이어 ATB 바 (codex 진단 추가) -->
+                                <div class="cb-row atb-row">
+                                    <span class="cb-label">ATB</span>
+                                    <div class="cb-track atb-track"><div id="player-cb-atb" class="cb-fill atb" style="width:0%"></div></div>
+                                    <span class="cb-text" id="player-cb-atb-text">0</span>
                             </div>
                         </div>
                     </div>
@@ -262,14 +268,13 @@
                          <div class="combatant-bars">
                             <div class="cb-row">
                                 <span class="cb-label">HP</span>
-                                <div class="cb-track"><div id="enemy-cb-hp" class="cb-fill hp" style="width:100%"></div></div>
-                                <span class="cb-text" id="enemy-cb-hp-text">--/--</span>
+                                <div class="cb-track"><div id="enemy-cb-hp-2" class="cb-fill hp" style="width:100%"></div></div>
+                                <span class="cb-text" id="enemy-cb-hp-text-2">--/--</span>
                             </div>
-                            <!-- ★ ATB 바 추가 -->
                             <div class="cb-row atb-row enemy">
                                 <span class="cb-label">ATB</span>
-                                <div class="cb-track atb-track"><div id="enemy-cb-atb" class="cb-fill atb-enemy" style="width:0%"></div></div>
-                                <span class="cb-text" id="enemy-cb-atb-text">0</span>
+                                <div class="cb-track atb-track"><div id="enemy-cb-atb-2" class="cb-fill atb-enemy" style="width:0%"></div></div>
+                                <span class="cb-text" id="enemy-cb-atb-text-2">0</span>
                             </div>
                         </div>
                     </div>
@@ -288,14 +293,13 @@
                          <div class="combatant-bars">
                             <div class="cb-row">
                                 <span class="cb-label">HP</span>
-                                <div class="cb-track"><div id="enemy-cb-hp" class="cb-fill hp" style="width:100%"></div></div>
-                                <span class="cb-text" id="enemy-cb-hp-text">--/--</span>
+                                <div class="cb-track"><div id="enemy-cb-hp-3" class="cb-fill hp" style="width:100%"></div></div>
+                                <span class="cb-text" id="enemy-cb-hp-text-3">--/--</span>
                             </div>
-                            <!-- ★ ATB 바 추가 -->
                             <div class="cb-row atb-row enemy">
                                 <span class="cb-label">ATB</span>
-                                <div class="cb-track atb-track"><div id="enemy-cb-atb" class="cb-fill atb-enemy" style="width:0%"></div></div>
-                                <span class="cb-text" id="enemy-cb-atb-text">0</span>
+                                <div class="cb-track atb-track"><div id="enemy-cb-atb-3" class="cb-fill atb-enemy" style="width:0%"></div></div>
+                                <span class="cb-text" id="enemy-cb-atb-text-3">0</span>
                             </div>
                         </div>
                     </div>
