@@ -98,11 +98,12 @@ class BattleSession:
         self.skills_used = 0
         self.items_used  = 0
 
-        # ★ ATB 시스템 (Digital Twin — Battle_Engine과 동일 규칙)
+        # ★ ATB 시스템 (사용자 모델 — SPD에서 시작, 행동마다 SPD씩 누적)
+        # 시작값: 각자 SPD (예: 도적 14, 슬라임 7)
         # 매 tick: effective_spd() 만큼 누적
         # 100 이상이면 행동 가능, 행동 후 -= 100
-        self.player_atb: float = 0.0
-        self.enemy_atbs: list  = [0.0 for _ in self.enemies]
+        self.player_atb: float = float(self.player.effective_spd())
+        self.enemy_atbs: list  = [float(e.effective_spd()) for e in self.enemies]
 
         # 적 first_strike 처리 (암살자) — 첫 tick부터 적이 100을 갖고 시작.
         for i, e in enumerate(self.enemies):
@@ -123,16 +124,6 @@ class BattleSession:
         # self.turn은 다른 곳에서도 쓰여서 별도로 관리.
         # 플레이어가 실제로 행동한 횟수 (item, escape도 포함 — step과 1:1).
         self._warrior_action_count = 0
-
-        INIT_ADDITION = 0.0  # 초기 ATB 보정 (예: 선제 공격 적)
-        # ★ ATB 시스템 (Digital Twin — Battle_Engine과 동일 규칙)
-        self.player_atb: float = 0.0
-        self.enemy_atbs: list  = [0.0 for _ in self.enemies]
-
-        # first_strike 처리 (암살자) — 첫 적은 ATB 100으로 시작
-        for i, e in enumerate(self.enemies):
-            if getattr(e, "first_strike", False):
-                self.enemy_atbs[i] = 100.0
 
     # 기존 1대1 코드는 self.enemy 직접 접근. 살아있는 첫 번째 적 반환.
     @property
@@ -163,26 +154,23 @@ class BattleSession:
 
     def step(self, action: str) -> dict:
         """
-        ATB 기반 단일 행동 처리 (★ A1 변경).
+        ATB 기반 step (사용자 모델, 단일 행동 응답).
 
         흐름:
-          - action == "attack"/"skill:"/"item:"/"escape":
-              플레이어 행동 처리. ATB 0으로 차감. 그 다음 ATB tick 진행해서
-              다음 행동자 결정 + 응답.
+          1. action이 "auto"가 아니면 플레이어 행동 처리 + ATB -= 100
+          2. action이 "auto"면 ATB ≥ 100인 적 1마리 행동 + ATB -= 100
+          3. tick 진행해서 다음 행동자 결정 (한 번에 한 tick씩)
+          4. 응답 (next_actor 포함)
 
-          - action == "auto":
-              적 1회 행동 처리. ATB 0으로 차감. 다음 행동자 결정 + 응답.
-              (UI가 next_actor='enemy'일 때 자동 호출)
-
-          - action == "status":
-              상태만 반환 (행동 없음, 턴 소모 없음).
-
-        응답 추가 필드:
-          - next_actor: "player" | "enemy" | "done"
-          - acting_enemy_idx: 다음 행동할 적의 슬롯 인덱스 (next_actor='enemy'일 때)
+        action:
+          - "attack" / "skill:이름" / "item:이름" / "escape" → 플레이어 행동
+          - "attack:N" / "skill:이름:N" → 타깃 인덱스 지정
+          - "auto" → 적 1마리 자동 행동 (UI가 next_actor='enemy'일 때 호출)
+          - "status" → 상태만 반환 (행동 없음)
         """
         if self.done:
-            return self._state(messages=["전투가 이미 종료되었습니다."], next_actor="done")
+            return self._state(messages=["전투가 이미 종료되었습니다."],
+                               next_actor="done")
 
         msgs = []
 
@@ -193,12 +181,12 @@ class BattleSession:
                                next_actor=next_actor, acting_enemy_idx=idx)
 
         # ════════════════════════════════════════════════════════
-        # 1. 적 자동 행동 (next_actor='enemy'일 때 UI가 호출)
+        # 1. 적 자동 행동 (auto)
         # ════════════════════════════════════════════════════════
         if action == "auto":
-            # ATB 100 이상인 적 중 가장 ATB 높은 적 찾기
+            # ATB ≥ 100인 적 중 가장 높은 적 찾기
             acting_idx = -1
-            acting_atb = -1
+            acting_atb = -1.0
             for i, e in enumerate(self.enemies):
                 if e.hp > 0 and self.enemy_atbs[i] >= 100.0:
                     if self.enemy_atbs[i] > acting_atb:
@@ -206,7 +194,7 @@ class BattleSession:
                         acting_idx = i
 
             if acting_idx < 0:
-                # 적이 행동 준비 안 됨 — ATB tick으로 다음 행동자 결정
+                # 적이 행동 준비 안 됨 — tick 진행 후 다음 행동자 결정
                 next_actor, idx = self._determine_next_actor()
                 return self._state(messages=msgs,
                                    next_actor=next_actor, acting_enemy_idx=idx)
@@ -223,18 +211,21 @@ class BattleSession:
                 msgs.append(f"{self.player.name}이(가) 쓰러졌다...")
                 return self._state(messages=msgs, next_actor="done")
 
-            # 다음 행동자 결정 (ATB tick 진행)
+            # 다음 행동자 결정
             next_actor, idx = self._determine_next_actor()
             return self._state(messages=msgs,
                                next_actor=next_actor, acting_enemy_idx=idx)
 
         # ════════════════════════════════════════════════════════
-        # 2. 플레이어 행동 (attack / skill: / item: / escape)
+        # 2. 플레이어 행동
         # ════════════════════════════════════════════════════════
         self.turn += 1
 
-        # 전사 패시브: 2턴마다 maxhp 10% 회복
-        if self.player.job == "전사" and self.turn % 2 == 0 and self.player.hp > 0:
+        # 전사 패시브: 행동 3회마다 maxhp 10% 회복 (Battle_Engine 통일)
+        self._warrior_action_count += 1
+        if (self.player.job == "전사" and
+            self._warrior_action_count % 3 == 0 and
+            self.player.hp > 0):
             warrior_msg = self.player.passive_on_turn_start()
             if warrior_msg:
                 msgs.append(warrior_msg)
@@ -243,7 +234,7 @@ class BattleSession:
         p_result = self._player_action(action, msgs)
         self.player.tick_buffs()
 
-        # 플레이어 ATB 100 차감
+        # 플레이어 ATB 차감
         self.player_atb = max(0.0, self.player_atb - 100.0)
 
         # 도망 성공
@@ -263,11 +254,58 @@ class BattleSession:
                 msgs.append(f"{self.enemies[0].name}을(를) 처치했다!")
             return self._state(messages=msgs, next_actor="done")
 
-        # 다음 행동자 결정 (ATB tick 진행)
+        # 다음 행동자 결정 (tick 진행)
         next_actor, idx = self._determine_next_actor()
         return self._state(messages=msgs,
                            next_actor=next_actor, acting_enemy_idx=idx)
 
+
+    def _determine_next_actor(self):
+        """
+        ATB tick 진행해서 다음 행동자 결정.
+        누군가 ATB ≥ 100 될 때까지 한 tick씩 진행 (max 200 tick 안전망).
+
+        한 tick = 모든 살아있는 entity의 ATB가 자기 SPD만큼 증가.
+
+        반환:
+          ("player", -1)        → 플레이어 행동 가능
+          ("enemy", N)          → 적 슬롯 N 행동 가능 (N = self.enemies 인덱스)
+          ("done", -1)          → 모든 적 사망 (이론상 도달 X)
+        """
+        max_ticks = 200
+        ticks = 0
+
+        # 이미 누군가 100 이상이면 tick 안 돌리고 바로 결정
+        while ticks <= max_ticks:
+            # 행동 가능 entity 확인
+            player_ready = self.player_atb >= 100.0
+
+            ready_enemies = []
+            for i, e in enumerate(self.enemies):
+                if e.hp > 0 and self.enemy_atbs[i] >= 100.0:
+                    ready_enemies.append((i, self.enemy_atbs[i]))
+
+            if player_ready or ready_enemies:
+                # ATB가 가장 높은 entity가 우선
+                # 동률이면 플레이어 우선 (UX)
+                max_enemy_atb = max((atb for _, atb in ready_enemies), default=-1.0)
+
+                if not ready_enemies or self.player_atb >= max_enemy_atb:
+                    if player_ready:
+                        return ("player", -1)
+                # 적 행동
+                idx = max(ready_enemies, key=lambda x: x[1])[0]
+                return ("enemy", idx)
+
+            # 아직 아무도 100 못 닿음 → 한 tick 진행
+            ticks += 1
+            self.player_atb += self.player.effective_spd()
+            for i, e in enumerate(self.enemies):
+                if e.hp > 0:
+                    self.enemy_atbs[i] += e.effective_spd()
+
+        # max_ticks 초과 (이론상 도달 X) — 안전 폴백
+        return ("player", -1)
 
     def _determine_next_actor(self):
         """

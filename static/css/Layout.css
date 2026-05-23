@@ -131,6 +131,12 @@ body {
     border-bottom: 1px dashed var(--border);
 }
 
+.center-col {
+    min-width: 0;
+    overflow: hidden;
+}
+ 
+
 
 /* ═══════════════════════════════════════════════════════════
    좌측 컬럼 — 플레이어 패널이 전체 차지

@@ -155,40 +155,44 @@ async function explore() {
 }
 
 async function battleAction(action) {
-    // 중복 호출 방지 락
+    // ── 연타 방지 락 ──
     if (state.battleProcessing) {
-        console.warn("[battleAction] already processing, ignoring:", action);
+        console.warn('[battleAction] already processing, ignoring:', action);
         return;
     }
     state.battleProcessing = true;
 
+    // 액션 메뉴 닫기 + 비활성화
+    const sm = document.getElementById('skill-menu');
+    const im = document.getElementById('item-menu');
+    if (sm) sm.classList.remove('active');
+    if (im) im.classList.remove('active');
+
+    showEnemyTurn();   // 행동 처리 중 — 버튼 비활성화
+
     try {
         const r = await api('/battle/action', { action });
         if (!r.ok) {
-            toast(r.error || '행동 실패', 'error');
+            toast(r.error || 'action 실패', 'error');
             return;
         }
 
-        // ── 시퀀서: 메시지 순차 재생 ──
-        showEnemyTurn();   // 일단 행동 처리 중 — 버튼 비활성화
+        // 시퀀서 또는 폴백으로 메시지 재생
+        const messages = r.messages || [];
+        const bsForRefresh = { ...r, messages: [] };
+        refreshBattle(bsForRefresh);
 
-        if (typeof BattleSequencer !== 'undefined' && BattleSequencer.play) {
-            await BattleSequencer.play(r);
+        // refreshBattle 안에서 showPlayerTurn 호출될 수 있으니 다시 비활성화
+        showEnemyTurn();
+
+        if (typeof playBattleSequence === 'function') {
+            await playBattleSequence(action, { ...r, messages });
         } else {
-            // 폴백: 메시지 즉시 출력
-            if (r.messages && r.messages.length > 0) {
-                for (const msg of r.messages) {
-                    logLine(msg);
-                    await _sleep(120);
-                }
-            }
+            messages.forEach(m => logLine(m));
         }
 
-        // 상태 갱신
-        refreshBattle(r);
-
-        // 너무 빠르면 답답 — 적정 대기
-        await _sleep(300);
+        // 마지막 메시지 읽을 시간
+        await new Promise(resolve => setTimeout(resolve, 400));
 
         // ── 종료 처리 ──
         if (r.done) {
@@ -212,31 +216,39 @@ async function battleAction(action) {
                 logLine('▶ 도망쳤다.', 'system');
                 term('escaped');
             }
-            document.getElementById('turn-indicator').className = 'turn-indicator';
-            document.getElementById('action-bar').classList.remove('your-turn');
-            document.getElementById('action-bar').classList.remove('processing');
-            document.getElementById('actions-panel').classList.remove('processing');
+            const turnEl = document.getElementById('turn-indicator');
+            const actBar = document.getElementById('action-bar');
+            const actPanel = document.getElementById('actions-panel');
+            if (turnEl) turnEl.className = 'turn-indicator';
+            if (actBar) {
+                actBar.classList.remove('your-turn');
+                actBar.classList.remove('processing');
+            }
+            if (actPanel) actPanel.classList.remove('processing');
             await loadStatus();
             return;
         }
 
-        // ── ★ A1: next_actor에 따라 다음 동작 결정 ──
+        // ── ★ next_actor 처리 ──
         const nextActor = r.next_actor || "player";
 
         if (nextActor === "enemy") {
-            // 적 차례 → 0.5초 후 자동으로 step("auto") 호출 (재귀)
-            // 락은 해제 후 재호출 (이렇게 안 하면 battleProcessing이 true라서 멈춤)
+            // 적 차례 → 500ms 후 자동 step("auto") 재귀 호출
+            // 락을 풀고 호출 (재귀라서 락 충돌 방지)
             state.battleProcessing = false;
-            await _sleep(500);
+            await new Promise(resolve => setTimeout(resolve, 500));
             await battleAction("auto");
-            return;   // 재귀 호출이 락 관리하므로 finally 안 가도록
+            return;   // 재귀 호출이 락 관리 — finally 안 가도록
         } else {
-            // 플레이어 차례 — 버튼 활성화
+            // 플레이어 차례 → 행동 버튼 활성화
             showPlayerTurn();
         }
 
+    } catch (e) {
+        console.error('[battleAction]', e);
+        toast('네트워크 오류', 'error');
     } finally {
-        // 락 해제 (단, 위에서 재귀 호출하지 않은 경우만)
+        // 락 해제 (정상 종료 시. 적 차례 재귀에서는 위에서 return 했음)
         state.battleProcessing = false;
     }
 }

@@ -242,3 +242,66 @@
     border-radius: 2px;
     font-size: 9px;
 }
+
+#explore-mode {
+    width: 100%;
+    max-width: 100%;
+    box-sizing: border-box;
+    overflow: hidden;     /* 자식이 넘어가도 잘림 */
+}
+
+/* 인벤토리/스킬 그리드 — 폭 제한 */
+.explore-info-grid {
+    width: 100%;
+    max-width: 100%;
+    box-sizing: border-box;
+    overflow: hidden;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); /* 1fr → minmax(0, 1fr)로 폭 strict */
+}
+
+/* 각 카드 — 부모를 넘지 않도록 */
+.explore-card {
+    width: 100%;
+    max-width: 100%;
+    box-sizing: border-box;
+    overflow: hidden;
+    min-width: 0;         /* flex/grid 자식이 자기 콘텐츠 폭 따라 늘어나는 것 방지 */
+}
+
+/* 카드 body — 텍스트 줄바꿈 처리 */
+.explore-card-body {
+    overflow: hidden;
+    word-wrap: break-word;
+    word-break: break-word;
+}
+
+/* 인벤토리 항목 행 — 폭 안에 가두기 */
+.inv-item {
+    max-width: 100%;
+    box-sizing: border-box;
+    overflow: hidden;
+}
+
+.inv-item span {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+/* 스킬 칩 — 폭 넘어가면 자동 wrap */
+.sk-chip {
+    max-width: 100%;
+    word-break: keep-all;
+}
+
+/* 탐험 progress bar도 폭 제한 */
+.explore-progress {
+    max-width: 100%;
+    box-sizing: border-box;
+}
+
+/* 탐험 hero (PEACEFUL FIELD) 부분도 폭 제한 */
+.explore-hero {
+    max-width: 100%;
+    box-sizing: border-box;
+}
