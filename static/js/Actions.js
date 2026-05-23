@@ -155,20 +155,18 @@ async function explore() {
 }
 
 async function battleAction(action) {
-    // ── 연타 방지 락 ──
+    // 연타 방지 락
     if (state.battleProcessing) {
-        console.warn('[battleAction] already processing, ignoring:', action);
+        term('battle action in progress, ignored', 'warn');
         return;
     }
     state.battleProcessing = true;
 
-    // 액션 메뉴 닫기 + 비활성화
-    const sm = document.getElementById('skill-menu');
-    const im = document.getElementById('item-menu');
-    if (sm) sm.classList.remove('active');
-    if (im) im.classList.remove('active');
+    document.getElementById('skill-menu').classList.remove('active');
+    document.getElementById('item-menu').classList.remove('active');
 
-    showEnemyTurn();   // 행동 처리 중 — 버튼 비활성화
+    // 액션 패널 비활성화 + 적 턴 표시
+    showEnemyTurn();
 
     try {
         const r = await api('/battle/action', { action });
@@ -177,14 +175,28 @@ async function battleAction(action) {
             return;
         }
 
-        // 시퀀서 또는 폴백으로 메시지 재생
+        // ────────────────────────────────────────────────────────
+        // ★ 1단계: interim_atb_states 애니메이션 (ATB 차오름 시각화)
+        // 백엔드가 "도적 ATB 14 → 28 → 42 → 56 → ... → 112"
+        // 같이 tick 단위 진행 기록을 보내줌. 100ms씩 부드럽게 표시.
+        // ────────────────────────────────────────────────────────
+        if (r.interim_atb_states && r.interim_atb_states.length > 0) {
+            await _animateInterimAtbStates(r.interim_atb_states);
+        }
+
+        // ────────────────────────────────────────────────────────
+        // ★ 2단계: 최종 상태 반영 (HP/MP/슬롯 등 + 행동 직후 ATB)
+        // ────────────────────────────────────────────────────────
         const messages = r.messages || [];
         const bsForRefresh = { ...r, messages: [] };
         refreshBattle(bsForRefresh);
 
-        // refreshBattle 안에서 showPlayerTurn 호출될 수 있으니 다시 비활성화
+        // refreshBattle 안에서 showPlayerTurn 자동 호출됨 → 다시 적 턴 표시
         showEnemyTurn();
 
+        // ────────────────────────────────────────────────────────
+        // ★ 3단계: 시퀀서로 메시지 재생
+        // ────────────────────────────────────────────────────────
         if (typeof playBattleSequence === 'function') {
             await playBattleSequence(action, { ...r, messages });
         } else {
@@ -194,7 +206,9 @@ async function battleAction(action) {
         // 마지막 메시지 읽을 시간
         await new Promise(resolve => setTimeout(resolve, 400));
 
-        // ── 종료 처리 ──
+        // ────────────────────────────────────────────────────────
+        // ★ 4단계: 종료 처리
+        // ────────────────────────────────────────────────────────
         if (r.done) {
             if (r.winner === 'player') {
                 logLine('★ VICTORY!', 'crit');
@@ -229,18 +243,21 @@ async function battleAction(action) {
             return;
         }
 
-        // ── ★ next_actor 처리 ──
+        // ────────────────────────────────────────────────────────
+        // ★ 5단계: next_actor 처리
+        // - "player": 사용자 대기 (버튼 활성화)
+        // - "enemy":  500ms 후 자동으로 battleAction("auto") 재귀 호출
+        // ────────────────────────────────────────────────────────
         const nextActor = r.next_actor || "player";
 
         if (nextActor === "enemy") {
-            // 적 차례 → 500ms 후 자동 step("auto") 재귀 호출
-            // 락을 풀고 호출 (재귀라서 락 충돌 방지)
+            // 적 차례 → 락 해제 후 재귀 호출
             state.battleProcessing = false;
             await new Promise(resolve => setTimeout(resolve, 500));
             await battleAction("auto");
-            return;   // 재귀 호출이 락 관리 — finally 안 가도록
+            return;
         } else {
-            // 플레이어 차례 → 행동 버튼 활성화
+            // 플레이어 차례 — 버튼 활성화
             showPlayerTurn();
         }
 
@@ -248,8 +265,73 @@ async function battleAction(action) {
         console.error('[battleAction]', e);
         toast('네트워크 오류', 'error');
     } finally {
-        // 락 해제 (정상 종료 시. 적 차례 재귀에서는 위에서 return 했음)
+        // 락 해제 (재귀 호출하지 않은 경우만)
         state.battleProcessing = false;
+    }
+}
+
+
+async function _animateInterimAtbStates(interimStates) {
+    if (!interimStates || interimStates.length === 0) return;
+
+    const STEP_MS = 100;  // 각 tick 사이 간격
+
+    for (const state_ of interimStates) {
+        // 플레이어 ATB 바 갱신
+        const playerAtb = state_.player_atb !== undefined ? state_.player_atb : 0;
+        const playerAtbPct = Math.min(100, Math.max(0, playerAtb));
+        const playerAtbEl = document.getElementById('player-cb-atb');
+        const playerAtbTextEl = document.getElementById('player-cb-atb-text');
+        if (playerAtbEl) {
+            playerAtbEl.style.width = playerAtbPct + '%';
+            if (playerAtbPct >= 100) {
+                playerAtbEl.classList.add('full');
+            } else {
+                playerAtbEl.classList.remove('full');
+            }
+        }
+        if (playerAtbTextEl) {
+            playerAtbTextEl.textContent = Math.round(playerAtb);
+        }
+
+        // 좌측 패널 ATB 바도 갱신
+        const leftAtbFill = document.getElementById('atb-fill');
+        const leftAtbCur = document.getElementById('atb-cur');
+        if (leftAtbFill) {
+            leftAtbFill.style.height = playerAtbPct + '%';
+            if (playerAtbPct >= 100) {
+                leftAtbFill.classList.add('full');
+            } else {
+                leftAtbFill.classList.remove('full');
+            }
+        }
+        if (leftAtbCur) {
+            leftAtbCur.textContent = Math.round(playerAtb);
+        }
+
+        // 적 슬롯 ATB 바 갱신 (3개 슬롯)
+        const enemyAtbs = state_.enemy_atbs || [];
+        for (let i = 0; i < 3; i++) {
+            const suffix = i === 0 ? '' : `-${i + 1}`;
+            const atb = enemyAtbs[i] !== undefined ? enemyAtbs[i] : 0;
+            const atbPct = Math.min(100, Math.max(0, atb));
+            const atbEl = document.getElementById(`enemy-cb-atb${suffix}`);
+            const atbTextEl = document.getElementById(`enemy-cb-atb-text${suffix}`);
+            if (atbEl) {
+                atbEl.style.width = atbPct + '%';
+                if (atbPct >= 100) {
+                    atbEl.classList.add('full');
+                } else {
+                    atbEl.classList.remove('full');
+                }
+            }
+            if (atbTextEl) {
+                atbTextEl.textContent = Math.round(atb);
+            }
+        }
+
+        // 다음 tick까지 대기
+        await new Promise(resolve => setTimeout(resolve, STEP_MS));
     }
 }
 

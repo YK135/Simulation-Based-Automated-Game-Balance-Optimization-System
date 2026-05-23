@@ -56,6 +56,10 @@ class Player:
         self.luc = luc
         self.job = job
         self.skill = None
+        # ★ ATB 이월값 — 전투 종료 시 잔여 ATB 저장 (다음 전투 시작에 누적)
+        # 매 전투마다 BattleSession.__init__에서 SPD와 합산되어 player_atb로 변환됨.
+        # 사용 후 0.0으로 리셋 (덜 헷갈리게).
+        self.atb_remainder = 0.0
 
     def Show_Staters(self):
         print(f"\n이  름 : {self.name}  ({self.job})")

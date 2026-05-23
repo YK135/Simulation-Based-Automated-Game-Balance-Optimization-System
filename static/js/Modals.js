@@ -6,6 +6,11 @@
    - animateBalanceTuning: 시뮬 binary search 애니메이션
    ═══════════════════════════════════════════════════════════ */
 
+// 개발 모드 (배포 시 false로)
+const IS_DEV = location.hostname === 'localhost' ||
+               location.hostname === '127.0.0.1' ||
+               location.hostname.startsWith('192.168.');
+
 // 휴식 이벤트 모달 표시
 function showRestModal() {
     const modal = document.getElementById('modal-rest');
@@ -173,8 +178,14 @@ async function sendEmailCode() {
     // 코드 입력란에 자동 포커스
     document.getElementById('input-email-code').focus();
 
+    if (IS_DEV) {
+    console.log('[MOCK] 인증 코드:', '123456');
+    console.log('[MOCK] 실제 환경에서는 이메일로 발송됨');
+    }
+    /*
     // mock: 개발자 콘솔에 임시 코드 출력 (실제 발송 전 확인용)
     console.log('[MOCK] 인증 코드: 123456 (실제로는 이메일로 전송됨)');
+    */
 }
 
 
