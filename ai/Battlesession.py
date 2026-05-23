@@ -307,55 +307,6 @@ class BattleSession:
         # max_ticks 초과 (이론상 도달 X) — 안전 폴백
         return ("player", -1)
 
-    def _determine_next_actor(self):
-        """
-        ATB tick을 진행해서 다음 행동자 결정.
-        누군가 100 도달할 때까지 tick.
-
-        반환: (next_actor: str, enemy_idx: int)
-          - ("player", -1)
-          - ("enemy", N) — N은 self.enemies 인덱스
-          - ("done", -1) — 모든 적 사망 (이론상 도달 X, 안전망)
-        """
-        max_ticks = 200  # 무한루프 방지
-        ticks = 0
-
-        while ticks < max_ticks:
-            ticks += 1
-
-            # 모든 entity ATB 누적
-            self.player_atb += self.player.effective_spd()
-            for i, e in enumerate(self.enemies):
-                if e.hp > 0:
-                    self.enemy_atbs[i] += e.effective_spd()
-
-            # 누가 100 도달했는지 확인
-            player_ready = self.player_atb >= 100.0
-
-            ready_enemies = []
-            for i, e in enumerate(self.enemies):
-                if e.hp > 0 and self.enemy_atbs[i] >= 100.0:
-                    ready_enemies.append((i, self.enemy_atbs[i]))
-
-            # 행동 준비 완료된 entity가 있으면 누가 우선인지 결정
-            if player_ready or ready_enemies:
-                # 플레이어 vs 적 — ATB 더 높은 쪽이 우선
-                # (동률이면 적 우선 — RPG 관례)
-                max_enemy_atb = max((atb for _, atb in ready_enemies), default=0)
-
-                if ready_enemies and max_enemy_atb >= self.player_atb:
-                    # 적 행동
-                    # ATB 가장 높은 적
-                    idx = max(ready_enemies, key=lambda x: x[1])[0]
-                    return ("enemy", idx)
-                else:
-                    # 플레이어 행동
-                    return ("player", -1)
-
-            # 아직 아무도 100 못 닿음 — 계속 tick
-
-        # max_ticks 초과 (이론상 도달 X)
-        return ("player", -1)
 
     # ── 헬퍼: 새로 죽은 적의 원본 객체 수집 ──
     # self.enemies[i].hp <= 0 인 적의 self._origins[i] 를 defeated_origins에 추가.
@@ -1047,7 +998,9 @@ class BattleSession:
             ],
         }
 
-    def _state(self, messages: list = None) -> dict:
+    def _state(self, messages: list = None,
+               next_actor: str = "player",
+               acting_enemy_idx: int = -1) -> dict:
         # 첫 번째 살아있는 적 또는 마지막 적 (호환성 — 1대1 UI는 enemy_* 필드 사용)
         e = self.enemy
         diff_raw = getattr(e, "difficulty", "")
@@ -1144,4 +1097,7 @@ class BattleSession:
             "done":       self.done,
             "winner":     self.winner,
             "messages":   messages or [],
+            # ★ A1 응답 분리용 필드
+            "next_actor":         next_actor,
+            "acting_enemy_idx":   acting_enemy_idx,
         }
