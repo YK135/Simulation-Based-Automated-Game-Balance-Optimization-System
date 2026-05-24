@@ -525,12 +525,6 @@ def explore():
 
 
 def _start_battle(gs: dict, enemy, is_boss: bool = False) -> dict:
-    """
-    1대1 전투 세션 생성 후 초기 상태 반환.
-    enemy는 원본(Unit/_SnapUnit) — exp_reward() 호출 가능한 객체.
-    BattleSession에 enemy_origins=[enemy] 같이 전달해서
-    전투 종료 시 적별 경험치 계산에 사용.
-    """
     p_snap = _player_to_snap(gs["player"], gs["items"])
     e_snap = EntitySnapshot.from_enemy(enemy)
     gs["battle"] = BattleSession(
@@ -538,17 +532,13 @@ def _start_battle(gs: dict, enemy, is_boss: bool = False) -> dict:
         enemy=e_snap,
         items=gs["items"],
         is_boss=is_boss,
-        enemy_origins=[enemy],   # ★ 원본 보존
+        enemy_origins=[enemy],
+        player_original=gs["player"],   # ★ ATB 이월용 원본 Player
     )
     return gs["battle"]._state(messages=[f"{enemy.name}이(가) 나타났다!"])
 
 
 def _start_battle_multi(gs: dict, enemies: list, is_boss: bool = False) -> dict:
-    """
-    다대일 전투 세션 생성. enemies는 길이 1~3 — 원본(Unit/_SnapUnit) 리스트.
-    EntitySnapshot으로 변환해서 BattleSession에 넣되,
-    원본은 enemy_origins로 같이 전달 (적별 경험치 계산용).
-    """
     p_snap   = _player_to_snap(gs["player"], gs["items"])
     e_snaps  = [EntitySnapshot.from_enemy(e) for e in enemies]
     gs["battle"] = BattleSession(
@@ -556,7 +546,8 @@ def _start_battle_multi(gs: dict, enemies: list, is_boss: bool = False) -> dict:
         enemies=e_snaps,
         items=gs["items"],
         is_boss=is_boss,
-        enemy_origins=list(enemies),   # ★ 원본 보존
+        enemy_origins=list(enemies),
+        player_original=gs["player"],   # ★ ATB 이월용 원본 Player
     )
 
     # 같은 종류는 묶어서 메시지 표시

@@ -185,6 +185,21 @@ function refreshBattle(bs) {
             slotEl.style.cursor = '';
             slotEl.onclick = null;
         }
+        
+        // ── ★ 큐 기반 ATB: next_actor만 보고 결정 ──
+        // ATB는 추가 행동권 게이지 (행동 자체는 큐 순서대로).
+        // next_actor가 player면 ATB와 무관하게 행동 가능.
+        const nextActor = bs.next_actor;
+        if (nextActor === 'player') {
+            showPlayerTurn();
+        } else if (nextActor === 'enemy') {
+            showEnemyTurn();
+        } else if (nextActor === 'done') {
+            // 종료 — battleAction에서 처리
+        } else {
+            // 미정 — 안전하게 비활성화
+            showEnemyTurn();
+        }
     }
 
     // ── 1대1 호환 — 기존 single enemy 필드 (target-tag 등) ──

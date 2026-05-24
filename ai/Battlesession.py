@@ -41,6 +41,7 @@ class BattleSession:
         is_boss: bool = False,
         enemies: list = None,
         enemy_origins: list = None,   # ★ 원본 적 객체 (exp_reward용)
+        player_original = None,       # ★ 원본 Player 객체 (atb_remainder 이월용)
     ):
         """
         BattleSession — 1대1 또는 1대N 전투 세션.
@@ -57,6 +58,8 @@ class BattleSession:
           - None이면 [] — App.py가 폴백 경험치 처리.
         """
         self.player  = copy.deepcopy(player)
+        # ★ 원본 Player 참조 (atb_remainder 이월용, 없을 수도 있음)
+        self.player_original = player_original
  
         # ── enemies 리스트로 통일 ──
         # 단수 enemy로 호출되면 자동으로 [enemy]로 변환.
@@ -98,24 +101,28 @@ class BattleSession:
         self.skills_used = 0
         self.items_used  = 0
 
-        # ★ ATB 시스템 (사용자 모델 — SPD에서 시작, 행동마다 SPD씩 누적)
-        # 시작값: 각자 SPD (예: 도적 14, 슬라임 7)
-        # 매 tick: effective_spd() 만큼 누적
-        # 100 이상이면 행동 가능, 행동 후 -= 100
-        # ★ ATB 이월: 이전 전투 잔여값 + 이번 전투 SPD
-        prev_remainder = float(getattr(self.player, "atb_remainder", 0.0))
-        self.player_atb: float = prev_remainder + float(self.player.effective_spd())
-        # 사용 후 리셋 (덜 헷갈리게 — 이미 player_atb로 옮겨짐)
-        try:
-            self.player.atb_remainder = 0.0
-        except Exception:
-            pass
+        # ★ ATB 시스템 (사용자 모델 — 큐 기반 턴제 + 추가 행동권):
+        # 시작값: 이전 전투 atb_remainder 그대로 (SPD 안 더함)
+        #   1번 전투 종료 시 잔여값 그대로 다음 전투 시작 ATB로 사용 (SPD 더하지 않음)
+        #   ex) 1번 전투 끝 잔여 5 → 2번 전투 시작 ATB = 5
+        #   행동마다 +SPD 누적, 100 도달 시 추가 행동권 발동
+        # ※ atb_remainder는 원본 Player 객체에 있음 (snap엔 없음)
+        if self.player_original is not None:
+            self.player_atb: float = float(getattr(self.player_original, "atb_remainder", 0.0))
+            try:
+                self.player_original.atb_remainder = 0.0
+            except Exception:
+                pass
+        else:
+            # 폴백 (시뮬레이션 등 player_original 없는 경우)
+            self.player_atb: float = float(getattr(self.player, "atb_remainder", 0.0))
+            try:
+                self.player.atb_remainder = 0.0
+            except Exception:
+                pass
 
-        # 적은 매 전투마다 새로 시작 (이월 없음)
-        self.enemy_atbs: list  = [float(e.effective_spd()) for e in self.enemies]
-
-        # ★ ATB 진행 기록 (시각화용) — _determine_next_actor가 채움
-        self._last_interim_states = []
+        # 적은 매 전투마다 0에서 시작 (이월 없음, first_strike만 100)
+        self.enemy_atbs: list  = [0.0 for _ in self.enemies]
 
         # 적 first_strike 처리 (암살자) — 첫 tick부터 적이 100을 갖고 시작.
         for i, e in enumerate(self.enemies):
@@ -125,6 +132,11 @@ class BattleSession:
         # 전사 패시브용 행동 카운터 — 공격 3회마다 발동
         # (이전 v2 패치에서 추가된 필드 — 유지)
         self._warrior_action_count = 0
+
+        # ★ 행동 큐 (SPD 내림차순 턴제) — 라운드 시작 시 채워짐
+        # 큐 형식: [(actor_type, idx), ...]  actor_type: "player" | "enemy"
+        self.action_queue: list = []
+        self._build_round_queue()
  
         # ── 처치된 적 원본 리스트 (★ 신규) ──
         # 적이 죽을 때 self._origins[i] 를 여기에 추가.
@@ -161,13 +173,13 @@ class BattleSession:
 
     def step(self, action: str) -> dict:
         """
-        ATB 기반 step (사용자 모델, 단일 행동 응답).
+        ATB 기반 step (★ 큐 기반 턴제 + 추가 행동권).
 
-        흐름:
-          1. action이 "auto"가 아니면 플레이어 행동 처리 + ATB -= 100
-          2. action이 "auto"면 ATB ≥ 100인 적 1마리 행동 + ATB -= 100
-          3. tick 진행해서 다음 행동자 결정 (한 번에 한 tick씩)
-          4. 응답 (next_actor 포함)
+        시스템 핵심:
+          - 기본은 턴제: 라운드 시작 시 SPD 내림차순 큐 생성
+          - 행동 후 모든 살아있는 entity ATB += 자기 SPD
+          - 본인 ATB ≥ 100이면 차례 직후 추가 행동 1회 (보너스)
+          - 추가 행동 후 ATB -= 100, ATB 누적은 추가 행동에서도 발생
 
         action:
           - "attack" / "skill:이름" / "item:이름" / "escape" → 플레이어 행동
@@ -183,180 +195,237 @@ class BattleSession:
 
         # ── 상태 확인 (행동 없음) ──
         if action == "status":
-            next_actor, idx = self._determine_next_actor()
+            next_actor, idx = self._peek_next_actor()
             return self._state(messages=["현재 상태를 확인합니다."],
                                next_actor=next_actor, acting_enemy_idx=idx)
 
-        # ════════════════════════════════════════════════════════
-        # 1. 적 자동 행동 (auto)
-        # ════════════════════════════════════════════════════════
-        # ── ★ ATB 100 미만 검사 (codex 진단 #2) ──
-        # auto가 아닌 플레이어 행동은 ATB ≥ 100일 때만 수행
-        if action != "auto" and action != "status" and self.player_atb < 100.0:
-            next_actor, idx = self._determine_next_actor()
-            return self._state(
-                messages=["아직 행동할 수 없습니다 (ATB 부족)"],
-                next_actor=next_actor,
-                acting_enemy_idx=idx,
-            )
+        # 큐 비었으면 새 라운드 시작
+        if not self.action_queue:
+            self._build_round_queue()
 
-        if action == "auto":
-            # ATB ≥ 100인 적 중 가장 높은 적 찾기
-            acting_idx = -1
-            acting_atb = -1.0
-            for i, e in enumerate(self.enemies):
-                if e.hp > 0 and self.enemy_atbs[i] >= 100.0:
-                    if self.enemy_atbs[i] > acting_atb:
-                        acting_atb = self.enemy_atbs[i]
-                        acting_idx = i
+        # 죽은 적 큐에서 정리
+        self._cleanup_dead_from_queue()
 
-            if acting_idx < 0:
-                # 적이 행동 준비 안 됨 — tick 진행 후 다음 행동자 결정
-                next_actor, idx = self._determine_next_actor()
+        # 큐 다 비면 — 모든 적 죽은 상태 (이론상 _alive_enemies 체크가 먼저)
+        if not self.action_queue:
+            self.done = True
+            self.winner = "player"
+            try:
+                self.player.atb_remainder = float(self.player_atb)
+                # ★ 원본에도 동기화 (이월값 유지)
+                if self.player_original is not None:
+                    self.player_original.atb_remainder = float(self.player_atb)
+            except Exception:
+                pass
+            msgs.append("모든 적을 처치했다!")
+            return self._state(messages=msgs, next_actor="done")
+
+        actor_type, idx = self.action_queue[0]   # peek (pop은 행동 후)
+
+        # ════════════════════════════════════════════════════════
+        # 케이스 A: 플레이어 차례
+        # ════════════════════════════════════════════════════════
+        if actor_type == "player":
+            if action == "auto":
+                # 잘못 호출 — 플레이어 차례인데 auto 옴 (적 차례 자동 호출 실수)
+                return self._state(messages=["플레이어 차례입니다."],
+                                   next_actor="player", acting_enemy_idx=-1)
+
+            self.turn += 1
+
+            # 전사 패시브: 행동 3회마다 maxhp 10% 회복
+            self._warrior_action_count += 1
+            if (self.player.job == "전사" and
+                self._warrior_action_count % 3 == 0 and
+                self.player.hp > 0):
+                warrior_msg = self.player.passive_on_turn_start()
+                if warrior_msg:
+                    msgs.append(warrior_msg)
+
+            # 플레이어 행동 처리
+            p_result = self._player_action(action, msgs)
+            self.player.tick_buffs()
+
+            # 큐에서 자신 제거
+            self.action_queue.pop(0)
+
+            # 도망 성공
+            if p_result == "escaped":
+                self.done = True
+                self.winner = "escaped"
+                try:
+                    self.player.atb_remainder = float(self.player_atb)
+                    # ★ 원본에도 동기화 (이월값 유지)
+                    if self.player_original is not None:
+                        self.player_original.atb_remainder = float(self.player_atb)
+                except Exception:
+                    pass
+                msgs.append("도망에 성공했다!")
+                return self._state(messages=msgs, next_actor="done")
+
+            # 모든 적 사망 체크
+            if not self._alive_enemies():
+                self.done = True
+                self.winner = "player"
+                try:
+                    self.player.atb_remainder = float(self.player_atb)
+                    # ★ 원본에도 동기화 (이월값 유지)
+                    if self.player_original is not None:
+                        self.player_original.atb_remainder = float(self.player_atb)
+                except Exception:
+                    pass
+                if len(self.enemies) > 1:
+                    msgs.append("모든 적을 처치했다!")
+                else:
+                    msgs.append(f"{self.enemies[0].name}을(를) 처치했다!")
+                return self._state(messages=msgs, next_actor="done")
+
+            # ── ★ 모든 살아있는 entity ATB += 자기 SPD ──
+            self._accumulate_atb_all()
+
+            # ── ATB ≥ 100 → 추가 행동권 (BONUS) ──
+            if self.player_atb >= 100.0:
+                self.player_atb -= 100.0
+                # 큐 맨 앞에 자신 다시 삽입
+                self.action_queue.insert(0, ("player", -1))
+                msgs.append(f"⚡ {self.player.name} 추가 행동! (BONUS)")
+
+            # 다음 행동자 결정 (큐 정리 후 peek)
+            self._cleanup_dead_from_queue()
+            if not self.action_queue:
+                self._build_round_queue()
+                self._cleanup_dead_from_queue()
+            next_actor, next_idx = self._peek_next_actor()
+            return self._state(messages=msgs,
+                               next_actor=next_actor,
+                               acting_enemy_idx=next_idx)
+
+        # ════════════════════════════════════════════════════════
+        # 케이스 B: 적 차례 (action == "auto" 호출이 와야 정상)
+        # ════════════════════════════════════════════════════════
+        elif actor_type == "enemy":
+            # auto가 아닌 액션이 왔는데 적 차례 — 사용자가 입력한 거니 무시
+            # (UI가 적 차례엔 버튼 비활성화해야 정상)
+            if action != "auto":
+                return self._state(messages=["적이 행동 중입니다."],
+                                   next_actor="enemy",
+                                   acting_enemy_idx=idx)
+
+            enemy = self.enemies[idx]
+
+            # 이미 죽은 적이면 큐에서 제거 후 다음으로 (재귀 1회만)
+            if enemy.hp <= 0:
+                self.action_queue.pop(0)
+                self._cleanup_dead_from_queue()
+                if not self.action_queue:
+                    self._build_round_queue()
+                next_actor, next_idx = self._peek_next_actor()
                 return self._state(messages=msgs,
-                                   next_actor=next_actor, acting_enemy_idx=idx)
+                                   next_actor=next_actor,
+                                   acting_enemy_idx=next_idx)
 
-            # 적 1회 행동
-            enemy = self.enemies[acting_idx]
+            # 적 행동
             self._single_enemy_action(enemy, msgs)
-            self.enemy_atbs[acting_idx] = max(0.0, self.enemy_atbs[acting_idx] - 100.0)
+            self.action_queue.pop(0)
 
             # 플레이어 사망 체크
             if self.player.hp <= 0:
                 self.done = True
-                # ★ ATB 이월: 잔여값을 player에 저장 → 다음 전투로 이월
+                self.winner = "enemy"
                 try:
                     self.player.atb_remainder = float(self.player_atb)
+                    # ★ 원본에도 동기화 (이월값 유지)
+                    if self.player_original is not None:
+                        self.player_original.atb_remainder = float(self.player_atb)
                 except Exception:
                     pass
-                self.winner = "enemy"
                 msgs.append(f"{self.player.name}이(가) 쓰러졌다...")
                 return self._state(messages=msgs, next_actor="done")
 
-            # 다음 행동자 결정
-            next_actor, idx = self._determine_next_actor()
+            # ── 모든 살아있는 entity ATB += 자기 SPD ──
+            self._accumulate_atb_all()
+
+            # ── 적 ATB ≥ 100 → 추가 행동권 (BONUS) ──
+            if self.enemy_atbs[idx] >= 100.0:
+                self.enemy_atbs[idx] -= 100.0
+                self.action_queue.insert(0, ("enemy", idx))
+                msgs.append(f"⚡ {enemy.name} 추가 행동! (BONUS)")
+
+            # 다음 행동자
+            self._cleanup_dead_from_queue()
+            if not self.action_queue:
+                self._build_round_queue()
+                self._cleanup_dead_from_queue()
+            next_actor, next_idx = self._peek_next_actor()
             return self._state(messages=msgs,
-                               next_actor=next_actor, acting_enemy_idx=idx)
+                               next_actor=next_actor,
+                               acting_enemy_idx=next_idx)
 
-        # ════════════════════════════════════════════════════════
-        # 2. 플레이어 행동
-        # ════════════════════════════════════════════════════════
-        self.turn += 1
+        # 폴백 (도달 X)
+        return self._state(messages=msgs, next_actor="player")
 
-        # 전사 패시브: 행동 3회마다 maxhp 10% 회복 (Battle_Engine 통일)
-        self._warrior_action_count += 1
-        if (self.player.job == "전사" and
-            self._warrior_action_count % 3 == 0 and
-            self.player.hp > 0):
-            warrior_msg = self.player.passive_on_turn_start()
-            if warrior_msg:
-                msgs.append(warrior_msg)
-
-        # 플레이어 행동 처리
-        p_result = self._player_action(action, msgs)
-        self.player.tick_buffs()
-
-        # 플레이어 ATB 차감
-        self.player_atb = max(0.0, self.player_atb - 100.0)
-
-        # 도망 성공
-        if p_result == "escaped":
-            self.done = True
-            # ★ ATB 이월: 잔여값을 player에 저장 → 다음 전투로 이월
-            try:
-                self.player.atb_remainder = float(self.player_atb)
-            except Exception:
-                pass
-            self.winner = "escaped"
-            msgs.append("도망에 성공했다!")
-            return self._state(messages=msgs, next_actor="done")
-
-        # 모든 적 사망 체크
-        if not self._alive_enemies():
-            self.done = True
-            # ★ ATB 이월: 잔여값을 player에 저장 → 다음 전투로 이월
-            try:
-                self.player.atb_remainder = float(self.player_atb)
-            except Exception:
-                pass
-            self.winner = "player"
-            if len(self.enemies) > 1:
-                msgs.append("모든 적을 처치했다!")
-            else:
-                msgs.append(f"{self.enemies[0].name}을(를) 처치했다!")
-            return self._state(messages=msgs, next_actor="done")
-
-        # 다음 행동자 결정 (tick 진행)
-        next_actor, idx = self._determine_next_actor()
-        return self._state(messages=msgs,
-                           next_actor=next_actor, acting_enemy_idx=idx)
-
-
-    def _determine_next_actor(self):
+    def _build_round_queue(self):
         """
-        다음 행동자 결정 (★ 새 ATB 모델 + interim_states).
+        라운드 시작 — 살아있는 entity를 SPD 내림차순으로 큐 채우기.
 
-        흐름:
-          1. 즉시 ATB ≥ 100인 entity 있는지 확인 → 있으면 그게 행동자
-          2. 없으면 한 tick 진행 (모두 ATB += SPD) → interim_states에 기록
-          3. 다시 확인 → 반복
-          4. max 200 tick 안전망
+        큐 형식: [(actor_type, idx), ...]
+          actor_type: "player" 또는 "enemy"
+          idx: enemy의 경우 self.enemies 인덱스, player는 -1
+        """
+        entities = []
+        # 플레이어
+        if self.player.hp > 0:
+            entities.append(("player", -1, self.player.effective_spd()))
+        # 적
+        for i, e in enumerate(self.enemies):
+            if e.hp > 0:
+                entities.append(("enemy", i, e.effective_spd()))
 
-        새 모델:
-          - tick 정보를 self._last_interim_states 에 저장
-          - step()이 응답 만들 때 이걸 응답에 포함
+        # SPD 내림차순 정렬 (같으면 플레이어 우선, 그 다음 슬롯 번호 빠른 적)
+        entities.sort(key=lambda x: (-x[2], 0 if x[0] == "player" else 1, x[1]))
 
+        # 큐에 (actor_type, idx) 형태로 저장
+        self.action_queue = [(t, i) for t, i, _ in entities]
+
+    def _cleanup_dead_from_queue(self):
+        """죽은 적 큐에서 제거."""
+        self.action_queue = [
+            (t, i) for t, i in self.action_queue
+            if t == "player" or (i < len(self.enemies) and self.enemies[i].hp > 0)
+        ]
+
+    def _peek_next_actor(self):
+        """
+        큐 맨 앞 행동자가 누구인지 반환 (큐 변경 X).
         반환: (next_actor: str, enemy_idx: int)
         """
-        max_ticks = 200
-        ticks = 0
-        # interim_states 초기화 (이 호출 동안의 tick 진행 기록)
-        self._last_interim_states = []
+        # 큐 비면 새 라운드
+        if not self.action_queue:
+            self._build_round_queue()
+            self._cleanup_dead_from_queue()
 
-        while ticks <= max_ticks:
-            # 행동 가능한 entity 확인
-            player_ready = self.player_atb >= 100.0
-            ready_enemies = []
-            for i, e in enumerate(self.enemies):
-                if e.hp > 0 and self.enemy_atbs[i] >= 100.0:
-                    ready_enemies.append((i, self.enemy_atbs[i]))
+        if not self.action_queue:
+            return ("done", -1)
 
-            if player_ready or ready_enemies:
-                # ── 결정 로직 ──
-                # 1) 플레이어와 적 중 ATB 더 높은 쪽
-                # 2) 동률이면 플레이어 우선
-                # 3) 적끼리 동률이면 슬롯 번호 빠른 적 우선
-                max_enemy_atb = max(
-                    (atb for _, atb in ready_enemies), default=-1.0
-                )
+        actor_type, idx = self.action_queue[0]
+        if actor_type == "player":
+            return ("player", -1)
+        else:
+            return ("enemy", idx)
 
-                if player_ready and self.player_atb >= max_enemy_atb:
-                    return ("player", -1)
+    def _accumulate_atb_all(self):
+        """
+        모든 살아있는 entity에 자기 SPD 만큼 ATB 누적.
+        한 행동이 끝날 때마다 호출. 죽은 적은 누적 안 함.
+        """
+        # 플레이어
+        if self.player.hp > 0:
+            self.player_atb += float(self.player.effective_spd())
+        # 적
+        for i, e in enumerate(self.enemies):
+            if e.hp > 0:
+                self.enemy_atbs[i] += float(e.effective_spd())
 
-                if ready_enemies:
-                    # 슬롯 번호 빠른 적 우선 (key: (-ATB, slot_idx))
-                    ready_enemies.sort(key=lambda x: (-x[1], x[0]))
-                    idx = ready_enemies[0][0]
-                    return ("enemy", idx)
-
-                # 안전 폴백
-                return ("player", -1)
-
-            # 아무도 100 못 닿음 → 한 tick 진행
-            ticks += 1
-            self.player_atb += self.player.effective_spd()
-            for i, e in enumerate(self.enemies):
-                if e.hp > 0:
-                    self.enemy_atbs[i] += e.effective_spd()
-
-            # interim_states에 이 tick 상태 기록 (UI 시각화용)
-            self._last_interim_states.append({
-                "player_atb": round(self.player_atb, 1),
-                "enemy_atbs": [round(a, 1) for a in self.enemy_atbs],
-            })
-
-        # max_ticks 초과 (이론상 도달 X)
-        return ("player", -1)
 
     def _collect_defeated_origins(self):
         # 이미 수집된 인덱스 집합 (한 번만 추가)
@@ -1144,8 +1213,7 @@ class BattleSession:
             "done":       self.done,
             "winner":     self.winner,
             "messages":   messages or [],
-            # ★ A1 응답 분리 + ATB 진행 시각화용 필드
+            # ★ A1 응답 분리 — 다음 행동자 정보
             "next_actor":         next_actor,
             "acting_enemy_idx":   acting_enemy_idx,
-            "interim_atb_states": getattr(self, "_last_interim_states", []),
         }
