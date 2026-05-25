@@ -282,7 +282,14 @@ class MultiBattleSimulator:
         self.max_turns        = max_turns
 
     def run(self) -> SimulationResult:
-        """N회 반복 시뮬 → SimulationResult 반환"""
+        """
+        N회 반복 시뮬 → SimulationResult 반환 (★ 새 ATB 시스템 호환).
+
+        새 ATB: step() 응답의 next_actor에 따라 분기.
+          - "player": _decide_player_action() 결과로 step
+          - "enemy":  step("auto")로 적 자동 행동
+          - "done":   루프 종료
+        """
         # 지연 import — 순환참조 방지
         try:
             from ai.Battlesession import BattleSession
@@ -293,7 +300,7 @@ class MultiBattleSimulator:
         turn_list = []
         hp_list = []
 
-        # 시뮬용 PlayerAI — 매 행동마다 호출해서 action 문자열 생성
+        # 시뮬용 PlayerAI
         player_ai = PlayerAI(self.player_ai_mode)
 
         for _ in range(self.n):
@@ -308,15 +315,39 @@ class MultiBattleSimulator:
                 is_boss=False,
             )
 
-            # 시뮬 루프 — done 또는 max_turns 도달까지 step
-            for _t in range(self.max_turns):
-                if session.done:
-                    break
-                # 살아있는 적 중 첫 번째를 타깃으로 (PlayerAI는 단일 타깃 기준 결정)
-                action = self._decide_player_action(session, player_ai)
-                session.step(action)
+            # ── 새 ATB: 첫 응답에서 next_actor 받기 ──
+            # BattleSession은 __init__에서 큐를 자동 빌드, 첫 step("status")로 상태 조회.
+            # 또는 첫 step()을 _decide_player_action으로 호출하기 전에
+            # action_queue[0] 확인해서 누구 차례인지 알아낼 수도 있음.
+            # 가장 간단한 방법: 매 step 응답의 next_actor 사용.
+            # 첫 응답 받기 위해 "status" 호출.
+            state = session.step("status")
+            next_actor = state.get("next_actor", "player")
 
-            # max_turns 초과 = 미결 → 적 측 승리로 간주 (보수적)
+            # ── 시뮬 루프 ──
+            step_count = 0
+            max_steps = self.max_turns * 4   # ATB 추가 행동 고려해 여유 4배
+
+            while not session.done and step_count < max_steps:
+                step_count += 1
+
+                if next_actor == "done":
+                    break
+
+                if next_actor == "enemy":
+                    # 적 자동 행동
+                    state = session.step("auto")
+                elif next_actor == "player":
+                    # 플레이어 AI 결정 후 행동
+                    action = self._decide_player_action(session, player_ai)
+                    state = session.step(action)
+                else:
+                    # 예외 (next_actor 미정) — auto로 처리
+                    state = session.step("auto")
+
+                next_actor = state.get("next_actor", "player")
+
+            # max_steps 초과 = 미결 → 적 측 승리로 간주 (보수적)
             if not session.done:
                 session.winner = "enemy"
 
