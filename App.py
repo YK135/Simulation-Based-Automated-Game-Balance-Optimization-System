@@ -43,7 +43,7 @@ sys.path.insert(0, ROOT)
 from game.Player_Class import Player, create_player_by_job
 from game.Enemy_Class  import Make_Random_Monster, Make_MidBoss, Make_FinalBoss
 from game.Skill        import Ply_Skill
-from game.Lv           import LV_, Allocate_Stat_Pooints
+from game.Lv           import LV_, Allocate_Stat_Points
 from game.Item         import Item_
 from ai.Battle_Engine  import EntitySnapshot
 from ai.Simulator      import MonsterFactory
@@ -363,7 +363,7 @@ def levelup_allocate():
             return jsonify({"ok": False, "error": f"잘못된 포인트 값: {stat}={pts}"}), 400
 
     player = gs["player"]
-    result = Allocate_Stat_Pooints(player, clean_alloc)
+    result = Allocate_Stat_Points(player, clean_alloc)
 
     if not result["ok"]:
         return jsonify({"ok": False, "error": result["msg"],

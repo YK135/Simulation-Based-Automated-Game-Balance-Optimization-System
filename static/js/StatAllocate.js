@@ -20,12 +20,13 @@ function openStatAllocate(points) {
     saTotalPoints = points;
     saAllocation = {};
     SA_STATS.forEach(s => saAllocation[s.key] = 0);
-
+ 
     document.getElementById("sa-remaining").textContent = points;
     renderStatAllocList();
-
-    const overlay = document.getElementById("stat-allocate-overlay");
-    if (overlay) overlay.style.display = "flex";
+ 
+    // ★ 휴식 모달과 동일하게 .modal-bg → .active 토글
+    const modal = document.getElementById("modal-stat-allocate");
+    if (modal) modal.classList.add("active");
 }
 
 /** 분배 UI 렌더 */

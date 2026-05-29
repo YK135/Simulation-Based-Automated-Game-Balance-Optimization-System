@@ -226,6 +226,10 @@ async function battleAction(action) {
             }
             if (actPanel) actPanel.classList.remove('processing');
             await loadStatus();
+
+            if (typeof checkPendingPoints === 'function') {
+                checkPendingPoints();
+            }
             return;
         }
 

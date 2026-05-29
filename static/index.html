@@ -646,24 +646,27 @@
     </div>
 </div>
 
-<!-- ★ 스탯 분배 모달 (레벨업 시) -->
-<div id="stat-allocate-overlay" class="modal-overlay" style="display:none;">
-  <div class="stat-allocate-modal">
-    <div class="sa-header">
-      <h2>⬆ 레벨업! 스탯 분배</h2>
-      <div class="sa-points">남은 포인트: <span id="sa-remaining">0</span></div>
+<!-- ★ 스탯 분배 모달 (레벨업 시) — 휴식 모달과 동일 시스템 -->
+<div id="modal-stat-allocate" class="modal-bg">
+    <div class="modal modal-stat-allocate">
+        <h2>⬆ LEVEL UP — STAT ALLOCATION</h2>
+        
+        <div class="sa-desc">
+            <span class="sa-points-label">남은 포인트</span>
+            <span class="sa-points-value" id="sa-remaining">0</span>
+        </div>
+        
+        <div class="sa-hint">SPD는 1포인트당 +0.5 (추가 행동권 직결)</div>
+ 
+        <div class="sa-stat-list" id="sa-stat-list">
+            <!-- JS가 채움 -->
+        </div>
+ 
+        <div class="sa-footer">
+            <button id="sa-reset" class="btn sa-btn-reset">RESET</button>
+            <button id="sa-confirm" class="btn primary sa-btn-confirm">▶ CONFIRM</button>
+        </div>
     </div>
-    <div class="sa-hint">SPD는 1포인트당 +0.5 (추가 행동권 직결)</div>
-
-    <div class="sa-stat-list" id="sa-stat-list">
-      <!-- JS가 채움 -->
-    </div>
-
-    <div class="sa-footer">
-      <button id="sa-reset" class="sa-btn-reset">초기화</button>
-      <button id="sa-confirm" class="sa-btn-confirm">확정</button>
-    </div>
-  </div>
 </div>
 
 <!-- 토스트 알림 -->
