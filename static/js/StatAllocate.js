@@ -91,14 +91,17 @@ function saReset() {
 
 /** 확정 — 백엔드 전송 */
 async function saConfirm() {
+    const payload = {};
+    Object.entries(saAllocation).forEach(([k, v]) => {
+    if (v > 0) payload[k] = v;
+    });
+    const confirmBtn = document.getElementById("sa-confirm");
+    if (confirmBtn?.disabled) return;
+
     const spent = Object.values(saAllocation).reduce((a, b) => a + b, 0);
     if (spent === 0) return;
 
-    // 0인 항목 제외하고 전송
-    const payload = {};
-    Object.entries(saAllocation).forEach(([k, v]) => {
-        if (v > 0) payload[k] = v;
-    });
+    if (confirmBtn) confirmBtn.disabled = true;
 
     try {
         const r = await api("/levelup/allocate", { allocation: payload });
@@ -124,13 +127,15 @@ async function saConfirm() {
     } catch (e) {
         console.error("[saConfirm]", e);
         toast("네트워크 오류", "error");
+    } finally {
+        if (confirmBtn) confirmBtn.disabled = false;
     }
 }
 
 /** 모달 닫기 */
 function closeStatAllocate() {
-    const overlay = document.getElementById("stat-allocate-overlay");
-    if (overlay) overlay.style.display = "none";
+    const modal = document.getElementById("modal-stat-allocate");
+    if (modal) modal.classList.remove("active");
 }
 
 /**
