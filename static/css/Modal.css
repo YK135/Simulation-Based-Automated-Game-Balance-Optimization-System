@@ -427,3 +427,131 @@
     letter-spacing: 0.1em;
     font-weight: 600;
 }
+
+/* 스탯 분배 모달 */
+.stat-allocate-modal {
+    background: #22262B;
+    border: 1px solid #3A3F45;
+    border-radius: 10px;
+    padding: 24px;
+    width: 420px;
+    max-width: 90vw;
+    box-shadow: 0 10px 40px rgba(0,0,0,0.5);
+}
+
+.sa-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 6px;
+}
+.sa-header h2 {
+    color: #F5F6F8;
+    font-size: 20px;
+    margin: 0;
+}
+.sa-points {
+    color: #00FFD0;
+    font-size: 14px;
+    font-weight: bold;
+}
+.sa-points span {
+    font-size: 18px;
+}
+
+.sa-hint {
+    color: #8A8F95;
+    font-size: 12px;
+    margin-bottom: 16px;
+}
+
+.sa-stat-list {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    margin-bottom: 20px;
+}
+
+.sa-stat-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    background: #2C3036;
+    border-radius: 6px;
+    padding: 10px 14px;
+}
+.sa-stat-label {
+    color: #C5C8CC;
+    font-size: 14px;
+    width: 60px;
+}
+.sa-stat-value {
+    color: #F5F6F8;
+    font-size: 14px;
+    width: 70px;
+    text-align: center;
+}
+.sa-stat-value .added {
+    color: #00FFD0;
+    font-weight: bold;
+}
+.sa-stat-controls {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+.sa-btn-pm {
+    width: 28px;
+    height: 28px;
+    border-radius: 6px;
+    border: 1px solid #3A3F45;
+    background: #1A1D21;
+    color: #00FFD0;
+    font-size: 16px;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+.sa-btn-pm:hover {
+    background: #00FFD0;
+    color: #1A1D21;
+}
+.sa-btn-pm:disabled {
+    opacity: 0.3;
+    cursor: not-allowed;
+}
+.sa-alloc-count {
+    color: #00FFD0;
+    font-size: 14px;
+    width: 24px;
+    text-align: center;
+    font-weight: bold;
+}
+
+.sa-footer {
+    display: flex;
+    gap: 10px;
+    justify-content: flex-end;
+}
+.sa-btn-reset, .sa-btn-confirm {
+    padding: 8px 20px;
+    border-radius: 6px;
+    font-size: 14px;
+    cursor: pointer;
+    border: none;
+}
+.sa-btn-reset {
+    background: #2C3036;
+    color: #C5C8CC;
+    border: 1px solid #3A3F45;
+}
+.sa-btn-confirm {
+    background: #00FFD0;
+    color: #1A1D21;
+    font-weight: bold;
+}
+.sa-btn-confirm:disabled {
+    opacity: 0.4;
+    cursor: not-allowed;
+}

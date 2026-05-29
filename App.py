@@ -43,7 +43,7 @@ sys.path.insert(0, ROOT)
 from game.Player_Class import Player, create_player_by_job
 from game.Enemy_Class  import Make_Random_Monster, Make_MidBoss, Make_FinalBoss
 from game.Skill        import Ply_Skill
-from game.Lv           import LV_
+from game.Lv           import LV_, Allocate_Stat_Pooints
 from game.Item         import Item_
 from ai.Battle_Engine  import EntitySnapshot
 from ai.Simulator      import MonsterFactory
@@ -216,6 +216,7 @@ def _player_dict(player, items: list) -> dict:
         "maxexp": player.maxexp,
         "skills": list(player.skill.learned_skills) if player.skill else [],
         "items":  items,
+        "pending_points": getattr(player, "pending_points", 0),
     }
 
 
@@ -330,6 +331,50 @@ def status():
             pass
 
     return jsonify(payload)
+
+@app.route("/api/levelup/allocate", methods=["POST"])
+def levelup_allocate():
+    """
+    레벨업 시 쌓인 선택 포인트를 스탯에 분배.
+
+    요청: { "allocation": { "stg": 2, "spd": 1 } }
+    응답: { "ok": true, "player": {...}, "remaining": 0, "message": "..." }
+
+    규칙:
+      - 총 투입 포인트 <= pending_points
+      - SPD는 1포인트당 +0.5, 나머지는 +1
+    """
+    gs = _get_session()
+    if not gs:
+        return jsonify({"ok": False, "error": "게임 세션이 없습니다."}), 404
+
+    data = request.get_json() or {}
+    allocation = data.get("allocation", {})
+
+    if not isinstance(allocation, dict):
+        return jsonify({"ok": False, "error": "allocation은 dict여야 합니다."}), 400
+
+    # 정수 변환 (프론트에서 문자열로 올 수 있음)
+    clean_alloc = {}
+    for stat, pts in allocation.items():
+        try:
+            clean_alloc[stat] = int(pts)
+        except (ValueError, TypeError):
+            return jsonify({"ok": False, "error": f"잘못된 포인트 값: {stat}={pts}"}), 400
+
+    player = gs["player"]
+    result = Allocate_Stat_Pooints(player, clean_alloc)
+
+    if not result["ok"]:
+        return jsonify({"ok": False, "error": result["msg"],
+                        "remaining": result["remaining"]}), 400
+
+    return jsonify({
+        "ok":        True,
+        "player":    _player_dict(player, gs["items"]),
+        "remaining": result["remaining"],
+        "message":   result["msg"],
+    })
 
 @app.route("/api/ranking", methods=["GET"])
 def ranking():

@@ -53,7 +53,7 @@ class Unit:
         self.enemy_type      = enemy_type or name
 
     def exp_reward(self, player_maxexp: int) -> int:
-        ratio = {"상": 0.7, "중": 0.55, "하": 0.45}.get(self.grade, 0.34)
+        ratio = {"상": 0.8, "중": 0.55, "하": 0.45}.get(self.grade, 0.34)
         return int(player_maxexp * ratio)
 
     def decide_action(self, player) -> str:
@@ -76,9 +76,9 @@ class Unit:
 # 하급: 전반적으로 약하게
 # 상급: 탱커(HP/ARM) or 유리대포(STG) 성향 공존
 GRADE_MULT = {
-    "하": {"hp": 0.6, "stg": 0.70, "arm": 0.85, "sparm": 0.7, "sp": 0.70},
-    "중": {"hp": 0.90, "stg": 0.90, "arm": 1.00, "sparm": 0.8, "sp": 0.80},
-    "상": {"hp": 1.20, "stg": 1.12, "arm": 1.10, "sparm": 0.9, "sp": 1.0},
+    "하": {"hp": 0.6, "stg": 0.70, "arm": 0.85, "sparm": 0.7, "sp": 0.2},
+    "중": {"hp": 0.90, "stg": 0.90, "arm": 1.00, "sparm": 0.8, "sp": 0.4},
+    "상": {"hp": 1.20, "stg": 1.12, "arm": 1.10, "sparm": 0.9, "sp": 0.7},
 }
 
 
@@ -104,7 +104,7 @@ def Make_Goblin(player_lv: int, grade: str) -> Unit:
     unit = Unit(
         name  = "고블린",
         lv    = lv,
-        hp    = int(110 + 28 * (lv - 1)),
+        hp    = int(80 + 28 * (lv - 1)),
         mp    = 0,
         stg   = base_stg,
         arm   = round(5   + 1.4 * (lv - 1), 1),
@@ -128,7 +128,7 @@ def Make_Bat(player_lv: int, grade: str) -> Unit:
     unit = Unit(
         name  = "박쥐",
         lv    = lv,
-        hp    = int(85  + 18 * (lv - 1)),
+        hp    = int(60  + 18 * (lv - 1)),
         mp    = int(34  + 4 * (lv - 1)),
         stg   = 5 if lv == 1 else round(6 + 1.8 * (lv - 1), 1),
         arm   = round(3   + 0.8 * (lv - 1), 1),
@@ -304,9 +304,9 @@ def Make_Random_Monster(player_lv: int) -> Unit:
     pool = [Make_Goblin, Make_Bat]
     if player_lv >= 3:  pool.append(Make_Slime)
     if player_lv >= 5:  pool.append(Make_Golem)
-    if player_lv >= 7:  pool.append(Make_Ghost)
-    if player_lv >= 8:  pool.append(Make_Assassin)
-    if player_lv >= 9:  pool.append(Make_Priest)
+    if player_lv >= 6:  pool.append(Make_Ghost)
+    if player_lv >= 6:  pool.append(Make_Assassin)
+    if player_lv >= 8:  pool.append(Make_Priest)
     return choice(pool)(player_lv, grade)
 
 def Make_MidBoss(player_lv: int, base_monster_snap=None) -> Unit:

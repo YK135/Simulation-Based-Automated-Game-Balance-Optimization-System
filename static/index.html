@@ -646,6 +646,26 @@
     </div>
 </div>
 
+<!-- ★ 스탯 분배 모달 (레벨업 시) -->
+<div id="stat-allocate-overlay" class="modal-overlay" style="display:none;">
+  <div class="stat-allocate-modal">
+    <div class="sa-header">
+      <h2>⬆ 레벨업! 스탯 분배</h2>
+      <div class="sa-points">남은 포인트: <span id="sa-remaining">0</span></div>
+    </div>
+    <div class="sa-hint">SPD는 1포인트당 +0.5 (추가 행동권 직결)</div>
+
+    <div class="sa-stat-list" id="sa-stat-list">
+      <!-- JS가 채움 -->
+    </div>
+
+    <div class="sa-footer">
+      <button id="sa-reset" class="sa-btn-reset">초기화</button>
+      <button id="sa-confirm" class="sa-btn-confirm">확정</button>
+    </div>
+  </div>
+</div>
+
 <!-- 토스트 알림 -->
 <div id="toast" class="toast"></div>
 
@@ -653,18 +673,19 @@
      JS 모듈 — 의존성 순서 중요
      기반 → 상태 → 유틸 → UI → 액션 → 이벤트 바인딩 순
      ═══════════════════════════════════════════════════════════ -->
-<script src="js/Api.js"></script>          <!-- fetch wrapper -->
-<script src="js/State.js"></script>        <!-- 전역 state + 매핑 -->
+<script src="js/Api.js"></script>               <!-- fetch wrapper -->
+<script src="js/State.js"></script>             <!-- 전역 state + 매핑 -->
 <script src="js/CharSprite.js"></script>  
-<script src="js/BattleSequencer.js"></script> <!-- 배틀 턴 시퀀싱 -->
-<script src="js/Utils.js"></script>        <!-- 시계, 토스트, 로그 -->
-<script src="js/Pentagon.js"></script>     <!-- 펜타곤 차트 -->
-<script src="js/UI_Player.js"></script>    <!-- 좌측 패널 -->
-<script src="js/UI_Explore.js"></script>   <!-- 탐험 모드 -->
-<script src="js/UI_Battle.js"></script>    <!-- 배틀 모드 -->
-<script src="js/Modals.js"></script>       <!-- 휴식/도망 + 시뮬 가시화 -->
-<script src="js/Actions.js"></script>      <!-- API 호출 액션 -->
-<script src="js/Ranking.js"></script>      <!-- 랭킹 모달 + API 연동 -->
-<script src="js/Main.js"></script>         <!-- 부팅 + 이벤트 바인딩 -->
+<script src="js/BattleSequencer.js"></script>   <!-- 배틀 턴 시퀀싱 -->
+<script src="js/Utils.js"></script>             <!-- 시계, 토스트, 로그 -->
+<script src="js/Pentagon.js"></script>          <!-- 펜타곤 차트 -->
+<script src="js/UI_Player.js"></script>         <!-- 좌측 패널 -->
+<script src="js/UI_Explore.js"></script>        <!-- 탐험 모드 -->
+<script src="js/UI_Battle.js"></script>         <!-- 배틀 모드 -->
+<script src="js/Modals.js"></script>            <!-- 휴식/도망 + 시뮬 가시화 -->
+<script src="/js/StatAllocate.js"></script>     <!-- 레벨업 스탯 분배 모달 -->
+<script src="js/Actions.js"></script>           <!-- API 호출 액션 -->
+<script src="js/Ranking.js"></script>           <!-- 랭킹 모달 + API 연동 -->
+<script src="js/Main.js"></script>              <!-- 부팅 + 이벤트 바인딩 -->
 </body>
 </html>

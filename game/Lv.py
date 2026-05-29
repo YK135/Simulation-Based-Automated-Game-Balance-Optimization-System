@@ -310,35 +310,39 @@ def _initialize_skills_for_existing_level(player) -> None:
 # 레벨업 시스템
 # ─────────────────────────────────────────────
 class LV_:
-    EXP_GROWTH_RATE = 1.18  # 레벨업 후 필요 경험치 증가율
+    #EXP_GROWTH_RATE = 1.18  # 레벨업 후 필요 경험치 증가율
+    GROWTH_RATIO = 0.7          # ★ 자동 성장 비율 (70%)
+    POINTS_PER_LEVEL = 3        # ★ 레벨업당 선택 포인트
 
     def __init__(self, ply):
         self.player = ply
         _initialize_skills_for_existing_level(self.player)
 
+    # ★ 스탯 선택 시스템: 전투 스탯 성장 비율
+    # 자동 성장 70% + 선택 포인트 30%. HP/MP는 생존 기반이라 100% 유지.
+    GROWTH_RATIO = 0.7
+
     @staticmethod
     def apply_growth(player) -> None:
-        """
-        직업별 성장치를 적용한다.
-        """
         job = _get_job(player)
         growth = JOB_GROWTH[job]
         lv = player.lv
 
         hp_gain = growth["hp"](lv)
         mp_gain = growth["mp"](lv)
-        stg_gain = growth["stg"](lv)
-        sp_gain = growth["sp"](lv)
-        arm_gain = growth["arm"](lv)
-        sparm_gain = growth["sparm"](lv)
-        spd_gain = growth["spd"](lv)
-        luc_gain = growth["luc"](lv)
+        # 전투 스탯은 70%만 자동 (나머지 30%는 선택 포인트로)
+        r = LV_.GROWTH_RATIO
+        stg_gain = growth["stg"](lv) * r
+        sp_gain = growth["sp"](lv) * r
+        arm_gain = growth["arm"](lv) * r
+        sparm_gain = growth["sparm"](lv) * r
+        spd_gain = growth["spd"](lv) * r
+        luc_gain = growth["luc"](lv) * r
 
-        # 최대 체력/마나 증가
+        # HP/MP는 100% (생존 기반)
         player.maxhp += hp_gain
         player.maxmp += mp_gain
-
-        # 공격/방어/기타 증가
+        # 전투 스탯 70%
         player.stg += stg_gain
         player.sp += sp_gain
         player.arm += arm_gain
@@ -377,7 +381,12 @@ class LV_:
         old_lv = player.lv
         player.lv += 1
 
-        # 3) 성장 적용
+        # ★ 스탯 선택 포인트 지급 (레벨업당 3)
+        if not hasattr(player, "pending_points"):
+            player.pending_points = 0
+        player.pending_points += LV_.POINTS_PER_LEVEL
+
+        # 3) 성장 적용 (전투 스탯 70%)
         LV_.apply_growth(player)
 
         # 4) HP / MP 회복
@@ -452,3 +461,65 @@ class LV_:
         while player.exp >= player.maxexp:
             print("레벨이 올랐습니다!\n")
             LV_.Lv_up(player)
+
+# ─────────────────────────────────────────────
+# 스탯 포인트 분배 적용 (★ 스탯 선택 시스템)
+# ─────────────────────────────────────────────
+
+# 스탯별 포인트 효율: SPD만 1포인트 = +0.5, 나머지 1포인트 = +1
+STAT_POINT_VALUE = {
+    "stg":   1.0,
+    "sp":    1.0,
+    "arm":   1.0,
+    "sparm": 1.0,
+    "spd":   0.5,   # ★ SPD는 비싸게 (추가 행동권 직결)
+    "luc":   1.0,
+}
+
+# 분배 가능한 스탯 목록 (HP/MP는 자동 성장만)
+ALLOCATABLE_STATS = ["stg", "sp", "arm", "sparm", "spd", "luc"]
+
+
+def Allocate_Stat_Points(player, allocation: dict) -> dict:
+    """
+    선택 포인트를 스탯에 분배.
+
+    allocation: {"stg": 2, "spd": 1, ...} — 각 스탯에 투입할 포인트 수
+    반환: {"ok": bool, "msg": str, "remaining": int}
+
+    규칙:
+      - 총 투입 포인트 <= player.pending_points
+      - SPD는 1포인트당 +0.5, 나머지는 +1
+      - 음수 불가
+    """
+    if not hasattr(player, "pending_points"):
+        player.pending_points = 0
+
+    # 유효성 검사
+    total_spent = 0
+    for stat, pts in allocation.items():
+        if stat not in ALLOCATABLE_STATS:
+            return {"ok": False, "msg": f"분배 불가 스탯: {stat}",
+                    "remaining": player.pending_points}
+        if not isinstance(pts, int) or pts < 0:
+            return {"ok": False, "msg": "포인트는 0 이상 정수여야 합니다",
+                    "remaining": player.pending_points}
+        total_spent += pts
+
+    if total_spent > player.pending_points:
+        return {"ok": False,
+                "msg": f"포인트 부족 (보유 {player.pending_points}, 투입 {total_spent})",
+                "remaining": player.pending_points}
+
+    # 분배 적용
+    for stat, pts in allocation.items():
+        if pts > 0:
+            gain = pts * STAT_POINT_VALUE[stat]
+            current = getattr(player, stat, 0)
+            setattr(player, stat, current + gain)
+
+    player.pending_points -= total_spent
+
+    return {"ok": True,
+            "msg": f"{total_spent}포인트 분배 완료",
+            "remaining": player.pending_points}
