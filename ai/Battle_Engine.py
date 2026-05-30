@@ -872,12 +872,36 @@ ITEM_META = {
     # Digital Twin 원칙: game/Item.py의 공식과 완전히 일치시킴.
     # max(고정 최소값, maxhp/maxmp 비율) 형태.
     # 호출 시 meta["amount"](user) 형태로 사용.
-    "HP_S_potion": {"stat": "hp", "amount": lambda u: max(300, int(u.maxhp * 0.12))},
-    "HP_M_potion": {"stat": "hp", "amount": lambda u: max(500, int(u.maxhp * 0.20))},
-    "HP_L_potion": {"stat": "hp", "amount": lambda u: max(850, int(u.maxhp * 0.30))},
-    "MP_S_potion": {"stat": "mp", "amount": lambda u: max(20,  int(u.maxmp * 0.15))},
-    "MP_M_potion": {"stat": "mp", "amount": lambda u: max(40,  int(u.maxmp * 0.25))},
-    "MP_L_potion": {"stat": "mp", "amount": lambda u: max(60,  int(u.maxmp * 0.35))},
+    "HP_S_potion": {
+        "slot": "potion",        
+        "stat": "hp", 
+        "amount": lambda u: max(200, int(u.maxhp * 0.12))
+    },
+    "HP_M_potion": {
+        "slot": "potion", 
+        "stat": "hp",
+        "amount": lambda u: max(300, int(u.maxhp * 0.20))
+    },
+    "HP_L_potion": {
+        "slot": "potion", 
+        "stat": "hp", 
+        "amount": lambda u: max(500, int(u.maxhp * 0.30))
+    },
+    "MP_S_potion": {
+        "slot": "potion", 
+        "stat": "mp", 
+        "amount": lambda u: max(25,  int(u.maxmp * 0.15))
+    },
+    "MP_M_potion": {
+        "slot": "potion", 
+        "stat": "mp", 
+        "amount": lambda u: max(40,  int(u.maxmp * 0.25))
+    },
+    "MP_L_potion": {
+        "slot": "potion", 
+        "stat": "mp", 
+        "amount": lambda u: max(50,  int(u.maxmp * 0.35))
+    },
 }
 
 

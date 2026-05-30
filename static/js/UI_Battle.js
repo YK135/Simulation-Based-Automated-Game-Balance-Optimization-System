@@ -247,9 +247,56 @@ function refreshBattle(bs) {
     // 백엔드 형식 두 가지:
     //  - 객체 배열: [{name:'HP_S_potion', count:2}, ...]  (전투 _state)
     //  - 문자열 배열: ['HP_S_potion', 'HP_S_potion', ...]  (player_dict)
-    const il = document.getElementById('item-list');
-    il.innerHTML = '';
-    const battleItems = bs.items || [];
+    // 아이템 메뉴 — 포션/특수 분리 표시
+// 백엔드 player.inventory가 있으면 새 구조, 없으면 옛 평탄 리스트
+const il = document.getElementById('item-list');
+il.innerHTML = '';
+
+const stateInv = state.player ? state.player.inventory : null;
+const battleItems = bs.items || [];
+
+if (stateInv && (stateInv.potions.length > 0 || stateInv.special.length > 0)) {
+    // ★ 새 구조 — 분리 표시
+    
+    // 포션
+    if (stateInv.potions.length > 0) {
+        const header = document.createElement('div');
+        header.className = 'item-section-header';
+        header.style.cssText = 'grid-column:1/-1; color:var(--text-muted); font-size:10px; padding:4px 8px;';
+        header.textContent = `POTIONS (\${stateInv.potion_used}/\${stateInv.potion_capacity})`;
+        il.appendChild(header);
+        
+        stateInv.potions.forEach(({name, count}) => {
+            const cell = document.createElement('div');
+            cell.className = 'submenu-item';
+            cell.innerHTML = `\${name}<span class="cost">×\${count}</span>`;
+            cell.onclick = () => useItem(name);
+            il.appendChild(cell);
+        });
+    }
+    
+    // 특수
+    if (stateInv.special.length > 0) {
+        const header = document.createElement('div');
+        header.className = 'item-section-header';
+        header.style.cssText = 'grid-column:1/-1; color:var(--accent-cyan); font-size:10px; padding:4px 8px;';
+        header.textContent = `SPECIAL (\${stateInv.special_used}/\${stateInv.special_capacity})`;
+        il.appendChild(header);
+        
+        stateInv.special.forEach(name => {
+            const cell = document.createElement('div');
+            cell.className = 'submenu-item special';
+            cell.innerHTML = `\${name}<span class="cost">★</span>`;
+            cell.onclick = () => useItem(name);
+            il.appendChild(cell);
+        });
+    }
+    
+    if (stateInv.potions.length === 0 && stateInv.special.length === 0) {
+        il.innerHTML = '<div style="color:var(--text-muted); padding:8px; grid-column:1/-1;">아이템 없음</div>';
+    }
+} else {
+    // 옛 호환 — 평탄 리스트
     let itemEntries = [];
     if (battleItems.length > 0) {
         if (typeof battleItems[0] === 'object' && battleItems[0].name !== undefined) {
@@ -266,12 +313,12 @@ function refreshBattle(bs) {
         itemEntries.forEach(([name, n]) => {
             const cell = document.createElement('div');
             cell.className = 'submenu-item';
-            cell.innerHTML = `${name}<span class="cost">×${n}</span>`;
+            cell.innerHTML = `\${name}<span class="cost">×\${n}</span>`;
             cell.onclick = () => useItem(name);
             il.appendChild(cell);
         });
     }
-
+}
     // ── 좌측 패널 ATB 바 갱신 ──
     // bs.player_atb (0~100+) 값을 받아서 시각적으로 표시.
     const atbFill = document.getElementById('atb-fill');

@@ -44,6 +44,7 @@ from game.Player_Class import Player, create_player_by_job
 from game.Enemy_Class  import Make_Random_Monster, Make_MidBoss, Make_FinalBoss
 from game.Skill        import Ply_Skill
 from game.Lv           import LV_, Allocate_Stat_Points
+from game.Inventory   import Inventory   # ★ 인벤토리 분리 (#4), Allocate_Stat_Points
 from game.Item         import Item_
 from ai.Battle_Engine  import EntitySnapshot
 from ai.Simulator      import MonsterFactory
@@ -180,8 +181,17 @@ def _save_battle_to_db(gs: dict, battle, result: dict, winner: str) -> None:
         # DB 실패해도 게임은 계속 (안전망)
         print(f"[DB] Battle save failed: {e}")
 
-def _player_to_snap(player, items: list) -> EntitySnapshot:
+def _player_to_snap(player, inv) -> EntitySnapshot:
+    """
+    inv는 Inventory 객체 또는 list 호환.
+    BattleSession은 평탄 list를 받으므로 inv.to_flat_list() 사용.
+    """
     skills = list(player.skill.learned_skills) if player.skill else []
+    # 호환성: Inventory 객체 또는 list 둘 다 지원
+    if isinstance(inv, Inventory):
+        items_list = inv.to_flat_list()
+    else:
+        items_list = list(inv) if inv else []
     return EntitySnapshot(
         name=player.name,
         hp=player.hp,       maxhp=player.maxhp,
@@ -191,13 +201,30 @@ def _player_to_snap(player, items: list) -> EntitySnapshot:
         luc=player.luc,     lv=player.lv,
         spd=getattr(player, "spd", 10.0),
         learned_skills=skills,
-        items=list(items),
-        job=getattr(player, "job", ""),  # 직업 패시브 발동용 (전사/마법사/탱커/도적)
+        items=items_list,
+        job=getattr(player, "job", ""),  # 직업 패시브 발동용
     )
 
 
-def _player_dict(player, items: list) -> dict:
-    """플레이어 상태를 JSON 직렬화 가능한 dict로 변환"""
+def _player_dict(player, inv) -> dict:
+    """
+    플레이어 상태를 JSON 직렬화 가능한 dict로 변환.
+    
+    inv: Inventory 객체 또는 list (호환).
+    응답에는 items (평탄 리스트, 호환용) + inventory (구조화) 둘 다 포함.
+    """
+    # 호환성: Inventory 객체 또는 list
+    if isinstance(inv, Inventory):
+        flat_items = inv.to_flat_list()
+        inv_dict = inv.to_response_dict()
+    else:
+        flat_items = list(inv) if inv else []
+        # 옛 list → 임시 Inventory로 변환 후 응답 dict
+        tmp = Inventory.new()
+        for it in flat_items:
+            tmp.add(it)
+        inv_dict = tmp.to_response_dict()
+    
     return {
         "name":   player.name,
         "job":    player.job,
@@ -215,7 +242,8 @@ def _player_dict(player, items: list) -> dict:
         "exp":    player.exp,
         "maxexp": player.maxexp,
         "skills": list(player.skill.learned_skills) if player.skill else [],
-        "items":  items,
+        "items":  flat_items,
+        "inventory": inv_dict,                                # ★ 새 구조 (#4)
         "pending_points": getattr(player, "pending_points", 0),
     }
 
@@ -246,12 +274,9 @@ def new_game():
     player.skill = Ply_Skill(job=job)
     player.skill.update_skills(1)
 
-    items = [
-        "HP_S_potion", "HP_S_potion",
-        "HP_M_potion",
-        "MP_S_potion", "MP_S_potion",
-        "MP_M_potion",
-    ]
+    # ★ 인벤토리 분리 (#4) — Inventory 객체로 시작 (포션 6개 자동)
+    inv = Inventory.starting_set()
+    items = inv.to_flat_list()  # BalanceHook은 평탄 list 받음 (호환)
 
     hook = BalanceHook(player, items, show_graph=False, verbose=False)
 
@@ -284,7 +309,8 @@ def new_game():
     session["user_id"] = uid
     GAME_SESSIONS[uid] = {
         "player":           player,
-        "items":            items,
+        "items":            items,           # 평탄 list (호환)
+        "inventory":        inv,             # ★ Inventory 객체 (#4)
         "hook":             hook,
         "turn":             0,
         "battle":           None,
@@ -296,7 +322,7 @@ def new_game():
 
     return jsonify({
         "ok":         True,
-        "player":     _player_dict(player, items),
+        "player":     _player_dict(player, inv),
         "db_user_id": db_user_id,           # ★ 프론트에 user_id 전달 (디버그용)
         "message":    f"안녕하세요, {name}님! ({job}) 모험을 시작합니다.",
     })
@@ -371,7 +397,7 @@ def levelup_allocate():
 
     return jsonify({
         "ok":        True,
-        "player":    _player_dict(player, gs["items"]),
+        "player":    _player_dict(player, gs["inventory"]),
         "remaining": result["remaining"],
         "message":   result["msg"],
     })
@@ -454,6 +480,7 @@ def explore():
 
     player = gs["player"]
     items  = gs["items"]
+    # ★ 인벤토리 객체 (#4) — items는 호환용 평탄 list
     turn   = gs["turn"]
 
     # HP 0 체크
@@ -550,10 +577,30 @@ def explore():
         names   = [x[0] for x in DROP_POOL]
         weights = [x[1] for x in DROP_POOL]
         gained  = choices(names, weights=weights, k=1)[0]
-        items.append(gained)
-        return jsonify({"ok": True, "event": "item", "item": gained,
-                        "message": f"[아이템 획득] {gained}을(를) 발견했다!",
-                        "player": _player_dict(player, items)})  # UI 즉시 반영용
+        
+        # ★ 인벤토리 분리 (#4) — slot 자동 분류
+        inv = gs["inventory"]
+        result = inv.add(gained)
+        # 평탄 list도 동기화 (BalanceHook 등 호환)
+        gs["items"] = inv.to_flat_list()
+        
+        if result["ok"]:
+            return jsonify({"ok": True, "event": "item", "item": gained,
+                            "message": f"[아이템 획득] {gained}을(를) 발견했다!",
+                            "player": _player_dict(player, inv)})
+        elif result["reason"] == "special_full":
+            # 특수 가득 → 프론트 모달 트리거
+            return jsonify({"ok": True, "event": "item_full",
+                            "incoming": gained,
+                            "candidates": result["candidates"],
+                            "message": result["message"],
+                            "player": _player_dict(player, inv)})
+        else:
+            # 포션 가득 → 거절
+            return jsonify({"ok": True, "event": "item_rejected",
+                            "incoming": gained,
+                            "message": result["message"],
+                            "player": _player_dict(player, inv)})
 
     elif 16 <= rd <= 17:
         # 휴식
@@ -570,12 +617,12 @@ def explore():
 
 
 def _start_battle(gs: dict, enemy, is_boss: bool = False) -> dict:
-    p_snap = _player_to_snap(gs["player"], gs["items"])
+    p_snap = _player_to_snap(gs["player"], gs["inventory"])
     e_snap = EntitySnapshot.from_enemy(enemy)
     gs["battle"] = BattleSession(
         p_snap,
         enemy=e_snap,
-        items=gs["items"],
+        items=gs["inventory"].to_flat_list(),
         is_boss=is_boss,
         enemy_origins=[enemy],
         player_original=gs["player"],   # ★ ATB 이월용 원본 Player
@@ -584,12 +631,12 @@ def _start_battle(gs: dict, enemy, is_boss: bool = False) -> dict:
 
 
 def _start_battle_multi(gs: dict, enemies: list, is_boss: bool = False) -> dict:
-    p_snap   = _player_to_snap(gs["player"], gs["items"])
+    p_snap   = _player_to_snap(gs["player"], gs["inventory"])
     e_snaps  = [EntitySnapshot.from_enemy(e) for e in enemies]
     gs["battle"] = BattleSession(
         p_snap,
         enemies=e_snaps,
-        items=gs["items"],
+        items=gs["inventory"].to_flat_list(),
         is_boss=is_boss,
         enemy_origins=list(enemies),
         player_original=gs["player"],   # ★ ATB 이월용 원본 Player
@@ -674,6 +721,7 @@ def battle_action():
         if battle.enemy.name == "중간 보스" and winner == "player":
             gs["mid_boss_cleared"] = True
             gs["items"].append("HP_L_potion")
+            gs["inventory"].add("HP_L_potion")   # ★ inv 동기화 (#4)
             result["messages"].append("보상: HP_L_potion 획득!")
 
         # ════════════════════════════════════════════════
@@ -683,7 +731,16 @@ def battle_action():
 
         # 전투 세션 초기화
         gs["battle"] = None
-        result["player"] = _player_dict(player, gs["items"])
+        # ★ 전투 종료 시 BattleSession items를 inv에 재반영 (#4)
+        if result.get("done") and battle is not None:
+            bs_items = getattr(battle, "items", None)
+            if bs_items is not None:
+                new_inv = Inventory.new()
+                for item_name in bs_items:
+                    new_inv.add(item_name)
+                gs["inventory"] = new_inv
+                gs["items"] = new_inv.to_flat_list()
+        result["player"] = _player_dict(player, gs["inventory"])
 
     return jsonify({"ok": True, **result})
     return jsonify({"ok": True, **result})
@@ -692,6 +749,48 @@ def battle_action():
 # ─────────────────────────────────────────────
 # API: 필드 아이템 사용
 # ─────────────────────────────────────────────
+
+
+# ─────────────────────────────────────────────
+# API: 특수 인벤토리 교체 (★ #4)
+# ─────────────────────────────────────────────
+
+@app.route("/api/inventory/swap_special", methods=["POST"])
+def inventory_swap_special():
+    """
+    특수 슬롯 가득 시: 기존 아이템 1개 버리고 새 아이템 추가.
+    
+    요청: { "drop": "bomb", "new": "fire_bottle" }
+    응답: { "ok": True, "dropped": "...", "added": "...", "player": {...} }
+    """
+    gs = _get_session()
+    if not gs:
+        return jsonify({"ok": False, "error": "게임 세션이 없습니다."}), 404
+    
+    data = request.get_json() or {}
+    drop_item = data.get("drop", "")
+    new_item = data.get("new", "")
+    
+    if not drop_item or not new_item:
+        return jsonify({"ok": False, "error": "drop과 new를 모두 지정해야 합니다."}), 400
+    
+    inv = gs["inventory"]
+    result = inv.swap_special(drop_item, new_item)
+    
+    if not result["ok"]:
+        return jsonify({"ok": False, "error": result.get("message", "교체 실패")}), 400
+    
+    # 평탄 list 동기화
+    gs["items"] = inv.to_flat_list()
+    
+    return jsonify({
+        "ok": True,
+        "dropped": result["dropped"],
+        "added": result["added"],
+        "message": f"{result['dropped']}을(를) 버리고 {result['added']}을(를) 획득!",
+        "player": _player_dict(gs["player"], inv),
+    })
+
 
 @app.route("/api/use_item", methods=["POST"])
 def use_item():
@@ -726,6 +825,7 @@ def use_item():
         before     = int(player.hp)
         player.hp  = min(player.maxhp, player.hp + amount)
         items.remove(item_name)
+        gs["inventory"].use(item_name)   # ★ inv 동기화 (#4)
         return jsonify({"ok": True, "message": f"{item_name} 사용 → HP {before} → {int(player.hp)}",
                         "player": _player_dict(player, items)})
 
@@ -733,6 +833,7 @@ def use_item():
         before     = int(player.mp)
         player.mp  = min(player.maxmp, player.mp + amount)
         items.remove(item_name)
+        gs["inventory"].use(item_name)   # ★ inv 동기화 (#4)
         return jsonify({"ok": True, "message": f"{item_name} 사용 → MP {before} → {int(player.mp)}",
                         "player": _player_dict(player, items)})
 
@@ -759,12 +860,12 @@ def rest():
     if choice == "heal":
         if player.hp >= player.maxhp:
             return jsonify({"ok": True, "message": "이미 체력이 가득 찼습니다.",
-                            "player": _player_dict(player, gs["items"])})
+                            "player": _player_dict(player, gs["inventory"])})
         heal      = min(int(player.maxhp / 3), int(player.maxhp - player.hp))
         player.hp = min(player.maxhp, player.hp + heal)
         return jsonify({"ok": True,
                         "message": f"체력 {heal} 회복! ({int(player.hp)}/{int(player.maxhp)})",
-                        "player": _player_dict(player, gs["items"])})
+                        "player": _player_dict(player, gs["inventory"])})
 
     elif choice == "train":
         ratio   = 0.60 + random() * 0.20
@@ -774,7 +875,7 @@ def rest():
         gs["hook"].check_level_up()
         return jsonify({"ok": True,
                         "message": f"수련으로 {exp_gain} 경험치 획득!",
-                        "player": _player_dict(player, gs["items"])})
+                        "player": _player_dict(player, gs["inventory"])})
 
     return jsonify({"ok": False, "error": "choice는 heal 또는 train이어야 합니다."})
 

@@ -61,7 +61,7 @@ class BattleSession:
         # ★ 원본 Player 참조 (atb_remainder 이월용, 없을 수도 있음)
         self.player_original = player_original
  
-        # ── enemies 리스트로 통일 ──
+         # ── enemies 리스트로 통일 ──
         # 단수 enemy로 호출되면 자동으로 [enemy]로 변환.
         if enemies is not None:
             self.enemies = [copy.deepcopy(e) for e in enemies]
@@ -69,7 +69,26 @@ class BattleSession:
             self.enemies = [copy.deepcopy(enemy)]
         else:
             raise ValueError("BattleSession은 enemy 또는 enemies 중 하나를 받아야 합니다")
- 
+
+        # ── ★ 다중 몹 스탯 배율 (#2) ──
+        # 다대일 전투 시 적 스탯을 약화 (도전성 + 공정성).
+        # 1대1: 100%, 1대2: 90%, 1대3: 80%
+        # 적용 스탯: HP/STG/SP/ARM/SPARM (SPD 제외 — ATB 행동 횟수에 영향 X)
+        # 보스 전투는 제외 (단일 전투이므로 자동으로 100%).
+        if len(self.enemies) >= 2 and not is_boss:
+            mult = {2: 0.9, 3: 0.8}.get(len(self.enemies), 0.8)
+            for e in self.enemies:
+                # HP 비율 유지 (현재 HP도 비례 감소)
+                hp_ratio = e.hp / e.maxhp if e.maxhp > 0 else 1.0
+                e.maxhp = e.maxhp * mult
+                e.hp = e.maxhp * hp_ratio
+                # 공격/방어 스탯 약화
+                e.stg = e.stg * mult
+                e.sp = e.sp * mult
+                e.arm = e.arm * mult
+                e.sparm = e.sparm * mult
+                # SPD는 변경 안 함 — ATB 누적/행동 횟수 동일 유지
+
         # 각 적에게 인덱스 부여 (UI 슬롯 매핑용: 0=슬롯3, 1=슬롯4, 2=슬롯5)
         for i, e in enumerate(self.enemies):
             e._slot_index = i

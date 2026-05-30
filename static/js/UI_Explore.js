@@ -15,35 +15,75 @@ function refreshExploreInfo() {
     //  - player_dict: 단순 문자열 배열 ['HP_S_potion', 'HP_S_potion', ...]
     //  - 전투 state.items: [{name, count}, ...]
     const invEl = document.getElementById('explore-inventory');
-    if (invEl) {
+if (invEl) {
+    const inv = p.inventory || null;
+    
+    if (!inv) {
+        // 옛 응답 호환 — items 평탄 리스트
         const items = p.items || [];
-        let entries = [];
-        if (items.length > 0) {
-            if (typeof items[0] === 'object' && items[0].name !== undefined) {
-                entries = items.map(it => [it.name, it.count]);
-            } else {
-                const counts = {};
-                items.forEach(it => counts[it] = (counts[it]||0)+1);
-                entries = Object.entries(counts);
-            }
-        }
-        if (entries.length === 0) {
+        if (items.length === 0) {
             invEl.innerHTML = '<div class="explore-empty">아이템이 없습니다</div>';
         } else {
+            const counts = {};
+            items.forEach(it => counts[it] = (counts[it]||0)+1);
             invEl.innerHTML = '';
-            entries.forEach(([name, n]) => {
+            Object.entries(counts).forEach(([name, n]) => {
+                const row = document.createElement('div');
+                row.className = 'inv-item clickable';
+                row.innerHTML = `<span>\${name}</span><span class="qty">×\${n}</span>`;
+                row.onclick = () => useItemInField(name);
+                invEl.appendChild(row);
+            });
+        }
+    } else {
+        // ★ 새 분리 구조
+        invEl.innerHTML = '';
+        
+        // 포션 섹션
+        const potHeader = document.createElement('div');
+        potHeader.className = 'inv-section-header';
+        potHeader.textContent = `포션 (\${inv.potion_used}/\${inv.potion_capacity})`;
+        invEl.appendChild(potHeader);
+        
+        if (inv.potions.length === 0) {
+            const empty = document.createElement('div');
+            empty.className = 'explore-empty';
+            empty.textContent = '포션 없음';
+            invEl.appendChild(empty);
+        } else {
+            inv.potions.forEach(({name, count}) => {
                 const row = document.createElement('div');
                 row.className = 'inv-item clickable';
                 row.title = '클릭해서 사용';
-                row.innerHTML = `<span>${name}</span><span class="qty">×${n}</span>`;
+                row.innerHTML = `<span>\${name}</span><span class="qty">×\${count}</span>`;
+                row.onclick = () => useItemInField(name);
+                invEl.appendChild(row);
+            });
+        }
+        
+        // 특수 섹션
+        const spHeader = document.createElement('div');
+        spHeader.className = 'inv-section-header special';
+        spHeader.textContent = `특수 (\${inv.special_used}/\${inv.special_capacity})`;
+        invEl.appendChild(spHeader);
+        
+        if (inv.special.length === 0) {
+            const empty = document.createElement('div');
+            empty.className = 'explore-empty';
+            empty.textContent = '특수 없음';
+            invEl.appendChild(empty);
+        } else {
+            inv.special.forEach(name => {
+                const row = document.createElement('div');
+                row.className = 'inv-item clickable special';
+                row.innerHTML = `<span>\${name}</span><span class="qty special">★</span>`;
                 row.onclick = () => useItemInField(name);
                 invEl.appendChild(row);
             });
         }
     }
-
+}
     // 스탯 카드는 제거됨 (좌측 패널 능력치로 통합)
-
     // 스킬
     const skEl = document.getElementById('explore-skills');
     if (skEl) {

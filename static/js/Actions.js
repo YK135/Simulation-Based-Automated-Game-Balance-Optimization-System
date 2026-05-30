@@ -120,6 +120,14 @@ async function explore() {
             toast(`+ ${r.item}`);
             // ★ 좌측 패널 happy 표정 1.5초
             showHappyState('player_panel', 1500);
+        } else if (r.event === 'item_full') {
+            if (typeof openInvSwap === 'function') {
+                openInvSwap(r.incoming, r.candidates || []);
+            } else {
+                toast('특수 가방이 가득 찼습니다.', 'warn');
+            }
+        } else if (r.event === 'item_rejected') {
+            toast(r.message || '아이템 획득을 포기했습니다.', 'warn');
         } else if (r.event === 'rest') {
             logLine('🌙 휴식 장소를 발견했다.', 'heal');
             term('rest event');
