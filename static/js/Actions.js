@@ -299,4 +299,9 @@ async function useItemInField(itemName) {
         term(`item used: ${itemName}`, 'ok');
         toast(r.message);
     }
+
+    // ★ 필드 인벤토리 카드에서 사용한 아이템 즉시 제거
+    if (typeof refreshExploreInfo === 'function') {
+        refreshExploreInfo();
+    }
 }

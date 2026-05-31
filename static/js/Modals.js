@@ -32,6 +32,11 @@ async function performRest(choice) {
         toast(r.message);
     }
     document.getElementById('modal-rest').classList.remove('active');
+
+    // ★ train으로 레벨업했을 때 즉시 스탯 분배 모달 표시
+    if (typeof checkPendingPoints === 'function') {
+        checkPendingPoints();
+    }
 }
 
 // ── 시뮬 가시화 (시각 효과) ──

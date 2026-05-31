@@ -825,17 +825,15 @@ def use_item():
         before     = int(player.hp)
         player.hp  = min(player.maxhp, player.hp + amount)
         items.remove(item_name)
-        gs["inventory"].use(item_name)   # ★ inv 동기화 (#4)
         return jsonify({"ok": True, "message": f"{item_name} 사용 → HP {before} → {int(player.hp)}",
-                        "player": _player_dict(player, items)})
+                        "player": _player_dict(player, gs["items"])})  # ★ gs["items"] 직접 참조
 
     elif meta["stat"] == "mp":
         before     = int(player.mp)
         player.mp  = min(player.maxmp, player.mp + amount)
         items.remove(item_name)
-        gs["inventory"].use(item_name)   # ★ inv 동기화 (#4)
         return jsonify({"ok": True, "message": f"{item_name} 사용 → MP {before} → {int(player.mp)}",
-                        "player": _player_dict(player, items)})
+                        "player": _player_dict(player, gs["items"])})  # ★ gs["items"] 직접 참조
 
     return jsonify({"ok": False, "error": "사용할 수 없는 아이템입니다."})
 
