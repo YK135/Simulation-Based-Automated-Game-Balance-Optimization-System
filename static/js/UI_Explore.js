@@ -30,7 +30,7 @@ if (invEl) {
             Object.entries(counts).forEach(([name, n]) => {
                 const row = document.createElement('div');
                 row.className = 'inv-item clickable';
-                row.innerHTML = `<span>\${name}</span><span class="qty">×\${n}</span>`;
+                row.innerHTML = `<span>${name}</span><span class="qty">×${n}</span>`;
                 row.onclick = () => useItemInField(name);
                 invEl.appendChild(row);
             });
@@ -42,7 +42,7 @@ if (invEl) {
         // 포션 섹션
         const potHeader = document.createElement('div');
         potHeader.className = 'inv-section-header';
-        potHeader.textContent = `포션 (\${inv.potion_used}/\${inv.potion_capacity})`;
+        potHeader.textContent = `포션 (${inv.potion_used}/${inv.potion_capacity})`;
         invEl.appendChild(potHeader);
         
         if (inv.potions.length === 0) {
@@ -55,7 +55,7 @@ if (invEl) {
                 const row = document.createElement('div');
                 row.className = 'inv-item clickable';
                 row.title = '클릭해서 사용';
-                row.innerHTML = `<span>\${name}</span><span class="qty">×\${count}</span>`;
+                row.innerHTML = `<span>${name}</span><span class="qty">×${count}</span>`;
                 row.onclick = () => useItemInField(name);
                 invEl.appendChild(row);
             });
@@ -64,7 +64,7 @@ if (invEl) {
         // 특수 섹션
         const spHeader = document.createElement('div');
         spHeader.className = 'inv-section-header special';
-        spHeader.textContent = `특수 (\${inv.special_used}/\${inv.special_capacity})`;
+        spHeader.textContent = `특수 (${inv.special_used}/${inv.special_capacity})`;
         invEl.appendChild(spHeader);
         
         if (inv.special.length === 0) {
@@ -76,7 +76,7 @@ if (invEl) {
             inv.special.forEach(name => {
                 const row = document.createElement('div');
                 row.className = 'inv-item clickable special';
-                row.innerHTML = `<span>\${name}</span><span class="qty special">★</span>`;
+                row.innerHTML = `<span>${name}</span><span class="qty special">★</span>`;
                 row.onclick = () => useItemInField(name);
                 invEl.appendChild(row);
             });

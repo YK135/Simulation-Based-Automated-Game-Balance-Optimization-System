@@ -34,7 +34,7 @@ function renderInvCandidates() {
         const row = document.createElement('div');
         row.className = 'iv-candidate' + (ivSelectedDrop === name ? ' selected' : '');
         row.innerHTML = `
-            <span class="iv-cand-name">\${name}</span>
+            <span class="iv-cand-name">${name}</span>
             <span class="iv-cand-mark">✕ 버림</span>
         `;
         row.onclick = () => {
@@ -79,7 +79,7 @@ async function confirmInvSwap() {
 
 /** 취소 (새 아이템 포기) */
 function cancelInvSwap() {
-    toast(`\${ivIncomingItem} 획득 포기`, 'info');
+    toast(`${ivIncomingItem} 획득 포기`, 'info');
     closeInvSwap();
 }
 

@@ -263,13 +263,13 @@ if (stateInv && (stateInv.potions.length > 0 || stateInv.special.length > 0)) {
         const header = document.createElement('div');
         header.className = 'item-section-header';
         header.style.cssText = 'grid-column:1/-1; color:var(--text-muted); font-size:10px; padding:4px 8px;';
-        header.textContent = `POTIONS (\${stateInv.potion_used}/\${stateInv.potion_capacity})`;
+        header.textContent = `POTIONS (${stateInv.potion_used}/${stateInv.potion_capacity})`;
         il.appendChild(header);
         
         stateInv.potions.forEach(({name, count}) => {
             const cell = document.createElement('div');
             cell.className = 'submenu-item';
-            cell.innerHTML = `\${name}<span class="cost">×\${count}</span>`;
+            cell.innerHTML = `${name}<span class="cost">×${count}</span>`;
             cell.onclick = () => useItem(name);
             il.appendChild(cell);
         });
@@ -280,13 +280,13 @@ if (stateInv && (stateInv.potions.length > 0 || stateInv.special.length > 0)) {
         const header = document.createElement('div');
         header.className = 'item-section-header';
         header.style.cssText = 'grid-column:1/-1; color:var(--accent-cyan); font-size:10px; padding:4px 8px;';
-        header.textContent = `SPECIAL (\${stateInv.special_used}/\${stateInv.special_capacity})`;
+        header.textContent = `SPECIAL (${stateInv.special_used}/${stateInv.special_capacity})`;
         il.appendChild(header);
         
         stateInv.special.forEach(name => {
             const cell = document.createElement('div');
             cell.className = 'submenu-item special';
-            cell.innerHTML = `\${name}<span class="cost">★</span>`;
+            cell.innerHTML = `${name}<span class="cost">★</span>`;
             cell.onclick = () => useItem(name);
             il.appendChild(cell);
         });
@@ -313,12 +313,13 @@ if (stateInv && (stateInv.potions.length > 0 || stateInv.special.length > 0)) {
         itemEntries.forEach(([name, n]) => {
             const cell = document.createElement('div');
             cell.className = 'submenu-item';
-            cell.innerHTML = `\${name}<span class="cost">×\${n}</span>`;
+            cell.innerHTML = `${name}<span class="cost">×${n}</span>`;
             cell.onclick = () => useItem(name);
             il.appendChild(cell);
         });
     }
 }
+
     // ── 좌측 패널 ATB 바 갱신 ──
     // bs.player_atb (0~100+) 값을 받아서 시각적으로 표시.
     const atbFill = document.getElementById('atb-fill');
