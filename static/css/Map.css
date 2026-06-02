@@ -1,0 +1,438 @@
+/* ═══════════════════════════════════════════════════════════
+   Map.css — 노드맵 (슬레이 더 스파이어 스타일)
+   기존 테마 변수 사용: var(--accent-cyan), var(--bg-panel) 등
+   ═══════════════════════════════════════════════════════════ */
+
+/* ─── 맵 컨테이너 ─── */
+#map-mode {
+    display: flex;
+    flex-direction: column;
+    height: 100%;
+    min-height: 320px;
+    overflow: hidden;
+}
+
+/* ─── 맵 헤더 ─── */
+.map-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 8px 12px;
+    border-bottom: 1px dashed var(--border, rgba(0,255,208,0.2));
+    flex-shrink: 0;
+}
+
+.map-chapter-badge {
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: 0.15em;
+    color: var(--accent-cyan, #00ffd0);
+}
+
+.map-layer-info {
+    font-size: 10px;
+    color: var(--text-dim, #6b7a8d);
+    letter-spacing: 0.1em;
+}
+
+/* ─── 맵 스크롤 영역 ─── */
+.map-scroll {
+    flex: 1;
+    overflow-y: auto;
+    overflow-x: hidden;
+    padding: 12px 8px;
+    display: flex;
+    flex-direction: column-reverse; /* 보스가 위, 시작이 아래 */
+    gap: 6px;
+}
+
+.map-scroll::-webkit-scrollbar { width: 4px; }
+.map-scroll::-webkit-scrollbar-track { background: transparent; }
+.map-scroll::-webkit-scrollbar-thumb {
+    background: var(--accent-cyan, #00ffd0);
+    opacity: 0.3;
+    border-radius: 2px;
+}
+
+/* ─── 각 층 (Layer Row) ─── */
+.map-layer-row {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 12px;
+    position: relative;
+    min-height: 56px;
+}
+
+.map-layer-row::before {
+    content: attr(data-layer);
+    position: absolute;
+    left: 4px;
+    font-size: 9px;
+    color: var(--text-dim, #6b7a8d);
+    letter-spacing: 0.08em;
+    opacity: 0.5;
+}
+
+/* ─── 노드 ─── */
+.map-node {
+    width: 48px;
+    height: 48px;
+    border-radius: 50%;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    cursor: default;
+    position: relative;
+    transition: all 0.18s ease;
+    border: 2px solid transparent;
+    font-size: 18px;
+    flex-shrink: 0;
+}
+
+/* 방문 완료 */
+.map-node.visited {
+    opacity: 0.35;
+    filter: grayscale(0.6);
+    border-color: transparent;
+}
+
+/* 선택 불가 (잠김) */
+.map-node.locked {
+    opacity: 0.25;
+    cursor: not-allowed;
+    filter: grayscale(1);
+}
+
+/* 선택 가능 — 클릭 가능 */
+.map-node.available {
+    cursor: pointer;
+    animation: map-node-pulse 1.8s ease-in-out infinite;
+}
+
+.map-node.available:hover {
+    transform: scale(1.18);
+    z-index: 10;
+    animation: none;
+}
+
+.map-node.available:active {
+    transform: scale(0.96);
+}
+
+@keyframes map-node-pulse {
+    0%, 100% { box-shadow: 0 0 0 0 rgba(0,255,208,0.35); }
+    50%       { box-shadow: 0 0 0 6px rgba(0,255,208,0); }
+}
+
+/* 현재 위치 (마지막 방문 노드) */
+.map-node.current {
+    opacity: 1;
+    filter: none;
+}
+
+/* 타입별 색상 */
+.map-node[data-type="battle"] {
+    background: rgba(255, 80, 80, 0.15);
+    border-color: rgba(255, 80, 80, 0.5);
+}
+.map-node[data-type="battle"].available {
+    border-color: rgba(255, 80, 80, 0.9);
+    box-shadow: 0 0 10px rgba(255,80,80,0.3);
+}
+
+.map-node[data-type="elite"] {
+    background: rgba(255, 150, 50, 0.15);
+    border-color: rgba(255, 150, 50, 0.5);
+}
+.map-node[data-type="elite"].available {
+    border-color: rgba(255, 150, 50, 0.9);
+    box-shadow: 0 0 10px rgba(255,150,50,0.3);
+}
+
+.map-node[data-type="rest"] {
+    background: rgba(80, 220, 120, 0.15);
+    border-color: rgba(80, 220, 120, 0.5);
+}
+.map-node[data-type="rest"].available {
+    border-color: rgba(80, 220, 120, 0.9);
+    box-shadow: 0 0 10px rgba(80,220,120,0.3);
+}
+
+.map-node[data-type="shop"] {
+    background: rgba(255, 210, 60, 0.15);
+    border-color: rgba(255, 210, 60, 0.5);
+}
+.map-node[data-type="shop"].available {
+    border-color: rgba(255, 210, 60, 0.9);
+    box-shadow: 0 0 10px rgba(255,210,60,0.3);
+}
+
+.map-node[data-type="event"] {
+    background: rgba(160, 100, 255, 0.15);
+    border-color: rgba(160, 100, 255, 0.5);
+}
+.map-node[data-type="event"].available {
+    border-color: rgba(160, 100, 255, 0.9);
+    box-shadow: 0 0 10px rgba(160,100,255,0.3);
+}
+
+.map-node[data-type="boss"] {
+    background: rgba(255, 40, 40, 0.2);
+    border-color: rgba(255, 40, 40, 0.7);
+    width: 56px;
+    height: 56px;
+    border-width: 2px;
+}
+.map-node[data-type="boss"].available {
+    border-color: #ff2828;
+    box-shadow: 0 0 18px rgba(255,40,40,0.5);
+    animation: map-boss-pulse 1.2s ease-in-out infinite;
+}
+
+@keyframes map-boss-pulse {
+    0%, 100% { box-shadow: 0 0 8px rgba(255,40,40,0.4); }
+    50%       { box-shadow: 0 0 22px rgba(255,40,40,0.8); }
+}
+
+/* 노드 아이콘 */
+.map-node-icon {
+    font-size: 20px;
+    line-height: 1;
+}
+
+.map-node[data-type="boss"] .map-node-icon {
+    font-size: 24px;
+}
+
+/* 노드 툴팁 라벨 */
+.map-node-label {
+    position: absolute;
+    bottom: -18px;
+    left: 50%;
+    transform: translateX(-50%);
+    font-size: 9px;
+    letter-spacing: 0.06em;
+    color: var(--text-dim, #6b7a8d);
+    white-space: nowrap;
+    pointer-events: none;
+    opacity: 0;
+    transition: opacity 0.15s;
+}
+
+.map-node:hover .map-node-label,
+.map-node.available .map-node-label {
+    opacity: 1;
+}
+
+/* ─── 연결선 (SVG 오버레이) ─── */
+.map-connections {
+    position: absolute;
+    top: 0; left: 0;
+    width: 100%; height: 100%;
+    pointer-events: none;
+    z-index: 0;
+}
+
+.map-node { z-index: 1; }
+
+/* ─── 맵 하단 — 챕터 시작 버튼 ─── */
+.map-footer {
+    flex-shrink: 0;
+    padding: 10px 12px;
+    border-top: 1px dashed var(--border, rgba(0,255,208,0.2));
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+}
+
+.map-chapter-progress {
+    font-size: 10px;
+    color: var(--text-dim, #6b7a8d);
+}
+
+.btn-map-start {
+    font-size: 11px;
+    padding: 7px 18px;
+    letter-spacing: 0.12em;
+}
+
+/* ─── 상점 패널 ─── */
+.shop-panel {
+    padding: 12px;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.shop-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 4px;
+}
+
+.shop-gold {
+    font-size: 12px;
+    color: rgba(255, 210, 60, 0.9);
+    font-weight: 700;
+}
+
+.shop-items-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 6px;
+}
+
+.shop-item {
+    background: rgba(255,255,255,0.04);
+    border: 1px solid var(--border, rgba(0,255,208,0.2));
+    border-radius: 4px;
+    padding: 8px;
+    cursor: pointer;
+    transition: all 0.15s;
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+}
+
+.shop-item:hover {
+    border-color: rgba(255,210,60,0.6);
+    background: rgba(255,210,60,0.07);
+}
+
+.shop-item-name {
+    font-size: 11px;
+    font-weight: 600;
+    color: var(--text, #c8d8e8);
+}
+
+.shop-item-effect {
+    font-size: 10px;
+    color: var(--text-dim, #6b7a8d);
+}
+
+.shop-item-price {
+    font-size: 11px;
+    color: rgba(255, 210, 60, 0.8);
+    font-weight: 700;
+    align-self: flex-end;
+}
+
+.shop-item.cant-afford {
+    opacity: 0.4;
+    cursor: not-allowed;
+}
+
+.shop-leave-btn {
+    margin-top: 4px;
+    font-size: 10px;
+    padding: 6px;
+    opacity: 0.7;
+}
+
+/* ─── 휴식 패널 ─── */
+.rest-panel {
+    padding: 16px;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    align-items: center;
+}
+
+.rest-title {
+    font-size: 12px;
+    letter-spacing: 0.15em;
+    color: rgba(80, 220, 120, 0.9);
+    font-weight: 700;
+}
+
+.rest-options {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    width: 100%;
+}
+
+.rest-option-btn {
+    padding: 10px 16px;
+    font-size: 11px;
+    letter-spacing: 0.1em;
+    border: 1px solid rgba(80,220,120,0.4);
+    background: rgba(80,220,120,0.08);
+    color: rgba(80,220,120,0.9);
+    cursor: pointer;
+    border-radius: 3px;
+    transition: all 0.15s;
+    text-align: left;
+}
+
+.rest-option-btn:hover {
+    background: rgba(80,220,120,0.18);
+    border-color: rgba(80,220,120,0.8);
+}
+
+/* ─── 이벤트 결과 패널 ─── */
+.event-result-panel {
+    padding: 16px;
+    text-align: center;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    align-items: center;
+}
+
+.event-icon { font-size: 32px; }
+
+.event-message {
+    font-size: 12px;
+    color: var(--text, #c8d8e8);
+    line-height: 1.5;
+}
+
+.event-continue-btn {
+    margin-top: 8px;
+    font-size: 11px;
+    padding: 7px 20px;
+}
+
+/* ─── 챕터 클리어 오버레이 ─── */
+.chapter-clear-overlay {
+    position: fixed;
+    inset: 0;
+    background: rgba(0,0,0,0.85);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    z-index: 999;
+    gap: 20px;
+    animation: fadeIn 0.4s ease;
+}
+
+@keyframes fadeIn {
+    from { opacity: 0; }
+    to   { opacity: 1; }
+}
+
+.chapter-clear-title {
+    font-size: 28px;
+    font-weight: 900;
+    letter-spacing: 0.2em;
+    color: var(--accent-cyan, #00ffd0);
+    text-shadow: 0 0 30px rgba(0,255,208,0.6);
+}
+
+.chapter-clear-sub {
+    font-size: 13px;
+    color: var(--text-dim, #6b7a8d);
+    letter-spacing: 0.12em;
+}
+
+.chapter-clear-btn {
+    padding: 12px 32px;
+    font-size: 13px;
+    letter-spacing: 0.15em;
+}

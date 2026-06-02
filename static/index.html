@@ -13,6 +13,7 @@
 <link rel="stylesheet" href="css/Player_Panel.css">  <!-- 좌측: 캐릭터/게이지/스킬북 -->
 <link rel="stylesheet" href="css/Battle.css">        <!-- 중앙 배틀 + 액션 + 로그 -->
 <link rel="stylesheet" href="css/Explore.css">       <!-- 탐험 모드 + 진행 턴 -->
+<link rel="stylesheet" href="css/Map.css">           <!-- 맵 모달 + 노드맵 -->
 <link rel="stylesheet" href="css/Modal.css">         <!-- 모달 3종 -->
 <link rel="stylesheet" href="css/Ranking_BIG.css">   <!-- 랭킹 모달 -->
 <link rel="stylesheet" href="css/AI_Monitor.css">    <!-- 우측 AI 패널 -->
@@ -120,15 +121,79 @@
     <button id="btn-restart" class="btn">⚡ NEW GAME</button>
 </div>
 
-<!-- ──────────────────────────────────────────────────────
-     CENTER: 배틀 / 탐험
-     ────────────────────────────────────────────────────── -->
-<div class="center-col">
-    <div class="battle-zone">
-        <div class="battle-header">
-            <div class="battle-title">LIVE BATTLE: <span class="field-name" id="field-name">FIELD</span></div>
-            <div class="field-name" id="turn-counter">TURN --</div>
+        <!-- ──────────────────────────────────────────────────────
+            CENTER: 배틀 / 탐험
+            ────────────────────────────────────────────────────── -->
+        <div class="center-col">
+            <div class="battle-zone">
+                <div class="battle-header">
+                    <div class="battle-title">LIVE BATTLE: <span class="field-name" id="field-name">FIELD</span></div>
+                    <div class="field-name" id="turn-counter">TURN --</div>
+                </div>
+
+                <!-- ═════════════════════ 노드맵 모드 ═════════════════════ -->
+        <div id="map-mode" style="display:none; flex-direction:column; height:100%;">
+
+            <!-- 맵 헤더 -->
+            <div class="map-header">
+                <span class="map-chapter-badge" id="map-chapter-badge">CHAPTER 1</span>
+                <span class="map-layer-info" id="map-layer-info">0 / 0 노드</span>
+            </div>
+
+            <!-- 맵 스크롤 영역 (노드 렌더링) -->
+            <div class="map-scroll" id="map-scroll">
+                <!-- JS가 채움 -->
+            </div>
+
+            <!-- 콘텐츠 오버레이 (휴식/상점/이벤트 패널) -->
+            <div id="map-content-overlay" style="
+                display:none;
+                position:absolute;
+                inset:0;
+                background:rgba(10,18,24,0.92);
+                z-index:20;
+                align-items:center;
+                justify-content:center;
+                border-radius:4px;
+            "></div>
+
+            <!-- 맵 하단 -->
+            <div class="map-footer">
+                <span class="map-chapter-progress" id="map-chapter-progress"></span>
+            </div>
         </div>
+        <!-- ═══════════════════════════════════════════════════════ -->
+
+        <!-- ═════════════════════ 노드맵 모드 ═════════════════════ -->
+        <div id="map-mode" style="display:none; flex-direction:column; height:100%; position:relative;">
+ 
+            <!-- 맵 헤더 -->
+            <div class="map-header">
+                <span class="map-chapter-badge" id="map-chapter-badge">CHAPTER 1</span>
+                <span class="map-layer-info"   id="map-layer-info">0 / 0 노드</span>
+            </div>
+ 
+            <!-- 노드 렌더링 영역 -->
+            <div class="map-scroll" id="map-scroll"></div>
+ 
+            <!-- 휴식/상점/이벤트 오버레이 패널 -->
+            <div id="map-content-overlay" style="
+                display:none;
+                position:absolute;
+                inset:0;
+                background:rgba(10,18,24,0.93);
+                z-index:20;
+                align-items:center;
+                justify-content:center;
+                border-radius:4px;
+            "></div>
+ 
+            <!-- 맵 하단 -->
+            <div class="map-footer">
+                <span class="map-chapter-progress" id="map-chapter-progress"></span>
+            </div>
+        </div>
+        <!-- ═══════════════════════════════════════════════════════ -->
 
         <!-- ═════════════════════ 탐험 모드 ═════════════════════ -->
         <div id="explore-mode" style="display:none;">
@@ -705,11 +770,12 @@
 <script src="js/Utils.js"></script>             <!-- 시계, 토스트, 로그 -->
 <script src="js/Pentagon.js"></script>          <!-- 펜타곤 차트 -->
 <script src="js/UI_Player.js"></script>         <!-- 좌측 패널 -->
-<script src="js/Inventory.js"></script>         <!-- 인벤토리 UI + 관리 -->
+<script src="js/InventorySwap.js"></script>         <!-- 인벤토리 UI + 관리 -->
 <script src="js/UI_Explore.js"></script>        <!-- 탐험 모드 -->
 <script src="js/UI_Battle.js"></script>         <!-- 배틀 모드 -->
 <script src="js/Modals.js"></script>            <!-- 휴식/도망 + 시뮬 가시화 -->
 <script src="/js/StatAllocate.js"></script>     <!-- 레벨업 스탯 분배 모달 -->
+<script src="js/UI_Map.js"></script>            <!-- 노드맵 UI + 관리 -->
 <script src="js/Actions.js"></script>           <!-- API 호출 액션 -->
 <script src="js/Ranking.js"></script>           <!-- 랭킹 모달 + API 연동 -->
 <script src="js/Main.js"></script>              <!-- 부팅 + 이벤트 바인딩 -->

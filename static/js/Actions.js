@@ -2,9 +2,9 @@
    actions.js — 백엔드 API 호출 액션
    - loadStatus: 세션/전투 복구
    - newGame: 새 게임 시작
-   - explore: 탐험
    - battleAction: 전투 행동 (attack, skill, item, escape)
    - useSkill / useItem / useItemInField: 사용 헬퍼
+   ※ explore() 함수 제거 — 노드맵으로 대체
    ═══════════════════════════════════════════════════════════ */
 
 async function loadStatus() {
@@ -15,166 +15,71 @@ async function loadStatus() {
     state.exploreTurn = r.turn || 0;
     refreshPlayer();
 
-    // 서버 세션이 전투 중이면 전투 상태 복구.
-    // 1차: /api/status 응답에 battle 페이로드 포함 (백엔드가 합쳐서 줌)
-    // 2차 폴백: in_battle만 true면 /api/battle/state 별도 호출
     if (r.in_battle) {
         let bs = r.battle;
         if (!bs) {
             const fetched = await api('/battle/state');
-            if (fetched && fetched.turn !== undefined && fetched.player_hp !== undefined) {
-                bs = fetched;
-            }
+            if (fetched && fetched.turn !== undefined) bs = fetched;
         }
         if (bs) {
             refreshBattle(bs);
             term('battle session restored', 'ok');
             return true;
         }
-        term('battle restore failed, fallback to peace', 'warn');
+        term('battle restore failed, fallback to map', 'warn');
     }
 
     state.inBattle = false;
-    setExploreMode();
+
+    // 맵이 있으면 맵 모드, 없으면 맵 생성
+    if (typeof setMapMode === 'function') {
+        const ms = await api('/map/state', null, 'GET');
+        if (ms.ok && ms.map) {
+            if (typeof refreshMap === 'function') refreshMap(ms.map);
+            setMapMode();
+        }
+        // 맵이 없으면 newGame 모달에서 처리됨
+    }
     return true;
 }
 
 async function newGame(name, job) {
-    // ★ 중복 호출 방지 락
-    // 0.01초 안에 두 번 호출되어 DB에 User 두 개 생성되는 버그 방지.
     if (state.creatingGame) {
         console.warn('[newGame] already in progress, ignoring duplicate call');
         return;
     }
     state.creatingGame = true;
-
     try {
         const r = await api('/new_game', { name, job });
         if (r.ok) {
             state.player = r.player;
             refreshPlayer();
-            document.getElementById('modal-newgame').classList.remove('active');
-            setExploreMode();
+            document.getElementById('modal-newgame')?.classList.remove('active');
             clearLog();
             logLine(`▶ ${name} (${job}) 모험 시작!`, 'skill');
             term(`session created: ${name}/${job}`, 'ok');
             toast(`Welcome, ${name}!`);
+            // ★ 노드맵 챕터 1 생성
+            if (typeof initMap === 'function') {
+                await initMap(1);
+            }
         } else {
-            toast('생성 실패: ' + (r.error||'unknown'), 'error');
+            toast('생성 실패: ' + (r.error || 'unknown'), 'error');
         }
     } finally {
-        // 락 해제 (성공/실패 모두)
         state.creatingGame = false;
     }
 }
 
-async function explore() {
-    // ── 연타 방지 락 ──
-    // 백엔드 응답이 도착하기 전에 두 번째 explore 클릭이 들어오면 무시.
-    // 응답 처리 중 race condition으로 인해 이벤트가 스킵되는 버그 방지.
-    if (state.exploring) {
-        term('exploration in progress, ignored', 'warn');
-        return;
-    }
-    state.exploring = true;
-
-    // 탐험 버튼 즉시 비활성화 (시각적 피드백)
-    const btn = document.getElementById('btn-explore');
-    if (btn) {
-        btn.disabled = true;
-        btn.style.opacity = '0.5';
-        btn.style.cursor = 'wait';
-    }
-
-    try {
-        term('exploring field...');
-        const r = await api('/explore', {});
-        if (!r.ok) {
-            toast(r.error || '탐험 실패', 'error');
-            return;
-        }
-
-        if (r.event === 'battle' || r.event === 'midboss' || r.event === 'finalboss' || r.event === 'battle_multi') {
-            state.inBattle = true;
-            if (r.event === 'midboss') {
-                logLine('▼ 중간 보스가 나타났다!', 'crit');
-                term('encounter: MIDBOSS', 'warn');
-            } else if (r.event === 'finalboss') {
-                logLine('▼ 최종 보스가 나타났다!', 'crit');
-                term('encounter: FINALBOSS', 'warn');
-            } else if (r.event === 'battle_multi') {
-                const names = (r.enemies || []).map(e => e.name).join(', ');
-                logLine(`⚠ ${r.enemy_count}마리의 적이 나타났다! [${names}]`, 'crit');
-                term(`encounter: ${r.enemy_count} enemies`, 'warn');
-            } else {
-                const enemyName = r.battle_state?.enemy_info?.name || r.battle_state?.enemy_name || '???';
-                logLine(`▼ ${enemyName}이(가) 나타났다!`, 'system');
-                term(`encounter: ${enemyName}`);
-            }
-            refreshBattle(r.battle_state);
-            animateBalanceTuning();
-        } else if (r.event === 'item') {
-            logLine(`✚ 아이템 획득: ${r.item}`, 'heal');
-            term('item gained');
-            if (r.player) { state.player = r.player; refreshPlayer(); }
-            toast(`+ ${r.item}`);
-            // ★ 좌측 패널 happy 표정 1.5초
-            showHappyState('player_panel', 1500);
-        } else if (r.event === 'item_full') {
-            if (typeof openInvSwap === 'function') {
-                openInvSwap(r.incoming, r.candidates || []);
-            } else {
-                toast('특수 가방이 가득 찼습니다.', 'warn');
-            }
-        } else if (r.event === 'item_rejected') {
-            toast(r.message || '아이템 획득을 포기했습니다.', 'warn');
-        } else if (r.event === 'rest') {
-            logLine('🌙 휴식 장소를 발견했다.', 'heal');
-            term('rest event');
-            showRestModal();
-            // ★ 휴식 발견도 좋은 이벤트 — happy
-            showHappyState('player_panel', 1500);
-        } else if (r.event === 'gameover') {
-            logLine('✖ GAME OVER', 'crit');
-            term('game over', 'warn');
-            toast('게임 오버. 다시 시작하세요.', 'warn');
-        } else {
-            logLine(r.message || '아무 일도 일어나지 않았다.', 'system');
-            if (r.player) { state.player = r.player; refreshPlayer(); }
-        }
-
-        // 진행 턴 동기화
-        if (!state.inBattle) {
-            const st = await api('/status');
-            if (st.ok) {
-                state.exploreTurn = st.turn || 0;
-                refreshExploreTurn();
-            }
-        }
-    } finally {
-        // 락 해제 — 응답이 성공/실패 어느 쪽이든 반드시 해제 (try/finally)
-        state.exploring = false;
-        if (btn) {
-            btn.disabled = false;
-            btn.style.opacity = '';
-            btn.style.cursor = '';
-        }
-    }
-}
-
 async function battleAction(action) {
-    // 연타 방지 락
     if (state.battleProcessing) {
         term('battle action in progress, ignored', 'warn');
         return;
     }
     state.battleProcessing = true;
 
-    // 메뉴 닫기
     document.getElementById('skill-menu')?.classList.remove('active');
     document.getElementById('item-menu')?.classList.remove('active');
-
-    // 액션 패널 비활성화 + 적 턴 표시
     showEnemyTurn();
 
     try {
@@ -184,22 +89,17 @@ async function battleAction(action) {
             return;
         }
 
-        // 상태 갱신 (HP/MP/ATB 등) — 메시지는 시퀀서가 출력
         const messages = r.messages || [];
         const bsForRefresh = { ...r, messages: [] };
         refreshBattle(bsForRefresh);
-
-        // refreshBattle 안에서 showPlayerTurn 자동 호출됨 → 다시 적 턴 표시
         showEnemyTurn();
 
-        // 시퀀서로 메시지 재생 (적 행동/추가 행동/패시브 등)
         if (typeof playBattleSequence === 'function') {
             await playBattleSequence(action, { ...r, messages });
         } else {
             messages.forEach(m => logLine(m));
         }
 
-        // 마지막 메시지 읽을 시간
         await new Promise(resolve => setTimeout(resolve, 400));
 
         // ── 종료 처리 ──
@@ -208,14 +108,7 @@ async function battleAction(action) {
                 logLine('★ VICTORY!', 'crit');
                 term('battle won', 'ok');
                 toast('승리!');
-                if (typeof showHappyState === 'function') {
-                    showHappyState('player_panel', 2000);
-                }
-                if (r.level_up && state.player && r.level_up > state.player.lv) {
-                    if (typeof showHappyState === 'function') {
-                        showHappyState('player_panel', 3000);
-                    }
-                }
+                if (typeof showHappyState === 'function') showHappyState('player_panel', 2000);
             } else if (r.winner === 'enemy') {
                 logLine('✖ DEFEAT', 'crit');
                 term('battle lost', 'warn');
@@ -224,34 +117,40 @@ async function battleAction(action) {
                 logLine('▶ 도망쳤다.', 'system');
                 term('escaped');
             }
-            const turnEl = document.getElementById('turn-indicator');
-            const actBar = document.getElementById('action-bar');
-            const actPanel = document.getElementById('actions-panel');
-            if (turnEl) turnEl.className = 'turn-indicator';
-            if (actBar) {
-                actBar.classList.remove('your-turn');
-                actBar.classList.remove('processing');
-            }
-            if (actPanel) actPanel.classList.remove('processing');
-            await loadStatus();
 
-            if (typeof checkPendingPoints === 'function') {
-                checkPendingPoints();
+            // UI 초기화
+            const turnEl  = document.getElementById('turn-indicator');
+            const actBar  = document.getElementById('action-bar');
+            const actPanel = document.getElementById('actions-panel');
+            if (turnEl)   turnEl.className = 'turn-indicator';
+            if (actBar)   { actBar.classList.remove('your-turn', 'processing'); }
+            if (actPanel) actPanel.classList.remove('processing');
+
+            // 플레이어 상태 갱신
+            if (r.player) {
+                state.player = r.player;
+                refreshPlayer();
+            }
+
+            if (typeof checkPendingPoints === 'function') checkPendingPoints();
+
+            // ★ 노드맵으로 복귀
+            if (typeof handleMapNodeDone === 'function') {
+                await handleMapNodeDone(r);
+            } else {
+                await loadStatus();
             }
             return;
         }
 
-        // ── ★ next_actor 처리 ──
-        const nextActor = r.next_actor || "player";
-
-        if (nextActor === "enemy") {
-            // 적 차례 → 500ms 후 자동 step("auto") 재귀 호출
+        // next_actor 처리
+        const nextActor = r.next_actor || 'player';
+        if (nextActor === 'enemy') {
             state.battleProcessing = false;
             await new Promise(resolve => setTimeout(resolve, 500));
-            await battleAction("auto");
+            await battleAction('auto');
             return;
         } else {
-            // 플레이어 차례 — 버튼 활성화
             showPlayerTurn();
         }
 
@@ -259,49 +158,50 @@ async function battleAction(action) {
         console.error('[battleAction]', e);
         toast('네트워크 오류', 'error');
     } finally {
-        // 락 해제 (재귀 호출하지 않은 경우만)
         state.battleProcessing = false;
     }
 }
 
-// ── 헬퍼: 비동기 sleep ──
-function _sleep(ms) {
-    return new Promise(resolve => setTimeout(resolve, ms));
-}
+// ── 헬퍼 ──────────────────────────────────────────────────
 
-// 다대일 전투 시 타깃 인덱스를 액션에 첨부.
-// 단일전이면 그대로 보냄.
+function _sleep(ms) { return new Promise(r => setTimeout(r, ms)); }
+
 function _withTarget(action) {
     if (!state.battleState) return action;
     const enemies = state.battleState.enemies || [];
     if (enemies.length <= 1) return action;
     const idx = state.battleState.target_idx ?? 0;
-    return `${action}:${idx}`;
+    return `${action}:t${idx}`;
 }
 
-async function useSkill(skillName) { await battleAction(_withTarget(`skill:${skillName}`)); }
-async function useItem(itemName)  { await battleAction(`item:${itemName}`); }  // 아이템은 타깃 무관
+async function useSkill(skillName) {
+    await battleAction(_withTarget(`skill:${skillName}`));
+}
 
-// 탐험 중 아이템 사용 (전투 외 — /api/use_item 호출)
+async function useItem(itemName) {
+    await battleAction(_withTarget(`item:${itemName}`));
+}
+
 async function useItemInField(itemName) {
-    if (state.inBattle) {
-        toast('전투 중에는 전투 메뉴에서 사용하세요', 'warn');
-        return;
-    }
     const r = await api('/use_item', { item: itemName });
-    if (!r.ok) {
-        toast(r.error || '아이템 사용 실패', 'error');
-        return;
+    if (!r.ok) { toast(r.error || '사용 실패', 'error'); return; }
+    if (r.player) {
+        state.player = r.player;
+        refreshPlayer();
+        if (typeof refreshExploreInfo === 'function') refreshExploreInfo();
     }
-    if (r.player) { state.player = r.player; refreshPlayer(); }
-    if (r.message) {
-        logLine('✚ ' + r.message, 'heal');
-        term(`item used: ${itemName}`, 'ok');
-        toast(r.message);
-    }
+    logLine(r.message || `${itemName} 사용`, 'heal');
+    toast(r.message || `${itemName} 사용`, 'ok');
+}
 
-    // ★ 필드 인벤토리 카드에서 사용한 아이템 즉시 제거
-    if (typeof refreshExploreInfo === 'function') {
-        refreshExploreInfo();
+async function performRest(choice) {
+    const r = await api('/rest', { choice });
+    if (!r.ok) { toast(r.error || '실패', 'error'); return; }
+    if (r.player) {
+        state.player = r.player;
+        refreshPlayer();
     }
+    logLine(r.message || '휴식 완료', 'heal');
+    toast(r.message, 'ok');
+    document.getElementById('modal-rest')?.classList.remove('active');
 }
