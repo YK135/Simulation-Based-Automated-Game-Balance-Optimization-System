@@ -289,6 +289,12 @@ def map_choose():
                 et   = hook.pick_random_enemy_type()
                 unit = hook.make_battle_unit(hook.get_enemy(et))
                 enemies.append(unit)
+            # 다대일 스탯 보정: 2마리 90%, 3마리 80%
+            mult = {2: 0.9, 3: 0.8}.get(n_enemies, 0.8)
+            for e in enemies:
+                for stat in ("hp", "maxhp", "stg", "sp", "arm", "sparm"):
+                    if hasattr(e, stat):
+                        setattr(e, stat, round(getattr(e, stat) * mult, 1))
             state = _start_battle_multi(gs, enemies)
             _log_node_choice(gs, node)
             _save_map(gs, fmap)

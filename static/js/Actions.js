@@ -195,15 +195,5 @@ async function useItemInField(itemName) {
     toast(r.message || `${itemName} 사용`, 'ok');
 }
 
-async function performRest(choice) {
-    const r = await api('/rest', { choice });
-    if (!r.ok) { toast(r.error || '실패', 'error'); return; }
-    if (r.player) {
-        state.player = r.player;
-        refreshPlayer();
-    }
-    logLine(r.message || '휴식 완료', 'heal');
-    toast(r.message, 'ok');
-    document.getElementById('modal-rest')?.classList.remove('active');
-    if (typeof checkPendingPoints === 'function') checkPendingPoints();
-}
+// performRest는 Modals.js에 정의됨 (icon 표시 + checkPendingPoints 포함)
+// 이 파일에서는 중복 정의 제거

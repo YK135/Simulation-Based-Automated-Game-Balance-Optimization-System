@@ -366,6 +366,16 @@ async function leaveShop() {
 
 /** 이벤트 결과 표시 */
 function _showEventResult(r) {
+    // item_full: 특수 아이템 가득 → swap 모달
+    if (r.event === "item_full" || r.reason === "special_full") {
+        if (typeof openInvSwap === "function") {
+            openInvSwap(r.incoming || r.item, r.candidates || []);
+        } else {
+            toast("특수 아이템 칸이 가득 찼습니다.", "warn");
+        }
+        return;
+    }
+
     const mapEl = document.getElementById("map-content-overlay");
     if (!mapEl) return;
 
