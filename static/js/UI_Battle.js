@@ -14,7 +14,9 @@ function refreshBattle(bs) {
     state.inBattle = !bs.done && (bs.player_hp > 0);
 
     // ── 모드 전환 ──
-    document.getElementById('explore-mode').style.display = state.inBattle ? 'none' : 'block';
+    const mapModeEl = document.getElementById('map-mode');
+    if (mapModeEl) mapModeEl.style.display = 'none';
+    document.getElementById('explore-mode').style.display = 'none';
     document.getElementById('battle-mode').style.display = state.inBattle ? 'block' : 'none';
     document.getElementById('actions-panel').style.display = state.inBattle ? 'block' : 'none';
 
@@ -252,72 +254,25 @@ function refreshBattle(bs) {
 const il = document.getElementById('item-list');
 il.innerHTML = '';
 
-const stateInv = state.player ? state.player.inventory : null;
+// 전투 중 아이템 메뉴는 bs.items(실시간) 기준
+// state.player.inventory는 전투 종료 전까지 업데이트 안 됨
 const battleItems = bs.items || [];
 
-if (stateInv && (stateInv.potions.length > 0 || stateInv.special.length > 0)) {
-    // ★ 새 구조 — 분리 표시
-    
-    // 포션
-    if (stateInv.potions.length > 0) {
-        const header = document.createElement('div');
-        header.className = 'item-section-header';
-        header.style.cssText = 'grid-column:1/-1; color:var(--text-muted); font-size:10px; padding:4px 8px;';
-        header.textContent = `POTIONS (${stateInv.potion_used}/${stateInv.potion_capacity})`;
-        il.appendChild(header);
-        
-        stateInv.potions.forEach(({name, count}) => {
-            const cell = document.createElement('div');
-            cell.className = 'submenu-item';
-            cell.innerHTML = `${name}<span class="cost">×${count}</span>`;
-            cell.onclick = () => useItem(name);
-            il.appendChild(cell);
-        });
-    }
-    
-    // 특수
-    if (stateInv.special.length > 0) {
-        const header = document.createElement('div');
-        header.className = 'item-section-header';
-        header.style.cssText = 'grid-column:1/-1; color:var(--accent-cyan); font-size:10px; padding:4px 8px;';
-        header.textContent = `SPECIAL (${stateInv.special_used}/${stateInv.special_capacity})`;
-        il.appendChild(header);
-        
-        stateInv.special.forEach(name => {
-            const cell = document.createElement('div');
-            cell.className = 'submenu-item special';
-            cell.innerHTML = `${name}<span class="cost">★</span>`;
-            cell.onclick = () => useItem(name);
-            il.appendChild(cell);
-        });
-    }
-    
-    if (stateInv.potions.length === 0 && stateInv.special.length === 0) {
-        il.innerHTML = '<div style="color:var(--text-muted); padding:8px; grid-column:1/-1;">아이템 없음</div>';
-    }
+if (battleItems.length === 0) {
+    il.innerHTML = '<div style="color:var(--text-muted); padding:8px; grid-column:1/-1;">아이템 없음</div>';
 } else {
-    // 옛 호환 — 평탄 리스트
-    let itemEntries = [];
-    if (battleItems.length > 0) {
-        if (typeof battleItems[0] === 'object' && battleItems[0].name !== undefined) {
-            itemEntries = battleItems.map(it => [it.name, it.count]);
-        } else {
-            const counts = {};
-            battleItems.forEach(it => counts[it] = (counts[it]||0)+1);
-            itemEntries = Object.entries(counts);
-        }
-    }
-    if (itemEntries.length === 0) {
-        il.innerHTML = '<div style="color:var(--text-muted); padding:8px; grid-column:1/-1;">아이템 없음</div>';
-    } else {
-        itemEntries.forEach(([name, n]) => {
-            const cell = document.createElement('div');
-            cell.className = 'submenu-item';
-            cell.innerHTML = `${name}<span class="cost">×${n}</span>`;
-            cell.onclick = () => useItem(name);
-            il.appendChild(cell);
-        });
-    }
+    const counts = {};
+    battleItems.forEach(it => {
+        const name = typeof it === 'object' ? it.name : it;
+        counts[name] = (counts[name] || 0) + 1;
+    });
+    Object.entries(counts).forEach(([name, n]) => {
+        const cell = document.createElement('div');
+        cell.className = 'submenu-item';
+        cell.innerHTML = `${name}<span class="cost">×${n}</span>`;
+        cell.onclick = () => useItem(name);
+        il.appendChild(cell);
+    });
 }
 
     // ── 좌측 패널 ATB 바 갱신 ──

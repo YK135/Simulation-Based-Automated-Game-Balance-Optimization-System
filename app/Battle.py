@@ -152,8 +152,8 @@ def _finish_battle(gs: dict, battle, result: dict, winner: str) -> None:
     gs["battle"] = None
     result["player"] = _player_dict(player, gs["inventory"])
 
-    # 노드맵 사용 중이면 pending_node 자동 완료
-    if gs.get("pending_node_id") and gs.get("map"):
+    # 노드맵 사용 중이면 승리 시에만 노드 완료 (패배/도망은 노드 유지)
+    if winner == "player" and gs.get("pending_node_id") and gs.get("map"):
         try:
             from game.Map import FloorMap
             fmap = FloorMap.from_dict(gs["map"])

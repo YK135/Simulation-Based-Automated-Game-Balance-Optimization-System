@@ -21,7 +21,6 @@ from DB import init_db
 # Blueprint import — 파일명 대문자 기준 (깃허브 파일명)
 from .Game      import game_bp
 from .Battle    import battle_bp
-from .Explore   import explore_bp
 from .Inventory import inventory_bp
 from .Rest      import rest_bp
 from .Ranking   import ranking_bp
@@ -40,7 +39,7 @@ def create_app() -> Flask:
 
     init_db()
 
-    for bp in (game_bp, battle_bp, explore_bp, inventory_bp, rest_bp, ranking_bp, map_bp):
+    for bp in (game_bp, battle_bp, inventory_bp, rest_bp, ranking_bp, map_bp):
         app.register_blueprint(bp)
 
     @app.route("/")

@@ -134,8 +134,8 @@ async function battleAction(action) {
 
             if (typeof checkPendingPoints === 'function') checkPendingPoints();
 
-            // ★ 노드맵으로 복귀
-            if (typeof handleMapNodeDone === 'function') {
+            // ★ 승리 시만 노드맵 완료 처리, 패배/도망은 loadStatus
+            if (r.winner === 'player' && typeof handleMapNodeDone === 'function') {
                 await handleMapNodeDone(r);
             } else {
                 await loadStatus();
@@ -179,7 +179,8 @@ async function useSkill(skillName) {
 }
 
 async function useItem(itemName) {
-    await battleAction(_withTarget(`item:${itemName}`));
+    // 아이템은 타깃 인덱스 불필요 — BattleSession이 직접 처리
+    await battleAction(`item:${itemName}`);
 }
 
 async function useItemInField(itemName) {
@@ -204,4 +205,5 @@ async function performRest(choice) {
     logLine(r.message || '휴식 완료', 'heal');
     toast(r.message, 'ok');
     document.getElementById('modal-rest')?.classList.remove('active');
+    if (typeof checkPendingPoints === 'function') checkPendingPoints();
 }

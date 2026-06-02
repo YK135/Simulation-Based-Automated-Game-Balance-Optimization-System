@@ -273,6 +273,9 @@ async function chooseRestOption(choice) {
         logLine(r.message || "휴식 완료", "heal");
         toast(r.message, "ok");
 
+        // 레벨업 스탯 분배 모달
+        if (typeof checkPendingPoints === "function") checkPendingPoints();
+
         // 노드 완료 처리
         await _completeNode(_pendingNodeId);
         _hideContentOverlay();
