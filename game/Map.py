@@ -1,56 +1,53 @@
 """
-game/Map.py — 노드맵 시스템
+game/Map.py — 슬레이 더 스파이어 스타일 노드맵 (좌/우 갈래 구조)
 ─────────────────────────────────────────────
-슬레이 더 스파이어 스타일 층 기반 랜덤 맵.
-
 구조:
-  챕터 1: 10층 (Layer 0~9) + 보스층 (Layer 10)
-  챕터 2: 12층 (Layer 0~11) + 보스층 (Layer 12)
+  챕터 1: 계층 1~14 (일반) + 계층 15 (중간 보스)
+  챕터 2: 계층 1~14 (일반) + 계층 15 (최종 보스)
+  전체 30턴
 
-각 Layer: 2~3개 노드 → 플레이어가 연결된 노드 중 1개 선택.
+갈래 구조:
+  - 계층 1에서 left / right 두 갈래로 분기
+  - 한번 선택한 branch는 챕터 내에서 고정
+  - 계층 15 보스는 양쪽 모두 연결
 
-노드 타입 비율 (보스 Layer 제외):
-  battle  45% — 일반 몬스터
-  elite   15% — 엘리트 몬스터
-  event   15% — 랜덤 이벤트
-  rest    15% — 휴식/수련
-  shop    10% — 상점
+노드 ID 형식: "ch{chapter}_l{layer}_{branch}_{index}"
+  예: "ch1_l3_left_0", "ch1_l15_boss_0"
 
-직렬화:
-  to_dict() / from_dict() — GAME_SESSIONS 저장 및 JSON 응답용.
-  모든 필드가 순수 Python 기본 타입 (나중에 DB 저장 시 json.dumps만 하면 됨).
+노드 타입 분포 규칙 (챕터당 1~14계층 전체):
+  event : 1~4개
+  shop  : 1~2개
+  rest  : 1~2개
+  elite : 1~3개
+  나머지: battle
+
+직렬화: to_dict() / from_dict() — JSON 직렬화 가능
 """
 from __future__ import annotations
 
 import random
-from typing import List, Optional, Dict, Any
-
+from typing import List, Dict, Any, Optional
 
 # ─────────────────────────────────────────────
-# 노드 타입 상수
+# 상수
 # ─────────────────────────────────────────────
-NODE_TYPES = ["battle", "elite", "event", "rest", "shop", "boss"]
+TOTAL_LAYERS    = 15          # 계층 1~15 (보스 = 15)
+BOSS_LAYER      = 15
+NORMAL_LAYERS   = 14          # 계층 1~14 일반
+BRANCHES        = ["left", "right"]
 
-# 챕터별 일반 층 타입 가중치 (보스 층 제외)
-_TYPE_WEIGHTS = [
-    ("battle", 45),
-    ("elite",  15),
-    ("event",  15),
-    ("rest",   15),
-    ("shop",   10),
-]
-_NAMES  = [t for t, _ in _TYPE_WEIGHTS]
-_WGHTS  = [w for _, w in _TYPE_WEIGHTS]
+# 계층별 각 branch 노드 수 (1~14계층)
+# 마지막 일반 계층(14)은 최대 2개
+NODES_PER_BRANCH_NORMAL = (1, 2)   # min, max
+NODES_LAYER_14_MAX      = 2        # 보스 직전 계층 최대
 
-# 챕터 설정
-CHAPTER_CONFIG = {
-    1: {"normal_layers": 10, "boss_layer": 10},  # Layer 0~9 일반, Layer 10 보스
-    2: {"normal_layers": 12, "boss_layer": 12},  # Layer 0~11 일반, Layer 12 보스
+# 챕터별 타입 분포 제약 (전체 맵 기준)
+TYPE_CONSTRAINTS = {
+    "event": (1, 4),
+    "shop":  (1, 2),
+    "rest":  (1, 2),
+    "elite": (1, 3),
 }
-
-# Layer당 노드 수 범위
-NODES_PER_LAYER_MIN = 2
-NODES_PER_LAYER_MAX = 3
 
 
 # ─────────────────────────────────────────────
@@ -58,50 +55,56 @@ NODES_PER_LAYER_MAX = 3
 # ─────────────────────────────────────────────
 class Node:
     """
-    맵의 단일 노드.
+    단일 노드.
 
     Attributes:
-        node_id   : 고유 ID (f"{layer}_{index}")
-        layer     : 층 번호 (0 = 시작)
-        index     : 같은 층 내 위치 (0, 1, 2)
-        node_type : "battle" | "elite" | "event" | "rest" | "shop" | "boss"
-        next_ids  : 다음 층에서 연결된 node_id 목록
-        visited   : 플레이어가 이 노드를 방문했는지
-        available : 현재 선택 가능한 노드인지
+        node_id   : 고유 ID ("ch1_l3_left_0")
+        chapter   : 챕터 번호
+        layer     : 계층 번호 (1~15)
+        branch    : "left" | "right" | "boss"
+        index     : 같은 branch 내 위치
+        node_type : battle/elite/event/rest/shop/boss
+        next_ids  : 다음 계층 연결 노드 ID 목록
+        visited   : 방문 완료 여부
+        available : 현재 선택 가능 여부
+        on_path   : 플레이어가 지나온 경로 여부 (하이라이트용)
     """
 
-    def __init__(
-        self,
-        layer: int,
-        index: int,
-        node_type: str,
-    ):
-        self.node_id   = f"{layer}_{index}"
+    def __init__(self, chapter: int, layer: int, branch: str,
+                 index: int, node_type: str):
+        self.node_id   = f"ch{chapter}_l{layer}_{branch}_{index}"
+        self.chapter   = chapter
         self.layer     = layer
+        self.branch    = branch
         self.index     = index
         self.node_type = node_type
         self.next_ids: List[str] = []
         self.visited   = False
-        self.available = False  # 시작 노드만 True로 시작
+        self.available = False
+        self.on_path   = False
 
     def to_dict(self) -> Dict[str, Any]:
         return {
             "node_id":   self.node_id,
+            "chapter":   self.chapter,
             "layer":     self.layer,
+            "branch":    self.branch,
             "index":     self.index,
             "node_type": self.node_type,
             "next_ids":  self.next_ids,
             "visited":   self.visited,
             "available": self.available,
+            "on_path":   self.on_path,
         }
 
     @classmethod
     def from_dict(cls, d: Dict[str, Any]) -> "Node":
-        node = cls(d["layer"], d["index"], d["node_type"])
-        node.next_ids  = d["next_ids"]
-        node.visited   = d["visited"]
-        node.available = d["available"]
-        return node
+        n = cls(d["chapter"], d["layer"], d["branch"], d["index"], d["node_type"])
+        n.next_ids  = d["next_ids"]
+        n.visited   = d["visited"]
+        n.available = d["available"]
+        n.on_path   = d.get("on_path", False)
+        return n
 
 
 # ─────────────────────────────────────────────
@@ -109,103 +112,109 @@ class Node:
 # ─────────────────────────────────────────────
 class FloorMap:
     """
-    챕터 1개의 전체 맵.
-
-    생성:
-        fmap = FloorMap.generate(chapter=1)
+    챕터 1개의 전체 맵 (좌/우 갈래 구조).
 
     사용:
-        state   = fmap.get_state()         # 현재 선택 가능 노드 목록
-        ok, msg = fmap.choose(node_id)     # 노드 선택
-        fmap.mark_visited(node_id)         # 노드 처리 완료 후 표시
+        fmap = FloorMap.generate(chapter=1)
+        state = fmap.get_state()
+        ok, node, err = fmap.choose(node_id)
+        fmap.mark_visited(node_id)
     """
 
     def __init__(self, chapter: int, nodes: Dict[str, Node]):
-        self.chapter    = chapter
-        self.nodes      = nodes           # node_id → Node
+        self.chapter       = chapter
+        self.nodes         = nodes           # node_id → Node
         self.current_layer = 0
-        cfg = CHAPTER_CONFIG[chapter]
-        self.boss_layer = cfg["boss_layer"]
-        self.completed  = False           # 보스 처치 시 True
+        self.player_branch: Optional[str] = None   # 선택된 갈래 ("left"/"right")
+        self.completed     = False
 
     # ── 생성 ──────────────────────────────────
 
     @classmethod
     def generate(cls, chapter: int) -> "FloorMap":
-        """랜덤 맵 생성."""
-        cfg = CHAPTER_CONFIG[chapter]
-        total_layers = cfg["boss_layer"] + 1  # 0 ~ boss_layer
+        """좌/우 갈래 맵 랜덤 생성."""
+        nodes: Dict[str, Node] = {}
 
-        # 층별 노드 생성
-        layers: List[List[Node]] = []
-        for layer in range(total_layers):
-            is_boss = (layer == cfg["boss_layer"])
-            is_start = (layer == 0)
+        # 1) 각 branch별 계층 1~14 노드 생성
+        branch_layers: Dict[str, List[List[Node]]] = {"left": [], "right": []}
 
-            if is_boss:
-                # 보스 층: 노드 1개 고정
-                nodes_in_layer = [Node(layer, 0, "boss")]
-            elif is_start:
-                # 시작 층: 2~3개, battle 위주
-                count = random.randint(NODES_PER_LAYER_MIN, NODES_PER_LAYER_MAX)
-                nodes_in_layer = [
-                    Node(layer, i, _pick_type(force_battle=(i == 0)))
-                    for i in range(count)
-                ]
-            else:
-                count = random.randint(NODES_PER_LAYER_MIN, NODES_PER_LAYER_MAX)
-                nodes_in_layer = [Node(layer, i, _pick_type()) for i in range(count)]
+        for branch in BRANCHES:
+            # 타입 할당 계획 생성 (분포 제약 만족)
+            type_plan = _make_type_plan(chapter, branch)
 
-            # 규칙: shop / rest 연속 2층 배치 금지
-            if layer >= 2:
-                prev_types = {n.node_type for n in layers[layer - 1]}
-                for node in nodes_in_layer:
-                    if node.node_type in ("shop", "rest") and node.node_type in prev_types:
-                        node.node_type = "battle"
+            for layer in range(1, NORMAL_LAYERS + 1):
+                if layer == NORMAL_LAYERS:
+                    # 14계층: 최대 2개
+                    count = random.randint(1, NODES_LAYER_14_MAX)
+                else:
+                    count = random.randint(*NODES_PER_BRANCH_NORMAL)
 
-            layers.append(nodes_in_layer)
+                layer_nodes = []
+                for idx in range(count):
+                    ntype = type_plan.pop(0) if type_plan else "battle"
+                    node  = Node(chapter, layer, branch, idx, ntype)
+                    layer_nodes.append(node)
+                    nodes[node.node_id] = node
 
-        # 층 간 연결 (각 노드 → 다음 층 1~2개 연결)
-        for layer_idx in range(len(layers) - 1):
-            cur_layer  = layers[layer_idx]
-            next_layer = layers[layer_idx + 1]
-            _connect_layers(cur_layer, next_layer)
+                branch_layers[branch].append(layer_nodes)
 
-        # 시작 노드 available = True
-        for node in layers[0]:
-            node.available = True
+        # 2) 보스 노드 (계층 15, branch="boss")
+        boss_type = "boss"
+        boss_node = Node(chapter, BOSS_LAYER, "boss", 0, boss_type)
+        nodes[boss_node.node_id] = boss_node
 
-        # dict로 변환
-        nodes_dict: Dict[str, Node] = {}
-        for layer_nodes in layers:
-            for node in layer_nodes:
-                nodes_dict[node.node_id] = node
+        # 3) 계층 간 연결 (각 branch 내부)
+        for branch in BRANCHES:
+            layers = branch_layers[branch]
+            for li in range(len(layers) - 1):
+                _connect_branch_layers(layers[li], layers[li + 1])
+            # 14계층 → 보스 연결
+            for node in layers[-1]:
+                if boss_node.node_id not in node.next_ids:
+                    node.next_ids.append(boss_node.node_id)
 
-        return cls(chapter, nodes_dict)
+        # 4) 계층 1 노드 available = True (양쪽 모두)
+        for branch in BRANCHES:
+            for node in branch_layers[branch][0]:
+                node.available = True
+
+        fmap = cls(chapter, nodes)
+        return fmap
 
     # ── 상태 조회 ──────────────────────────────
 
     def get_available(self) -> List[Node]:
-        """현재 선택 가능한 노드 목록."""
         return [n for n in self.nodes.values() if n.available and not n.visited]
 
     def get_state(self) -> Dict[str, Any]:
-        """프론트 응답용 맵 상태."""
+        """
+        프론트 응답용 맵 상태.
+        branch_locked: 플레이어가 이미 갈래를 선택했는지
+        """
         return {
-            "chapter":       self.chapter,
-            "current_layer": self.current_layer,
-            "boss_layer":    self.boss_layer,
-            "completed":     self.completed,
-            "nodes":         [n.to_dict() for n in self.nodes.values()],
-            "available":     [n.node_id for n in self.get_available()],
+            "chapter":        self.chapter,
+            "current_layer":  self.current_layer,
+            "boss_layer":     BOSS_LAYER,
+            "total_layers":   TOTAL_LAYERS,
+            "completed":      self.completed,
+            "player_branch":  self.player_branch,
+            "nodes":          [n.to_dict() for n in self.nodes.values()],
+            "available":      [n.node_id for n in self.get_available()],
+            # 배경 이미지 자리
+            # Chapter 1: static/img/map/chapter_1_bg.png
+            # Chapter 2: static/img/map/chapter_2_bg.png
+            # 권장 크기: 1280x720px, 16:9, 어두운 배경 권장
+            "bg_image": f"img/map/chapter_{self.chapter}_bg.png",
         }
 
     # ── 선택 처리 ──────────────────────────────
 
     def choose(self, node_id: str):
         """
-        플레이어가 노드 선택.
-        반환: (ok: bool, node: Node | None, error: str)
+        노드 선택.
+        반환: (ok, node, error)
+        갈래 잠금: 첫 선택 시 player_branch 확정,
+                  이후 반대편 branch 선택 불가.
         """
         node = self.nodes.get(node_id)
         if not node:
@@ -214,27 +223,45 @@ class FloorMap:
             return False, None, "선택할 수 없는 노드입니다."
         if node.visited:
             return False, None, "이미 방문한 노드입니다."
+
+        # 갈래 잠금 체크 (보스 노드는 양쪽 모두 허용)
+        if node.branch != "boss" and self.player_branch:
+            if node.branch != self.player_branch:
+                return False, None, f"이미 {self.player_branch} 경로를 선택했습니다."
+
+        # 첫 선택 시 갈래 확정
+        if node.branch != "boss" and not self.player_branch:
+            self.player_branch = node.branch
+
         return True, node, ""
 
     def mark_visited(self, node_id: str) -> None:
-        """노드 처리 완료 후 호출 — 다음 노드 available 업데이트."""
+        """노드 완료 처리 → 다음 노드 활성화."""
         node = self.nodes.get(node_id)
         if not node:
             return
 
         node.visited   = True
         node.available = False
+        node.on_path   = True
         self.current_layer = node.layer
 
         if node.node_type == "boss":
             self.completed = True
             return
 
-        # 다음 노드 available 활성화
+        # 다음 노드 활성화
         for next_id in node.next_ids:
             next_node = self.nodes.get(next_id)
-            if next_node:
+            if next_node and not next_node.visited:
                 next_node.available = True
+
+        # 반대편 branch 전체 비활성화 (갈래 잠금)
+        if self.player_branch:
+            opposite = "right" if self.player_branch == "left" else "left"
+            for n in self.nodes.values():
+                if n.branch == opposite and not n.visited:
+                    n.available = False
 
     # ── 직렬화 ────────────────────────────────
 
@@ -242,7 +269,7 @@ class FloorMap:
         return {
             "chapter":       self.chapter,
             "current_layer": self.current_layer,
-            "boss_layer":    self.boss_layer,
+            "player_branch": self.player_branch,
             "completed":     self.completed,
             "nodes":         {nid: n.to_dict() for nid, n in self.nodes.items()},
         }
@@ -250,9 +277,9 @@ class FloorMap:
     @classmethod
     def from_dict(cls, d: Dict[str, Any]) -> "FloorMap":
         nodes = {nid: Node.from_dict(nd) for nid, nd in d["nodes"].items()}
-        fmap = cls(d["chapter"], nodes)
+        fmap  = cls(d["chapter"], nodes)
         fmap.current_layer = d["current_layer"]
-        fmap.boss_layer    = d["boss_layer"]
+        fmap.player_branch = d.get("player_branch")
         fmap.completed     = d["completed"]
         return fmap
 
@@ -261,47 +288,53 @@ class FloorMap:
 # 내부 헬퍼
 # ─────────────────────────────────────────────
 
-def _pick_type(force_battle: bool = False) -> str:
-    """가중치 기반 노드 타입 선택."""
-    if force_battle:
-        return "battle"
-    return random.choices(_NAMES, weights=_WGHTS, k=1)[0]
+def _make_type_plan(chapter: int, branch: str) -> List[str]:
+    """
+    한 branch(14계층)의 타입 시퀀스 생성.
+    TYPE_CONSTRAINTS 제약을 만족하면서 나머지는 battle.
+    """
+    plan: List[str] = []
+
+    # 제약 충족 타입 먼저 추가
+    for ntype, (mn, mx) in TYPE_CONSTRAINTS.items():
+        count = random.randint(mn, mx)
+        plan.extend([ntype] * count)
+
+    # 나머지 슬롯 계산 (branch당 평균 노드 수 추정)
+    # 계층 1~13: 1~2개, 계층 14: 1~2개 → 평균 ~20개 슬롯
+    target_total = 20
+    remaining = max(0, target_total - len(plan))
+    plan.extend(["battle"] * remaining)
+
+    random.shuffle(plan)
+    return plan
 
 
-def _connect_layers(cur: List[Node], nxt: List[Node]) -> None:
+def _connect_branch_layers(cur: List[Node], nxt: List[Node]) -> None:
     """
-    현재 층 → 다음 층 연결.
-    규칙:
-      - 모든 현재 층 노드는 최소 1개의 다음 노드와 연결
-      - 모든 다음 층 노드는 최소 1개의 이전 노드와 연결 (고아 방지)
-      - 각 노드는 최대 2개까지 연결
+    같은 branch 내 계층 간 연결.
+    각 현재 노드 → 다음 계층 1~2개 연결.
+    모든 다음 계층 노드가 최소 1개 연결 보장.
     """
-    # 1) 다음 층 각 노드에 최소 1개 연결 (고아 방지)
-    used_next = set()
-    for i, cn in enumerate(cur):
-        # 선호 다음 노드: 같은 인덱스 또는 인접
+    used_next: set = set()
+
+    for cn in cur:
+        # 인덱스 근접 노드 선호
         pref = [n for n in nxt if abs(n.index - cn.index) <= 1]
         target = random.choice(pref if pref else nxt)
         if target.node_id not in cn.next_ids:
             cn.next_ids.append(target.node_id)
         used_next.add(target.node_id)
 
-    # 2) 연결 안 된 다음 층 노드 처리 (고아 방지)
-    orphans = [n for n in nxt if n.node_id not in used_next]
-    for orphan in orphans:
+    # 고아 방지
+    for orphan in [n for n in nxt if n.node_id not in used_next]:
         donor = random.choice(cur)
-        if len(donor.next_ids) < 2 and orphan.node_id not in donor.next_ids:
+        if orphan.node_id not in donor.next_ids:
             donor.next_ids.append(orphan.node_id)
-        else:
-            # 이미 2개면 다른 노드에서 연결
-            for cn in cur:
-                if len(cn.next_ids) < 2 and orphan.node_id not in cn.next_ids:
-                    cn.next_ids.append(orphan.node_id)
-                    break
 
-    # 3) 랜덤 추가 연결 (맵 풍성하게)
+    # 추가 연결 (30% 확률)
     for cn in cur:
         if len(cn.next_ids) < 2 and len(nxt) > 1:
             extras = [n for n in nxt if n.node_id not in cn.next_ids]
-            if extras and random.random() < 0.4:
+            if extras and random.random() < 0.3:
                 cn.next_ids.append(random.choice(extras).node_id)

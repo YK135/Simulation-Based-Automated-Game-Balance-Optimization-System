@@ -129,7 +129,7 @@ function renderMap(mapState) {
 
     scroll.innerHTML = "";
 
-    // ── 헤더 ──
+    // ── 맵 헤더 갱신 ──
     const badge = document.getElementById("map-chapter-badge");
     const info  = document.getElementById("map-layer-info");
     if (badge) badge.textContent = `CHAPTER ${mapState.chapter}`;
@@ -138,17 +138,17 @@ function renderMap(mapState) {
         info.textContent = `${visited} / ${nodes.length} 노드`;
     }
 
-    // ── 갈래 헤더 라벨 ──
-    const branchHeader = document.createElement("div");
-    branchHeader.className = "map-branch-header";
-    branchHeader.innerHTML = `
-        <span class="map-branch-label ${playerBranch === 'left' ? 'active' : ''}">◀ LEFT PATH</span>
-        <span class="map-branch-divider">|</span>
-        <span class="map-branch-label ${playerBranch === 'right' ? 'active' : ''}">RIGHT PATH ▶</span>
-    `;
-    scroll.appendChild(branchHeader);
+    // ── 갈래 라벨 (map-branch-status에 렌더, scroll 밖 고정) ──
+    const branchStatus = document.getElementById("map-branch-status");
+    if (branchStatus) {
+        branchStatus.innerHTML = `
+            <span class="map-branch-label ${playerBranch === 'left' ? 'active' : ''}">◀ LEFT</span>
+            <span class="map-branch-divider">|</span>
+            <span class="map-branch-label ${playerBranch === 'right' ? 'active' : ''}">RIGHT ▶</span>
+        `;
+    }
 
-    // ── 계층 역순 렌더링 (보스가 위, 시작이 아래) ──
+    // ── 계층 순서 렌더링 (보스가 위 = 먼저 추가, 시작이 아래 = 나중 추가)
     for (let layer = totalLayers; layer >= 1; layer--) {
         const layerData = byLayer[layer] || {};
         const row = document.createElement("div");

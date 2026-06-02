@@ -132,12 +132,13 @@
                 </div>
 
         <!-- ═════════════════════ 노드맵 모드 ═════════════════════ -->
-        <div id="map-mode" style="display:none; flex-direction:column; height:100%; position:relative;">
+        <div id="map-mode" style="display:none; flex-direction:column; height:100%; min-height:400px; position:relative;">
  
             <!-- 맵 헤더 -->
             <div class="map-header">
                 <span class="map-chapter-badge" id="map-chapter-badge">CHAPTER 1</span>
-                <span class="map-layer-info"   id="map-layer-info">0 / 0 노드</span>
+                <span id="map-branch-status"></span>
+                <span class="map-layer-info" id="map-layer-info">0 / 0 노드</span>
             </div>
  
             <!-- 노드 렌더링 영역 -->

@@ -2,10 +2,6 @@
    UI_Player.js — 좌측 플레이어 패널 갱신
    ═══════════════════════════════════════════════════════════ */
 
-const JOB_ICONS = {
-    '전사': '⚔', '마법사': '✦', '탱커': '⛨', '도적': '🗡'
-};
-
 function refreshPlayer() {
     if (!state.player) return;
     const p = state.player;

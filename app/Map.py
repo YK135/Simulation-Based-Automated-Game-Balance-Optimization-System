@@ -23,7 +23,7 @@ from random import choices as rand_choices, random, randint
 
 from flask import Blueprint, jsonify, request
 
-from game.Map      import FloorMap, CHAPTER_CONFIG
+from game.Map      import FloorMap, TOTAL_LAYERS, BOSS_LAYER
 from game.Enemy_Class import (
     Make_MidBoss, Make_FinalBoss,
 )
@@ -178,7 +178,7 @@ def map_generate():
     data    = request.get_json() or {}
     chapter = int(data.get("chapter", 1))
 
-    if chapter not in CHAPTER_CONFIG:
+    if chapter not in (1, 2):
         return jsonify({"ok": False, "error": f"잘못된 챕터: {chapter}"}), 400
 
     fmap = FloorMap.generate(chapter)
@@ -399,7 +399,7 @@ def map_next_chapter():
         return jsonify({"ok": False, "error": "게임 세션이 없습니다."}), 404
 
     next_ch = gs.get("chapter", 1) + 1
-    if next_ch not in CHAPTER_CONFIG:
+    if next_ch not in (1, 2):
         return jsonify({"ok": False, "error": "더 이상 챕터가 없습니다."}), 400
 
     fmap = FloorMap.generate(next_ch)
