@@ -82,12 +82,13 @@
 
 /* ─── 층 행 ─── */
 .map-layer-row {
-    display: flex;
+    display: grid;
+    grid-template-columns: 1fr auto 1fr;
     align-items: center;
-    justify-content: center;
-    min-height: 64px;
+    min-height: 72px;
     position: relative;
     flex-shrink: 0;
+    padding: 4px 0;
 }
 
 /* 계층 라벨 */
@@ -106,16 +107,22 @@
 /* ─── 좌/우 컬럼 ─── */
 .map-branch-col {
     display: flex;
+    flex-direction: row;
+    flex-wrap: wrap;
     align-items: center;
     gap: 8px;
-    flex: 1;
     padding: 4px 12px;
-    min-width: 0;
     min-height: 64px;
 }
 
-.map-branch-col.left-col  { justify-content: flex-end; }
-.map-branch-col.right-col { justify-content: flex-start; }
+.map-branch-col.left-col  {
+    justify-content: flex-end;
+    padding-right: 16px;
+}
+.map-branch-col.right-col {
+    justify-content: flex-start;
+    padding-left: 16px;
+}
 
 .map-col-divider {
     width: 1px;

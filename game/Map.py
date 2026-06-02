@@ -36,10 +36,11 @@ BOSS_LAYER      = 15
 NORMAL_LAYERS   = 14          # 계층 1~14 일반
 BRANCHES        = ["left", "right"]
 
-# 계층별 각 branch 노드 수 (1~14계층)
-# 마지막 일반 계층(14)은 최대 2개
-NODES_PER_BRANCH_NORMAL = (1, 2)   # min, max
-NODES_LAYER_14_MAX      = 2        # 보스 직전 계층 최대
+# 계층 전체(left+right 합산) 노드 수 범위
+# 14계층(보스 직전)은 좌우 합산 최대 4개
+NODES_TOTAL_MIN    = 2   # 계층 전체 최소
+NODES_TOTAL_MAX    = 4   # 계층 전체 최대
+NODES_LAYER_14_MAX = 4   # 14계층 합산 최대 (보스 직전)
 
 # 챕터별 타입 분포 제약 (전체 맵 기준)
 TYPE_CONSTRAINTS = {
@@ -138,24 +139,25 @@ class FloorMap:
         # 1) 각 branch별 계층 1~14 노드 생성
         branch_layers: Dict[str, List[List[Node]]] = {"left": [], "right": []}
 
-        for branch in BRANCHES:
-            # 타입 할당 계획 생성 (분포 제약 만족)
-            type_plan = _make_type_plan(chapter, branch)
+        # 타입 할당 계획 (branch별)
+        type_plans = {b: _make_type_plan(chapter, b) for b in BRANCHES}
 
-            for layer in range(1, NORMAL_LAYERS + 1):
-                if layer == NORMAL_LAYERS:
-                    # 14계층: 최대 2개
-                    count = random.randint(1, NODES_LAYER_14_MAX)
-                else:
-                    count = random.randint(*NODES_PER_BRANCH_NORMAL)
+        for layer in range(1, NORMAL_LAYERS + 1):
+            max_total = NODES_LAYER_14_MAX if layer == NORMAL_LAYERS else NODES_TOTAL_MAX
+            total = random.randint(NODES_TOTAL_MIN, max_total)
 
+            # 좌/우 분배: 최소 1개씩 보장, 나머지 랜덤
+            left_count  = random.randint(1, total - 1)
+            right_count = total - left_count
+
+            for branch, count in [("left", left_count), ("right", right_count)]:
                 layer_nodes = []
                 for idx in range(count):
-                    ntype = type_plan.pop(0) if type_plan else "battle"
+                    plan = type_plans[branch]
+                    ntype = plan.pop(0) if plan else "battle"
                     node  = Node(chapter, layer, branch, idx, ntype)
                     layer_nodes.append(node)
                     nodes[node.node_id] = node
-
                 branch_layers[branch].append(layer_nodes)
 
         # 2) 보스 노드 (계층 15, branch="boss")
