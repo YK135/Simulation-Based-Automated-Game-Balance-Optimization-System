@@ -213,6 +213,16 @@ function handleNodeResult(r) {
             if (r.node_done && r.map) refreshMap(r.map);
             break;
 
+        case "item_full":
+            // 특수 아이템 가득 → swap 모달
+            _showEventResult(r);
+            break;
+
+        case "item_rejected":
+            toast(r.message || "아이템 획득 실패", "warn");
+            if (r.node_done && r.map) refreshMap(r.map);
+            break;
+
         default:
             toast("알 수 없는 이벤트", "error");
     }

@@ -13,12 +13,22 @@ function refreshBattle(bs) {
     state.battleState = bs;
     state.inBattle = !bs.done && (bs.player_hp > 0);
 
-    // ── 모드 전환 ──
     const mapModeEl = document.getElementById('map-mode');
     if (mapModeEl) mapModeEl.style.display = 'none';
-    document.getElementById('explore-mode').style.display = 'none';
-    document.getElementById('battle-mode').style.display = state.inBattle ? 'block' : 'none';
-    document.getElementById('actions-panel').style.display = state.inBattle ? 'block' : 'none';
+    const exploreModeEl = document.getElementById('explore-mode');
+    if (exploreModeEl) exploreModeEl.style.display = 'none';
+    const battleModeEl = document.getElementById('battle-mode');
+    if (battleModeEl) battleModeEl.style.display = state.inBattle ? 'block' : 'none';
+    const actionsPanelEl = document.getElementById('actions-panel');
+    if (actionsPanelEl) actionsPanelEl.style.display = state.inBattle ? 'block' : 'none';
+ 
+    if (!state.inBattle) {
+        ['btn-attack','btn-skill','btn-item','btn-escape'].forEach(id => {
+            const btn = document.getElementById(id);
+            if (btn) btn.disabled = true;
+        });
+        return;
+    }
 
     if (!state.inBattle) {
         ['btn-attack','btn-skill','btn-item','btn-escape'].forEach(id => {
@@ -263,8 +273,13 @@ if (battleItems.length === 0) {
 } else {
     const counts = {};
     battleItems.forEach(it => {
-        const name = typeof it === 'object' ? it.name : it;
-        counts[name] = (counts[name] || 0) + 1;
+        if (typeof it === 'object' && it !== null) {
+            // {name, count} 형식
+            counts[it.name] = (counts[it.name] || 0) + (it.count || 1);
+        } else {
+            // 평탄 문자열 형식
+            counts[it] = (counts[it] || 0) + 1;
+        }
     });
     Object.entries(counts).forEach(([name, n]) => {
         const cell = document.createElement('div');
