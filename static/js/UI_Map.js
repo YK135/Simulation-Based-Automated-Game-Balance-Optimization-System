@@ -194,8 +194,9 @@ function handleNodeResult(r) {
         case "boss":
             logLine(`⚔ ${r.enemy?.name || "적"}이(가) 나타났다!`, "crit");
             hideMapMode();
-            if (typeof setBattleMode === "function")
-                setBattleMode(r.battle_state);
+            if (r.battle_state && typeof refreshBattle === "function") {
+                refreshBattle(r.battle_state);
+            }
             break;
 
         case "rest":
@@ -317,6 +318,16 @@ function _showShopPanel(r) {
 async function buyShopItem(itemId, price) {
     try {
         const r = await api("/shop/buy", { item_id: itemId, price });
+
+        // 특수 아이템 가득 → swap 모달
+        if (!r.ok && r.reason === "special_full") {
+            if (typeof openInvSwap === "function") {
+                openInvSwap(itemId, r.candidates || []);
+            } else {
+                toast("특수 아이템 칸이 가득 찼습니다.", "warn");
+            }
+            return;
+        }
         if (!r.ok) { toast(r.error || "구매 실패", "error"); return; }
 
         if (r.player) {
@@ -324,13 +335,19 @@ async function buyShopItem(itemId, price) {
             if (typeof refreshPlayer === "function") refreshPlayer();
         }
 
-        logLine(`🛒 ${r.message || itemId + " 구매!"}`);
-        toast(`${itemId} 구매!`, "ok");
+        logLine(`🛒 ${r.message || itemId + " 구매!"}`, "skill");
+        toast(r.message || `${itemId} 구매!`, "ok");
 
-        // 상점 UI 갱신 (남은 골드 반영)
         if (r.gold !== undefined) {
             const goldEl = document.querySelector(".shop-gold");
             if (goldEl) goldEl.textContent = `💰 ${r.gold} G`;
+            document.querySelectorAll(".shop-item").forEach(el => {
+                const priceEl = el.querySelector(".shop-item-price");
+                if (!priceEl) return;
+                const p = parseInt(priceEl.textContent);
+                if (r.gold < p) el.classList.add("cant-afford");
+                else el.classList.remove("cant-afford");
+            });
         }
     } catch (e) {
         console.error("[buyShopItem]", e);
