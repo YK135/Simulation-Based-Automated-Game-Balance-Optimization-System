@@ -436,3 +436,108 @@
     font-size: 13px;
     letter-spacing: 0.15em;
 }
+
+/* ─────────────────────────────────────────────
+   좌/우 갈래 레이아웃 추가 스타일
+   ───────────────────────────────────────────── */
+
+/* 갈래 헤더 */
+.map-branch-header {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 12px;
+    padding: 6px 12px;
+    font-size: 10px;
+    letter-spacing: 0.15em;
+    border-bottom: 1px dashed var(--border, rgba(0,255,208,0.15));
+    flex-shrink: 0;
+}
+
+.map-branch-label {
+    color: var(--text-dim, #6b7a8d);
+    transition: color 0.2s;
+}
+
+.map-branch-label.active {
+    color: var(--accent-cyan, #00ffd0);
+    font-weight: 700;
+    text-shadow: 0 0 8px rgba(0,255,208,0.4);
+}
+
+.map-branch-divider {
+    color: var(--border, rgba(0,255,208,0.2));
+}
+
+/* 2열 레이아웃 */
+.map-layer-row {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0;
+    position: relative;
+    min-height: 64px;
+}
+
+.map-branch-col {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    flex: 1;
+    min-width: 0;
+    padding: 4px 8px;
+}
+
+.map-branch-col.left-col  { justify-content: flex-end; }
+.map-branch-col.right-col { justify-content: flex-start; }
+
+.map-col-divider {
+    width: 1px;
+    height: 40px;
+    background: var(--border, rgba(0,255,208,0.12));
+    flex-shrink: 0;
+    margin: 0 6px;
+}
+
+.map-empty-col {
+    width: 48px;
+    height: 48px;
+    opacity: 0;
+}
+
+/* 경로 하이라이트 (on_path) */
+.map-node.on-path {
+    opacity: 1;
+    filter: none;
+}
+
+.map-node.on-path.visited {
+    border-color: rgba(0,255,208,0.6) !important;
+    box-shadow: 0 0 8px rgba(0,255,208,0.25);
+    opacity: 0.7;
+}
+
+/* 계층 라벨 (좌측) */
+.map-layer-row::before {
+    content: attr(data-layer);
+    position: absolute;
+    left: 2px;
+    font-size: 9px;
+    color: var(--text-dim, #6b7a8d);
+    opacity: 0.4;
+    letter-spacing: 0.06em;
+    pointer-events: none;
+}
+
+/* SVG 연결선 오버레이 */
+.map-connections-svg {
+    position: absolute;
+    top: 0; left: 0;
+    width: 100%; height: 100%;
+    pointer-events: none;
+    z-index: 0;
+    overflow: visible;
+}
+
+.map-node { z-index: 1; }

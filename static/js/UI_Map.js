@@ -1,18 +1,41 @@
 /* ═══════════════════════════════════════════════════════════
-   UI_Map.js — 노드맵 UI
+   UI_Map.js — 슬레이 더 스파이어 스타일 노드맵 UI
    ───────────────────────────────────────────────────────────
-   전역 함수:
-     initMap(chapter)        — 챕터 맵 생성 + 표시
-     refreshMap(mapState)    — 맵 상태 갱신 (노드 available 반영)
-     setMapMode()            — 맵 화면으로 전환
-     handleNodeResult(r)     — choose API 응답 처리
-     handleMapNodeDone()     — 노드 완료 후 맵 갱신
+   구조:
+     - 좌/우 2열 레이아웃 (left branch | right branch)
+     - 계층 1~14 일반 노드, 계층 15 보스 노드
+     - 선택된 branch 이후 반대편 비활성화
+     - 방문 경로 하이라이트 (on_path)
+     - 노드 간 SVG 연결선
 
-   노드 아이콘:
-     battle ⚔  elite 💀  rest 🏕  shop 🛒  event ❓  boss 💠
+   전역 함수:
+     initMap(chapter)         — 챕터 맵 생성 + 표시
+     refreshMap(mapState)     — 맵 상태 갱신
+     setMapMode()             — 맵 화면으로 전환
+     hideMapMode()            — 맵 화면 숨기기
+     handleNodeResult(r)      — choose API 응답 처리
+     handleMapNodeDone(r)     — 노드 완료 후 맵 복귀
    ═══════════════════════════════════════════════════════════ */
 
-// ─── 노드 타입 메타 ───────────────────────────────────────
+// ─────────────────────────────────────────────
+// 노드 타입 메타
+// ─────────────────────────────────────────────
+/*
+  노드 아이콘 이미지 자리
+  권장 크기: PNG/WebP 투명 배경, 64x64px 또는 96x96px
+  UI 표시 크기: 40~56px
+
+  예시 경로:
+    battle: static/img/map/node_battle.png
+    elite:  static/img/map/node_elite.png
+    event:  static/img/map/node_event.png
+    rest:   static/img/map/node_rest.png
+    shop:   static/img/map/node_shop.png
+    boss:   static/img/map/node_boss.png
+
+  이미지 사용 시 _buildNodeEl()의 el.innerHTML을
+  <img src="img/map/node_${type}.png" ...> 형식으로 교체하세요.
+*/
 const NODE_META = {
     battle: { icon: "⚔",  label: "BATTLE",  color: "#ff5050" },
     elite:  { icon: "💀", label: "ELITE",   color: "#ff9632" },
@@ -22,15 +45,16 @@ const NODE_META = {
     boss:   { icon: "💠", label: "BOSS",    color: "#ff2828" },
 };
 
-// ─── 현재 맵 상태 캐시 ────────────────────────────────────
-let _mapState = null;
-let _pendingNodeId = null;   // 휴식/상점 완료 대기 중인 node_id
+// ─────────────────────────────────────────────
+// 상태
+// ─────────────────────────────────────────────
+let _mapState      = null;
+let _pendingNodeId = null;
 
 // ═══════════════════════════════════════════════════════════
 // 진입점
 // ═══════════════════════════════════════════════════════════
 
-/** 챕터 맵 생성 요청 */
 async function initMap(chapter = 1) {
     try {
         const r = await api("/map/generate", { chapter });
@@ -38,7 +62,7 @@ async function initMap(chapter = 1) {
         _mapState = r.map;
         setMapMode();
         renderMap(_mapState);
-        logLine(`📍 챕터 ${chapter} 시작! 노드를 선택하세요.`, "system");
+        logLine(`📍 챕터 ${chapter} 시작! 경로를 선택하세요.`, "system");
         toast(`챕터 ${chapter} 시작!`, "ok");
     } catch (e) {
         console.error("[initMap]", e);
@@ -46,7 +70,6 @@ async function initMap(chapter = 1) {
     }
 }
 
-/** 맵 상태만 갱신 (노드 완료 후 etc.) */
 function refreshMap(mapState) {
     _mapState = mapState;
     renderMap(_mapState);
@@ -56,20 +79,15 @@ function refreshMap(mapState) {
 // 모드 전환
 // ═══════════════════════════════════════════════════════════
 
-/** 맵 화면으로 전환 */
 function setMapMode() {
-    const exploreEl = document.getElementById("explore-mode");
-    const battleEl  = document.getElementById("battle-mode");
-    const actionsEl = document.getElementById("actions-panel");
-    const mapEl     = document.getElementById("map-mode");
-
-    if (exploreEl) exploreEl.style.display = "none";
-    if (battleEl)  battleEl.style.display  = "none";
-    if (actionsEl) actionsEl.style.display = "none";
-    if (mapEl)     mapEl.style.display     = "flex";
+    ["explore-mode", "battle-mode", "actions-panel"].forEach(id => {
+        const el = document.getElementById(id);
+        if (el) el.style.display = "none";
+    });
+    const mapEl = document.getElementById("map-mode");
+    if (mapEl) mapEl.style.display = "flex";
 }
 
-/** 맵 화면 숨기기 (전투 진입 시 etc.) */
 function hideMapMode() {
     const mapEl = document.getElementById("map-mode");
     if (mapEl) mapEl.style.display = "none";
@@ -79,63 +97,125 @@ function hideMapMode() {
 // 맵 렌더링
 // ═══════════════════════════════════════════════════════════
 
-/** 전체 맵 렌더링 */
 function renderMap(mapState) {
-    const container = document.getElementById("map-scroll");
-    if (!container) return;
+    const scroll = document.getElementById("map-scroll");
+    if (!scroll) return;
 
-    // 층별로 노드 그룹화
+    // ── 챕터 배경 이미지 적용 ──
+    /*
+      챕터 배경 이미지 자리
+      Chapter 1: static/img/map/chapter_1_bg.png
+      Chapter 2: static/img/map/chapter_2_bg.png
+      권장 크기: 1280x720px, 16:9, 어두운 배경 권장
+      적용 방법: 아래 주석 해제 후 이미지 파일 배치
+    */
+    // const mapEl = document.getElementById("map-mode");
+    // if (mapEl) mapEl.style.backgroundImage = `url('${mapState.bg_image}')`;
+
+    // ── 노드 데이터 정리 ──
+    const nodes       = mapState.nodes || [];
+    const availSet    = new Set(mapState.available || []);
+    const totalLayers = mapState.total_layers || 15;
+    const bossLayer   = mapState.boss_layer   || 15;
+    const playerBranch = mapState.player_branch;  // "left" | "right" | null
+
+    // layer → branch → nodes 그룹화
     const byLayer = {};
-    mapState.nodes.forEach(n => {
-        if (!byLayer[n.layer]) byLayer[n.layer] = [];
-        byLayer[n.layer].push(n);
+    nodes.forEach(n => {
+        if (!byLayer[n.layer]) byLayer[n.layer] = { left: [], right: [], boss: [] };
+        byLayer[n.layer][n.branch] = byLayer[n.layer][n.branch] || [];
+        byLayer[n.layer][n.branch].push(n);
     });
 
-    const availableSet = new Set(mapState.available || []);
-    const totalLayers  = mapState.boss_layer;
+    scroll.innerHTML = "";
 
-    container.innerHTML = "";
+    // ── 헤더 ──
+    const badge = document.getElementById("map-chapter-badge");
+    const info  = document.getElementById("map-layer-info");
+    if (badge) badge.textContent = `CHAPTER ${mapState.chapter}`;
+    if (info) {
+        const visited = nodes.filter(n => n.visited).length;
+        info.textContent = `${visited} / ${nodes.length} 노드`;
+    }
 
-    // column-reverse라 높은 layer가 위에 렌더됨
-    for (let layer = 0; layer <= totalLayers; layer++) {
-        const nodes = byLayer[layer] || [];
-        const row   = document.createElement("div");
+    // ── 갈래 헤더 라벨 ──
+    const branchHeader = document.createElement("div");
+    branchHeader.className = "map-branch-header";
+    branchHeader.innerHTML = `
+        <span class="map-branch-label ${playerBranch === 'left' ? 'active' : ''}">◀ LEFT PATH</span>
+        <span class="map-branch-divider">|</span>
+        <span class="map-branch-label ${playerBranch === 'right' ? 'active' : ''}">RIGHT PATH ▶</span>
+    `;
+    scroll.appendChild(branchHeader);
+
+    // ── 계층 역순 렌더링 (보스가 위, 시작이 아래) ──
+    for (let layer = totalLayers; layer >= 1; layer--) {
+        const layerData = byLayer[layer] || {};
+        const row = document.createElement("div");
         row.className = "map-layer-row";
-        row.dataset.layer = layer === totalLayers ? "BOSS" : `L${layer + 1}`;
+        row.dataset.layer = layer === bossLayer ? "BOSS" : `L${layer}`;
 
-        nodes.forEach(nodeData => {
-            const el = _buildNodeEl(nodeData, availableSet);
-            row.appendChild(el);
-        });
+        if (layer === bossLayer) {
+            // 보스 계층 — 가운데 정렬
+            const bossNodes = layerData["boss"] || [];
+            bossNodes.forEach(nd => {
+                row.appendChild(_buildNodeEl(nd, availSet));
+            });
+        } else {
+            // 일반 계층 — 좌/우 2열
+            const leftCol  = document.createElement("div");
+            const divider  = document.createElement("div");
+            const rightCol = document.createElement("div");
+            leftCol.className  = "map-branch-col left-col";
+            divider.className  = "map-col-divider";
+            rightCol.className = "map-branch-col right-col";
 
-        container.appendChild(row);
+            // 좌측 branch
+            const leftNodes = layerData["left"] || [];
+            leftNodes.forEach(nd => leftCol.appendChild(_buildNodeEl(nd, availSet)));
+            if (leftNodes.length === 0) {
+                leftCol.innerHTML = '<div class="map-empty-col"></div>';
+            }
+
+            // 우측 branch
+            const rightNodes = layerData["right"] || [];
+            rightNodes.forEach(nd => rightCol.appendChild(_buildNodeEl(nd, availSet)));
+            if (rightNodes.length === 0) {
+                rightCol.innerHTML = '<div class="map-empty-col"></div>';
+            }
+
+            row.appendChild(leftCol);
+            row.appendChild(divider);
+            row.appendChild(rightCol);
+        }
+
+        scroll.appendChild(row);
     }
 
-    // 헤더 갱신
-    const chBadge = document.getElementById("map-chapter-badge");
-    const layerInfo = document.getElementById("map-layer-info");
-    if (chBadge)  chBadge.textContent  = `CHAPTER ${mapState.chapter}`;
-    if (layerInfo) {
-        const visited = mapState.nodes.filter(n => n.visited).length;
-        layerInfo.textContent = `${visited} / ${mapState.nodes.length} 노드`;
-    }
+    // ── SVG 연결선 (available 노드 → next_ids) ──
+    _drawConnections(scroll, nodes, availSet);
 }
 
 /** 단일 노드 DOM 요소 생성 */
-function _buildNodeEl(nodeData, availableSet) {
+function _buildNodeEl(nodeData, availSet) {
     const meta      = NODE_META[nodeData.node_type] || { icon: "?", label: nodeData.node_type };
-    const available = availableSet.has(nodeData.node_id);
+    const available = availSet.has(nodeData.node_id);
     const visited   = nodeData.visited;
+    const onPath    = nodeData.on_path;
 
     const el = document.createElement("div");
-    el.className   = "map-node";
+    el.className    = "map-node";
     el.dataset.type = nodeData.node_type;
     el.dataset.id   = nodeData.node_id;
+    el.dataset.layer = nodeData.layer;
+    el.dataset.branch = nodeData.branch;
     el.title        = meta.label;
 
     if (visited)        el.classList.add("visited");
     else if (available) el.classList.add("available");
     else                el.classList.add("locked");
+
+    if (onPath) el.classList.add("on-path");
 
     el.innerHTML = `
         <span class="map-node-icon">${meta.icon}</span>
@@ -149,18 +229,81 @@ function _buildNodeEl(nodeData, availableSet) {
     return el;
 }
 
+/** SVG 연결선 그리기 */
+function _drawConnections(container, nodes, availSet) {
+    // 이전 SVG 제거
+    container.querySelectorAll(".map-connections-svg").forEach(el => el.remove());
+
+    const nodeMap = {};
+    nodes.forEach(n => nodeMap[n.node_id] = n);
+
+    // available 노드에서 next_ids로 선 그리기
+    // DOM에서 위치를 읽어야 하므로 requestAnimationFrame 사용
+    requestAnimationFrame(() => {
+        const svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+        svg.classList.add("map-connections-svg");
+        svg.style.cssText = `
+            position:absolute; top:0; left:0;
+            width:100%; height:100%;
+            pointer-events:none; z-index:0;
+            overflow:visible;
+        `;
+        container.style.position = "relative";
+        container.appendChild(svg);
+
+        const containerRect = container.getBoundingClientRect();
+
+        nodes.forEach(srcNode => {
+            if (!srcNode.on_path && !srcNode.available && !srcNode.visited) return;
+            srcNode.next_ids.forEach(nextId => {
+                const dstNode = nodeMap[nextId];
+                if (!dstNode) return;
+
+                const srcEl = container.querySelector(`[data-id="${srcNode.node_id}"]`);
+                const dstEl = container.querySelector(`[data-id="${dstNode.node_id}"]`);
+                if (!srcEl || !dstEl) return;
+
+                const sRect = srcEl.getBoundingClientRect();
+                const dRect = dstEl.getBoundingClientRect();
+
+                const x1 = sRect.left + sRect.width / 2  - containerRect.left;
+                const y1 = sRect.top  + sRect.height / 2 - containerRect.top;
+                const x2 = dRect.left + dRect.width / 2  - containerRect.left;
+                const y2 = dRect.top  + dRect.height / 2 - containerRect.top;
+
+                const line = document.createElementNS("http://www.w3.org/2000/svg", "line");
+                line.setAttribute("x1", x1); line.setAttribute("y1", y1);
+                line.setAttribute("x2", x2); line.setAttribute("y2", y2);
+
+                // 경로 강조 vs 일반
+                if (srcNode.on_path && dstNode.on_path) {
+                    line.setAttribute("stroke", "rgba(0,255,208,0.7)");
+                    line.setAttribute("stroke-width", "2");
+                } else if (srcNode.on_path || srcNode.available) {
+                    line.setAttribute("stroke", "rgba(0,255,208,0.3)");
+                    line.setAttribute("stroke-width", "1.5");
+                } else {
+                    line.setAttribute("stroke", "rgba(100,120,140,0.2)");
+                    line.setAttribute("stroke-width", "1");
+                }
+                line.setAttribute("stroke-dasharray", srcNode.visited ? "none" : "4 3");
+
+                svg.appendChild(line);
+            });
+        });
+    });
+}
+
 // ═══════════════════════════════════════════════════════════
 // 노드 선택
 // ═══════════════════════════════════════════════════════════
 
-/** 노드 선택 API 호출 */
 async function chooseNode(nodeId, nodeType) {
     if (!nodeId) return;
 
-    // 버튼 즉시 비활성화 (중복 클릭 방지)
+    // 중복 클릭 방지
     document.querySelectorAll(".map-node.available").forEach(el => {
-        el.classList.remove("available");
-        el.classList.add("locked");
+        el.classList.replace("available", "locked");
         el.style.pointerEvents = "none";
     });
 
@@ -168,11 +311,11 @@ async function chooseNode(nodeId, nodeType) {
         const r = await api("/map/choose", { node_id: nodeId });
         if (!r.ok) {
             toast(r.error || "노드 선택 실패", "error");
-            // 실패 시 맵 재갱신
             await _reloadMapState();
             return;
         }
         _pendingNodeId = nodeId;
+        if (r.map) refreshMap(r.map);
         handleNodeResult(r);
     } catch (e) {
         console.error("[chooseNode]", e);
@@ -181,12 +324,8 @@ async function chooseNode(nodeId, nodeType) {
     }
 }
 
-/** /api/map/choose 응답 처리 */
 function handleNodeResult(r) {
     const event = r.event;
-
-    // 맵 상태 업데이트 (응답에 포함된 경우)
-    if (r.map) refreshMap(r.map);
 
     switch (event) {
         case "battle":
@@ -209,12 +348,10 @@ function handleNodeResult(r) {
 
         case "event":
             _showEventResult(r);
-            // node_done: true면 즉시 완료
             if (r.node_done && r.map) refreshMap(r.map);
             break;
 
         case "item_full":
-            // 특수 아이템 가득 → swap 모달
             _showEventResult(r);
             break;
 
@@ -228,16 +365,11 @@ function handleNodeResult(r) {
     }
 }
 
-/** 전투/이벤트 종료 후 맵으로 복귀 */
 async function handleMapNodeDone(battleResult) {
-    // 전투 종료 시 battle.py가 map.mark_visited 자동 호출
-    // → result.map이 있으면 그걸 쓰고, 없으면 /api/map/state 재조회
     if (battleResult?.map) {
         refreshMap(battleResult.map);
         setMapMode();
-        if (battleResult.map_done) {
-            _showChapterClear(battleResult);
-        }
+        if (battleResult.map_done) _showChapterClear(battleResult);
         return;
     }
     await _reloadMapState();
@@ -245,16 +377,14 @@ async function handleMapNodeDone(battleResult) {
 }
 
 // ═══════════════════════════════════════════════════════════
-// 노드 타입별 UI 패널
+// 노드 타입별 패널
 // ═══════════════════════════════════════════════════════════
 
-/** 휴식 패널 표시 */
 function _showRestPanel(r) {
-    const mapEl = document.getElementById("map-content-overlay");
-    if (!mapEl) return;
-
-    mapEl.style.display = "flex";
-    mapEl.innerHTML = `
+    const overlay = document.getElementById("map-content-overlay");
+    if (!overlay) return;
+    overlay.style.display = "flex";
+    overlay.innerHTML = `
         <div class="rest-panel">
             <div class="rest-title">🏕 REST SITE</div>
             <p class="event-message">${r.message || "휴식 지점에 도착했다."}</p>
@@ -269,42 +399,31 @@ function _showRestPanel(r) {
     `;
 }
 
-/** 휴식 선택 (heal / train) */
 async function chooseRestOption(choice) {
     try {
         const r = await api("/rest", { choice });
         if (!r.ok) { toast(r.error || "실패", "error"); return; }
-
         if (r.player) {
             state.player = r.player;
             if (typeof refreshPlayer === "function") refreshPlayer();
         }
-
         logLine(r.message || "휴식 완료", "heal");
         toast(r.message, "ok");
-
-        // 레벨업 스탯 분배 모달
         if (typeof checkPendingPoints === "function") checkPendingPoints();
-
-        // 노드 완료 처리
         await _completeNode(_pendingNodeId);
-        _hideContentOverlay();
+        _hideOverlay();
     } catch (e) {
         console.error("[chooseRestOption]", e);
-        toast("오류 발생", "error");
     }
 }
 
-/** 상점 패널 표시 */
 function _showShopPanel(r) {
-    const mapEl = document.getElementById("map-content-overlay");
-    if (!mapEl) return;
-
-    const gold = r.gold || 0;
+    const overlay = document.getElementById("map-content-overlay");
+    if (!overlay) return;
+    const gold  = r.gold || 0;
     const items = r.shop_items || [];
-
-    mapEl.style.display = "flex";
-    mapEl.innerHTML = `
+    overlay.style.display = "flex";
+    overlay.innerHTML = `
         <div class="shop-panel">
             <div class="shop-header">
                 <span class="panel-title">🛒 SHOP</span>
@@ -313,70 +432,48 @@ function _showShopPanel(r) {
             <div class="shop-items-grid">
                 ${items.map(item => `
                     <div class="shop-item ${gold < item.price ? "cant-afford" : ""}"
-                         onclick="${gold >= item.price ? `buyShopItem('${item.id}', ${item.price})` : ""}">
+                         onclick="${gold >= item.price ? `buyShopItem('${item.id}',${item.price})` : ""}">
                         <span class="shop-item-name">${item.name}</span>
                         <span class="shop-item-effect">${item.effect}</span>
                         <span class="shop-item-price">${item.price} G</span>
                     </div>
                 `).join("")}
             </div>
-            <button class="btn shop-leave-btn" onclick="leaveShop()">
-                나가기
-            </button>
+            <button class="btn shop-leave-btn" onclick="leaveShop()">나가기</button>
         </div>
     `;
 }
 
-/** 상점 구매 */
 async function buyShopItem(itemId, price) {
     try {
         const r = await api("/shop/buy", { item_id: itemId, price });
-
-        // 특수 아이템 가득 → swap 모달
         if (!r.ok && r.reason === "special_full") {
-            if (typeof openInvSwap === "function") {
-                openInvSwap(itemId, r.candidates || []);
-            } else {
-                toast("특수 아이템 칸이 가득 찼습니다.", "warn");
-            }
+            if (typeof openInvSwap === "function") openInvSwap(itemId, r.candidates || []);
+            else toast("특수 아이템 칸이 가득 찼습니다.", "warn");
             return;
         }
         if (!r.ok) { toast(r.error || "구매 실패", "error"); return; }
-
         if (r.player) {
             state.player = r.player;
             if (typeof refreshPlayer === "function") refreshPlayer();
         }
-
         logLine(`🛒 ${r.message || itemId + " 구매!"}`, "skill");
         toast(r.message || `${itemId} 구매!`, "ok");
-
         if (r.gold !== undefined) {
             const goldEl = document.querySelector(".shop-gold");
             if (goldEl) goldEl.textContent = `💰 ${r.gold} G`;
-            document.querySelectorAll(".shop-item").forEach(el => {
-                const priceEl = el.querySelector(".shop-item-price");
-                if (!priceEl) return;
-                const p = parseInt(priceEl.textContent);
-                if (r.gold < p) el.classList.add("cant-afford");
-                else el.classList.remove("cant-afford");
-            });
         }
     } catch (e) {
         console.error("[buyShopItem]", e);
-        toast("오류 발생", "error");
     }
 }
 
-/** 상점 나가기 */
 async function leaveShop() {
     await _completeNode(_pendingNodeId);
-    _hideContentOverlay();
+    _hideOverlay();
 }
 
-/** 이벤트 결과 표시 */
 function _showEventResult(r) {
-    // item_full: 특수 아이템 가득 → swap 모달
     if (r.event === "item_full" || r.reason === "special_full") {
         if (typeof openInvSwap === "function") {
             openInvSwap(r.incoming || r.item, r.candidates || []);
@@ -385,13 +482,11 @@ function _showEventResult(r) {
         }
         return;
     }
-
-    const mapEl = document.getElementById("map-content-overlay");
-    if (!mapEl) return;
-
+    const overlay = document.getElementById("map-content-overlay");
+    if (!overlay) return;
     const icon = r.item ? "📦" : "✨";
-    mapEl.style.display = "flex";
-    mapEl.innerHTML = `
+    overlay.style.display = "flex";
+    overlay.innerHTML = `
         <div class="event-result-panel">
             <div class="event-icon">${icon}</div>
             <div class="event-message">${r.message || "이벤트 발생!"}</div>
@@ -399,18 +494,14 @@ function _showEventResult(r) {
             <button class="btn event-continue-btn" onclick="closeEventPanel()">계속하기</button>
         </div>
     `;
-
-    // 플레이어 상태 갱신
     if (r.player) {
         state.player = r.player;
         if (typeof refreshPlayer === "function") refreshPlayer();
     }
 }
 
-/** 이벤트 패널 닫기 */
 async function closeEventPanel() {
-    _hideContentOverlay();
-    // node_done이 true면 이미 백엔드에서 완료됨 → map state 재조회
+    _hideOverlay();
     await _reloadMapState();
 }
 
@@ -420,35 +511,27 @@ async function closeEventPanel() {
 
 function _showChapterClear(result) {
     const isGameClear = result.game_clear;
-    const nextChapter = result.next_chapter;
-
+    const nextCh      = result.next_chapter;
     const overlay = document.createElement("div");
-    overlay.className = "chapter-clear-overlay";
     overlay.id = "chapter-clear-overlay";
-
+    overlay.className = "chapter-clear-overlay";
     overlay.innerHTML = `
         <div class="chapter-clear-title">
             ${isGameClear ? "🎉 GAME CLEAR!" : `CHAPTER ${_mapState?.chapter || ""} CLEAR!`}
         </div>
         <div class="chapter-clear-sub">
-            ${isGameClear
-                ? "모든 챕터를 클리어했습니다!"
-                : `챕터 ${nextChapter}로 진행합니다.`}
+            ${isGameClear ? "모든 챕터를 클리어했습니다!" : `챕터 ${nextCh}로 진행합니다.`}
         </div>
-        <button class="btn chapter-clear-btn" onclick="${isGameClear ? "restartGame()" : `startNextChapter(${nextChapter})`}">
-            ${isGameClear ? "처음으로" : `챕터 ${nextChapter} 시작 ▶`}
+        <button class="btn chapter-clear-btn"
+            onclick="${isGameClear ? "restartGame()" : `startNextChapter(${nextCh})`}">
+            ${isGameClear ? "처음으로" : `챕터 ${nextCh} 시작 ▶`}
         </button>
     `;
-
     document.body.appendChild(overlay);
 }
 
-/** 다음 챕터 시작 */
 async function startNextChapter(chapter) {
-    // 클리어 오버레이 제거
-    const overlay = document.getElementById("chapter-clear-overlay");
-    if (overlay) overlay.remove();
-
+    document.getElementById("chapter-clear-overlay")?.remove();
     try {
         const r = await api("/map/next_chapter", {});
         if (!r.ok) { toast(r.error || "챕터 전환 실패", "error"); return; }
@@ -459,7 +542,6 @@ async function startNextChapter(chapter) {
         toast(`챕터 ${chapter} 시작!`, "ok");
     } catch (e) {
         console.error("[startNextChapter]", e);
-        toast("오류 발생", "error");
     }
 }
 
@@ -467,27 +549,23 @@ async function startNextChapter(chapter) {
 // 내부 헬퍼
 // ═══════════════════════════════════════════════════════════
 
-/** 노드 완료 API 호출 */
 async function _completeNode(nodeId) {
     if (!nodeId) return;
     try {
         const r = await api("/map/node/complete", { node_id: nodeId });
         if (!r.ok) { toast(r.error || "노드 완료 실패", "error"); return; }
         _pendingNodeId = null;
-
         if (r.map) refreshMap(r.map);
         if (r.player) {
             state.player = r.player;
             if (typeof refreshPlayer === "function") refreshPlayer();
         }
-
         if (r.map_done) _showChapterClear(r);
     } catch (e) {
         console.error("[_completeNode]", e);
     }
 }
 
-/** 맵 상태 재조회 */
 async function _reloadMapState() {
     try {
         const r = await api("/map/state", null, "GET");
@@ -497,8 +575,7 @@ async function _reloadMapState() {
     }
 }
 
-/** 콘텐츠 오버레이 숨기기 */
-function _hideContentOverlay() {
+function _hideOverlay() {
     const el = document.getElementById("map-content-overlay");
     if (el) { el.style.display = "none"; el.innerHTML = ""; }
 }
