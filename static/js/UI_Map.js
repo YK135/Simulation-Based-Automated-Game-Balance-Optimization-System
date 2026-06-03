@@ -141,7 +141,7 @@ function renderMap(mapState) {
     // layer → branch → nodes 그룹화
     const byLayer = {};
     nodes.forEach(n => {
-        if (!byLayer[n.layer]) byLayer[n.layer] = { left: [], right: [], boss: [] };
+        if (!byLayer[n.layer]) byLayer[n.layer] = { left: [], right: [], boss: [], start: [] };
         byLayer[n.layer][n.branch] = byLayer[n.layer][n.branch] || [];
         byLayer[n.layer][n.branch].push(n);
     });
@@ -168,13 +168,20 @@ function renderMap(mapState) {
     }
 
     // ── 계층 순서 렌더링 (보스가 위 = 먼저 추가, 시작이 아래 = 나중 추가)
-    for (let layer = totalLayers; layer >= 1; layer--) {
+    for (let layer = totalLayers; layer >= 0; layer--) {
         const layerData = byLayer[layer] || {};
         const row = document.createElement("div");
         row.className = "map-layer-row";
-        row.dataset.layer = layer === bossLayer ? "BOSS" : `L${layer}`;
+        row.dataset.layer = layer === bossLayer ? "BOSS" : layer === 0 ? "START" : `L${layer}`;
 
-        if (layer === bossLayer) {
+        if (layer === 0) {
+            // 시작 노드 — 중앙 정렬
+            const startWrap = document.createElement("div");
+            startWrap.className = "map-start-row";
+            const startNodes = layerData["start"] || [];
+            startNodes.forEach(nd => startWrap.appendChild(_buildNodeEl(nd, availSet)));
+            row.appendChild(startWrap);
+        } else if (layer === bossLayer) {
             // 보스 계층 — grid 전체 너비 중앙 정렬
             const bossWrap = document.createElement("div");
             bossWrap.className = "map-boss-row";
@@ -288,7 +295,6 @@ function _drawConnections(container, nodes, availSet) {
         const containerRect = container.getBoundingClientRect();
 
         nodes.forEach(srcNode => {
-        nodes.forEach(srcNode => {
             // 모든 연결선 표시 (필터 없음)
             srcNode.next_ids.forEach(nextId => {
                 const dstNode = nodeMap[nextId];
@@ -302,10 +308,16 @@ function _drawConnections(container, nodes, availSet) {
                 const dRect = dstEl.getBoundingClientRect();
                 const scrollTop  = container.scrollTop  || 0;
                 const scrollLeft = container.scrollLeft || 0;
-                const x1 = sRect.left + sRect.width / 2  - containerRect.left + scrollLeft;
-                const y1 = sRect.top  + sRect.height / 2 - containerRect.top  + scrollTop;
-                const x2 = dRect.left + dRect.width / 2  - containerRect.left + scrollLeft;
-                const y2 = dRect.top  + dRect.height / 2 - containerRect.top  + scrollTop;
+                const sx = sRect.left + sRect.width / 2  - containerRect.left + scrollLeft;
+                const sy = sRect.top  + sRect.height / 2 - containerRect.top  + scrollTop;
+                const dx = dRect.left + dRect.width / 2  - containerRect.left + scrollLeft;
+                const dy = dRect.top  + dRect.height / 2 - containerRect.top  + scrollTop;
+                // 노드 원 테두리에서 시작/끝 (중심 관통 방지)
+                const NODE_RADIUS = 24, LINE_GAP = 3, TRIM = NODE_RADIUS + LINE_GAP;
+                const vx = dx - sx, vy = dy - sy;
+                const len = Math.sqrt(vx*vx + vy*vy) || 1;
+                const x1 = sx + (vx/len)*TRIM, y1 = sy + (vy/len)*TRIM;
+                const x2 = dx - (vx/len)*TRIM, y2 = dy - (vy/len)*TRIM;
 
                 const line = document.createElementNS("http://www.w3.org/2000/svg", "line");
                 line.setAttribute("x1", x1); line.setAttribute("y1", y1);
@@ -329,8 +341,7 @@ function _drawConnections(container, nodes, availSet) {
             });
         });
         });
-    });
-}
+    }
 
 // ═══════════════════════════════════════════════════════════
 // 노드 선택

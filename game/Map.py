@@ -35,19 +35,21 @@ TOTAL_LAYERS    = 15          # 계층 1~15 (보스 = 15)
 BOSS_LAYER      = 15
 NORMAL_LAYERS   = 14          # 계층 1~14 일반
 BRANCHES        = ["left", "right"]
+START_LAYER     = 0    # 시작 노드 계층 (중앙 고정)
 
 # 계층 전체(left+right 합산) 노드 수 범위
 NODES_TOTAL_MIN    = 2
 NODES_TOTAL_MAX    = 4
 NODES_LAYER_14_MAX = 4
+MAX_PER_BRANCH     = 4   # 한쪽 branch 최대 노드 수 (lane 폭 기준)
 
 # 노드 배치 기준 (px 단위, 프론트 CSS와 동기화)
 NODE_SIZE      = 48    # 노드 직경
-NODE_MIN_GAP   = 50    # 같은 계층 내 노드 간 최소 거리
-NODE_MAX_GAP   = 65    # 같은 계층 내 노드 간 최대 거리
+NODE_MIN_GAP   = 64    # 같은 계층 내 노드 간 최소 거리
+NODE_MAX_GAP   = 120   # 같은 계층 내 노드 간 최대 거리
 LANE_WIDTH     = 260   # 각 갈래 너비 (절반 화면 기준)
 LANE_PADDING   = 24    # 갈래 가장자리 여백
-CENTER_OFFSET  = 10    # 중앙선에서 각 갈래 노드의 최소 거리
+CENTER_OFFSET  = 20    # 중앙선에서 각 갈래 노드의 최소 거리
 
 # 챕터별 타입 분포 제약 (전체 맵 기준)
 TYPE_CONSTRAINTS = {
@@ -160,8 +162,10 @@ class FloorMap:
             max_total = NODES_LAYER_14_MAX if layer == NORMAL_LAYERS else NODES_TOTAL_MAX
             total = random.randint(NODES_TOTAL_MIN, max_total)
 
-            # 좌/우 분배: 최소 1개씩 보장
-            left_count  = random.randint(1, total - 1)
+            # 좌/우 분배: 최소 1개씩, 한쪽 최대 MAX_PER_BRANCH 제한
+            lo = max(1, total - MAX_PER_BRANCH)
+            hi = min(MAX_PER_BRANCH, total - 1)
+            left_count  = random.randint(lo, hi)
             right_count = total - left_count
 
             for branch, count in [("left", left_count), ("right", right_count)]:
@@ -195,10 +199,17 @@ class FloorMap:
                 if boss_node.node_id not in node.next_ids:
                     node.next_ids.append(boss_node.node_id)
 
-        # 4) 계층 1 노드 available = True (양쪽 모두)
+        # 4) 시작 노드 생성 (layer 0, branch="start", 중앙 고정)
+        start_node = Node(chapter, START_LAYER, "start", 0, "event")
+        start_node.x_pos = 0
+        start_node.available = True
+        nodes[start_node.node_id] = start_node
+
+        # 시작 노드 → 계층 1 좌/우 노드 전체 연결
         for branch in BRANCHES:
             for node in branch_layers[branch][0]:
-                node.available = True
+                start_node.next_ids.append(node.node_id)
+                node.available = False   # 시작 노드 완료 후 활성화
 
         fmap = cls(chapter, nodes)
         return fmap
@@ -218,6 +229,7 @@ class FloorMap:
             "current_layer":  self.current_layer,
             "boss_layer":     BOSS_LAYER,
             "total_layers":   TOTAL_LAYERS,
+            "start_layer":    START_LAYER,
             "completed":      self.completed,
             "player_branch":  self.player_branch,
             "nodes":          [n.to_dict() for n in self.nodes.values()],
@@ -246,13 +258,13 @@ class FloorMap:
         if node.visited:
             return False, None, "이미 방문한 노드입니다."
 
-        # 갈래 잠금 체크 (보스 노드는 양쪽 모두 허용)
-        if node.branch != "boss" and self.player_branch:
+        # 갈래 잠금 체크 (보스/시작 노드는 양쪽 모두 허용)
+        if node.branch not in ("boss", "start") and self.player_branch:
             if node.branch != self.player_branch:
                 return False, None, f"이미 {self.player_branch} 경로를 선택했습니다."
 
         # 첫 선택 시 갈래 확정
-        if node.branch != "boss" and not self.player_branch:
+        if node.branch not in ("boss", "start") and not self.player_branch:
             self.player_branch = node.branch
 
         return True, node, ""
@@ -270,7 +282,7 @@ class FloorMap:
 
         # 현재 계층 이하 모든 노드 비활성화 (이전 계층 재선택 방지)
         for n in self.nodes.values():
-            if n.layer <= node.layer and n.branch != "boss" and not n.visited:
+            if n.layer <= node.layer and n.branch not in ("boss", "start") and not n.visited:
                 n.available = False
 
         if node.node_type == "boss":

@@ -147,12 +147,14 @@
     align-items: center;
     justify-content: center;
     cursor: default;
-    position: relative;
+    position: absolute;
+    left: calc(50% + var(--node-x, 0px));
+    top: 50%;
+    transform: translate(-50%, -50%);
     transition: all 0.18s ease;
     border: 2px solid transparent;
     flex-shrink: 0;
     z-index: 1;
-    transform: translateX(var(--node-x, 0px));
 }
 
 /* 방문 완료 */
@@ -175,7 +177,7 @@
 }
 
 .map-node.available:hover {
-    transform: translateX(var(--node-x, 0px)) scale(1.18);
+    transform: translate(-50%, -50%) scale(1.18);
     z-index: 10;
     animation: none;
 }
@@ -431,3 +433,18 @@
 .map-connections-svg { z-index: 0 !important; pointer-events: none; }
 .map-node             { z-index: 1; }
 .map-node.available:hover { z-index: 10 !important; }
+
+/* ─── 시작 노드 행 ─── */
+.map-start-row {
+    grid-column: 1 / -1;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    min-height: 72px;
+}
+
+.map-node[data-type="event"][data-branch="start"] {
+    border-color: rgba(0,255,208,0.6);
+    background: rgba(0,255,208,0.1);
+    box-shadow: 0 0 12px rgba(0,255,208,0.25);
+}
