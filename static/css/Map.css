@@ -65,10 +65,10 @@
     flex: 1;
     overflow-y: auto;
     overflow-x: hidden;
-    padding: 8px 4px;
+    padding: 12px 8px;
     display: flex;
     flex-direction: column;
-    gap: 4px;
+    gap: 8px;
     position: relative;
 }
 
@@ -83,12 +83,13 @@
 /* ─── 층 행 ─── */
 .map-layer-row {
     display: grid;
-    grid-template-columns: 1fr auto 1fr;
+    grid-template-columns: minmax(0, 1fr) 24px minmax(0, 1fr);
     align-items: center;
-    min-height: 72px;
+    min-height: 80px;
     position: relative;
     flex-shrink: 0;
-    padding: 4px 0;
+    padding: 6px 0;
+    overflow: visible;
 }
 
 /* 계층 라벨 */
@@ -407,3 +408,23 @@
 }
 
 .chapter-clear-btn { padding: 12px 32px; font-size: 13px; }
+
+/* ─── 보스 행 래퍼 — grid 전체 너비 중앙 ─── */
+.map-boss-row {
+    grid-column: 1 / -1;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    min-height: 72px;
+}
+
+/* ─── 노드 x_offset 분산 배치 ─── */
+.map-node {
+    transform: translateX(var(--node-x, 0px));
+}
+
+.map-node.available:hover {
+    transform: translateX(var(--node-x, 0px)) scale(1.18);
+    z-index: 10;
+    animation: none;
+}

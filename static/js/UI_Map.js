@@ -73,6 +73,13 @@ async function initMap(chapter = 1) {
 function refreshMap(mapState) {
     _mapState = mapState;
     renderMap(_mapState);
+    // 다음 선택 가능 노드로 자동 스크롤
+    setTimeout(scrollToAvailableNode, 80);
+}
+
+function scrollToAvailableNode() {
+    const el = document.querySelector(".map-node.available");
+    if (el) el.scrollIntoView({ block: "center", behavior: "smooth" });
 }
 
 // ═══════════════════════════════════════════════════════════
@@ -156,11 +163,12 @@ function renderMap(mapState) {
         row.dataset.layer = layer === bossLayer ? "BOSS" : `L${layer}`;
 
         if (layer === bossLayer) {
-            // 보스 계층 — 가운데 정렬
+            // 보스 계층 — grid 전체 너비 중앙 정렬
+            const bossWrap = document.createElement("div");
+            bossWrap.className = "map-boss-row";
             const bossNodes = layerData["boss"] || [];
-            bossNodes.forEach(nd => {
-                row.appendChild(_buildNodeEl(nd, availSet));
-            });
+            bossNodes.forEach(nd => bossWrap.appendChild(_buildNodeEl(nd, availSet)));
+            row.appendChild(bossWrap);
         } else {
             // 일반 계층 — 좌/우 2열
             const leftCol  = document.createElement("div");
@@ -221,6 +229,11 @@ function _buildNodeEl(nodeData, availSet) {
         <span class="map-node-icon">${meta.icon}</span>
         <span class="map-node-label">${meta.label}</span>
     `;
+
+    // x_offset으로 자연스러운 분산 배치
+    if (nodeData.x_offset) {
+        el.style.setProperty("--node-x", `${nodeData.x_offset}px`);
+    }
 
     if (available) {
         el.addEventListener("click", () => chooseNode(nodeData.node_id, nodeData.node_type));
@@ -458,16 +471,32 @@ async function buyShopItem(itemId, price) {
             else toast("특수 아이템 칸이 가득 찼습니다.", "warn");
             return;
         }
-        if (!r.ok) { toast(r.error || "구매 실패", "error"); return; }
+        if (!r.ok) {
+            const msg = r.error || "구매 실패";
+            toast(msg, "error");
+            logLine(`🛒 ${msg}`, "warn");
+            return;
+        }
         if (r.player) {
             state.player = r.player;
             if (typeof refreshPlayer === "function") refreshPlayer();
         }
         logLine(`🛒 ${r.message || itemId + " 구매!"}`, "skill");
         toast(r.message || `${itemId} 구매!`, "ok");
-        if (r.gold !== undefined) {
+
+        // 상점 UI 재렌더 (골드/재고 반영)
+        if (r.shop_items) {
+            _showShopPanel({ gold: r.gold, shop_items: r.shop_items });
+        } else if (r.gold !== undefined) {
             const goldEl = document.querySelector(".shop-gold");
             if (goldEl) goldEl.textContent = `💰 ${r.gold} G`;
+            document.querySelectorAll(".shop-item").forEach(el => {
+                const priceEl = el.querySelector(".shop-item-price");
+                if (!priceEl) return;
+                const p = parseInt(priceEl.textContent);
+                if (r.gold < p) el.classList.add("cant-afford");
+                else el.classList.remove("cant-afford");
+            });
         }
     } catch (e) {
         console.error("[buyShopItem]", e);

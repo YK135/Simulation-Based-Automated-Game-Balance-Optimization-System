@@ -72,7 +72,9 @@ def new_game():
         player.learned_skills = []
     player.learned_skills = list(skill_sys.learned_skills)
 
-    inv   = Inventory.starting_set()   # 포션 6개 기본 지급
+    inv   = Inventory.new()   # 시작 포션 3개 (상점 구매 여지 확보)
+    for item in ["HP_S_potion", "HP_S_potion", "MP_S_potion"]:
+        inv.add(item)
     items = inv.to_flat_list()
 
     hook = BalanceHook(player, items, show_graph=False, verbose=False)

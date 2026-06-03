@@ -498,8 +498,9 @@ def shop_buy():
     gs["items"] = inv.to_flat_list()
 
     return jsonify({
-        "ok":      True,
-        "message": f"{item_id} 구매! (-{price}G)",
-        "gold":    gs["gold"],
-        "player":  _player_dict(gs["player"], inv),
+        "ok":        True,
+        "message":   f"{item_id} 구매! (-{price}G)",
+        "gold":      gs["gold"],
+        "player":    _player_dict(gs["player"], inv),
+        "shop_items": _get_shop_items(gs["player"]["lv"]),  # 상점 UI 재렌더용
     })

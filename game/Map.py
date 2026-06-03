@@ -83,6 +83,8 @@ class Node:
         self.visited   = False
         self.available = False
         self.on_path   = False
+        # 자연스러운 위치 분산용 x offset (픽셀)
+        self.x_offset: int = random.randint(-16, 16)
 
     def to_dict(self) -> Dict[str, Any]:
         return {
@@ -96,6 +98,7 @@ class Node:
             "visited":   self.visited,
             "available": self.available,
             "on_path":   self.on_path,
+            "x_offset":  self.x_offset,
         }
 
     @classmethod
@@ -105,6 +108,7 @@ class Node:
         n.visited   = d["visited"]
         n.available = d["available"]
         n.on_path   = d.get("on_path", False)
+        n.x_offset  = d.get("x_offset", 0)
         return n
 
 
@@ -246,6 +250,11 @@ class FloorMap:
         node.available = False
         node.on_path   = True
         self.current_layer = node.layer
+
+        # 현재 계층 이하 모든 노드 비활성화 (이전 계층 재선택 방지)
+        for n in self.nodes.values():
+            if n.layer <= node.layer and n.branch != "boss" and not n.visited:
+                n.available = False
 
         if node.node_type == "boss":
             self.completed = True
