@@ -426,3 +426,8 @@
 .map-branch-col {
     overflow: visible !important;
 }
+
+/* ─── z-index 스태킹 명시 ─── */
+.map-connections-svg { z-index: 0 !important; pointer-events: none; }
+.map-node             { z-index: 1; }
+.map-node.available:hover { z-index: 10 !important; }

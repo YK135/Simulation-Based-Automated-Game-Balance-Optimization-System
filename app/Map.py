@@ -443,10 +443,10 @@ def _get_boss(chapter: int, player_lv: int):
 
 def _get_shop_items(player_lv: int) -> list:
     """
-    상점 아이템 목록 생성.
-    나중에 스킬 강화 추가 예정.
+    상점 아이템 목록 생성 (포션 + 특수 아이템).
+    특수 아이템은 레벨 3 이상부터 노출.
     """
-    base_items = [
+    items = [
         {"id": "HP_M_potion", "name": "HP 중형 포션", "type": "potion",
          "effect": "HP +60%", "price": 50},
         {"id": "HP_L_potion", "name": "HP 대형 포션", "type": "potion",
@@ -456,8 +456,16 @@ def _get_shop_items(player_lv: int) -> list:
         {"id": "MP_L_potion", "name": "MP 대형 포션", "type": "potion",
          "effect": "MP +100%", "price": 80},
     ]
-    # 레벨에 따라 일부 아이템만 노출 (추후 확장)
-    return base_items
+    if player_lv >= 3:
+        items += [
+            {"id": "bomb",       "name": "폭탄",       "type": "special",
+             "effect": "전체 데미지", "price": 120},
+            {"id": "web_bomb",   "name": "거미줄 폭탄", "type": "special",
+             "effect": "전체 데미지 + 속도 감소", "price": 150},
+            {"id": "focus_drug", "name": "집중 물약",   "type": "special",
+             "effect": "다음 스킬 추가 피해", "price": 100},
+        ]
+    return items
 
 
 import random  # _pick_event에서 사용
@@ -490,8 +498,12 @@ def shop_buy():
     if not result.get("ok"):
         reason = result.get("reason", "")
         if reason == "special_full":
-            return jsonify({"ok": False, "error": "특수 아이템 가득 참. 교체 후 시도하세요.",
+            return jsonify({"ok": False, "error": "특수 아이템 칸이 가득 찼습니다.",
                            "reason": "special_full", "candidates": result.get("candidates", [])}), 400
+        if reason == "potion_full":
+            return jsonify({"ok": False,
+                           "error": "포션 슬롯이 가득 찼습니다. 기존 포션을 사용한 뒤 구매하세요.",
+                           "reason": "potion_full"}), 400
         return jsonify({"ok": False, "error": result.get("message", "인벤토리 가득 참")}), 400
 
     gs["gold"]  = gold - price
@@ -502,5 +514,5 @@ def shop_buy():
         "message":   f"{item_id} 구매! (-{price}G)",
         "gold":      gs["gold"],
         "player":    _player_dict(gs["player"], inv),
-        "shop_items": _get_shop_items(gs["player"]["lv"]),  # 상점 UI 재렌더용
+        "shop_items": _get_shop_items(["player"].lv),  # 상점 UI 재렌더용
     })

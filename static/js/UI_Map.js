@@ -83,6 +83,10 @@ function _redrawMapLater(scroll, nodes, availSet) {
             _drawConnections(scroll, nodes, availSet);
         });
     }, 80);
+    // 폰트/이미지 로딩 후 한 번 더 재계산
+    setTimeout(() => {
+        _drawConnections(scroll, nodes, availSet);
+    }, 280);
 }
 
 function scrollToAvailableNode() {
@@ -239,10 +243,9 @@ function _buildNodeEl(nodeData, availSet) {
         <span class="map-node-label">${meta.label}</span>
     `;
 
-    // x_offset으로 자연스러운 분산 배치
-    if (nodeData.x_offset) {
-        el.style.setProperty("--node-x", `${nodeData.x_offset}px`);
-    }
+    // x_pos 좌표 기반 배치 (x_offset은 fallback)
+    const xPos = nodeData.x_pos !== undefined ? nodeData.x_pos : (nodeData.x_offset || 0);
+    el.style.setProperty("--node-x", `${xPos}px`);
 
     if (available) {
         el.addEventListener("click", () => {
@@ -285,7 +288,8 @@ function _drawConnections(container, nodes, availSet) {
         const containerRect = container.getBoundingClientRect();
 
         nodes.forEach(srcNode => {
-            if (!srcNode.on_path && !srcNode.available && !srcNode.visited) return;
+        nodes.forEach(srcNode => {
+            // 모든 연결선 표시 (필터 없음)
             srcNode.next_ids.forEach(nextId => {
                 const dstNode = nodeMap[nextId];
                 if (!dstNode) return;
@@ -296,8 +300,6 @@ function _drawConnections(container, nodes, availSet) {
 
                 const sRect = srcEl.getBoundingClientRect();
                 const dRect = dstEl.getBoundingClientRect();
-
-                // scrollTop/scrollLeft 보정 (스크롤 시 선 어긋남 방지)
                 const scrollTop  = container.scrollTop  || 0;
                 const scrollLeft = container.scrollLeft || 0;
                 const x1 = sRect.left + sRect.width / 2  - containerRect.left + scrollLeft;
@@ -309,21 +311,23 @@ function _drawConnections(container, nodes, availSet) {
                 line.setAttribute("x1", x1); line.setAttribute("y1", y1);
                 line.setAttribute("x2", x2); line.setAttribute("y2", y2);
 
-                // 경로 강조 vs 일반
+                // 3단계 선 스타일
                 if (srcNode.on_path && dstNode.on_path) {
-                    line.setAttribute("stroke", "rgba(0,255,208,0.7)");
+                    line.setAttribute("stroke", "rgba(0,255,208,0.8)");
+                    line.setAttribute("stroke-width", "2.5");
+                    line.setAttribute("stroke-dasharray", "none");
+                } else if (srcNode.available || srcNode.on_path) {
+                    line.setAttribute("stroke", "rgba(0,255,208,0.45)");
                     line.setAttribute("stroke-width", "2");
-                } else if (srcNode.on_path || srcNode.available) {
-                    line.setAttribute("stroke", "rgba(0,255,208,0.3)");
-                    line.setAttribute("stroke-width", "1.5");
+                    line.setAttribute("stroke-dasharray", "5 3");
                 } else {
-                    line.setAttribute("stroke", "rgba(100,120,140,0.2)");
+                    line.setAttribute("stroke", "rgba(120,140,160,0.22)");
                     line.setAttribute("stroke-width", "1");
+                    line.setAttribute("stroke-dasharray", "3 4");
                 }
-                line.setAttribute("stroke-dasharray", srcNode.visited ? "none" : "4 3");
-
                 svg.appendChild(line);
             });
+        });
         });
     });
 }

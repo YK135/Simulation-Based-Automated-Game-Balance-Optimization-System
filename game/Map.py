@@ -37,10 +37,17 @@ NORMAL_LAYERS   = 14          # 계층 1~14 일반
 BRANCHES        = ["left", "right"]
 
 # 계층 전체(left+right 합산) 노드 수 범위
-# 14계층(보스 직전)은 좌우 합산 최대 4개
-NODES_TOTAL_MIN    = 2   # 계층 전체 최소
-NODES_TOTAL_MAX    = 4   # 계층 전체 최대
-NODES_LAYER_14_MAX = 4   # 14계층 합산 최대 (보스 직전)
+NODES_TOTAL_MIN    = 2
+NODES_TOTAL_MAX    = 4
+NODES_LAYER_14_MAX = 4
+
+# 노드 배치 기준 (px 단위, 프론트 CSS와 동기화)
+NODE_SIZE      = 48    # 노드 직경
+NODE_MIN_GAP   = 50    # 같은 계층 내 노드 간 최소 거리
+NODE_MAX_GAP   = 65    # 같은 계층 내 노드 간 최대 거리
+LANE_WIDTH     = 260   # 각 갈래 너비 (절반 화면 기준)
+LANE_PADDING   = 24    # 갈래 가장자리 여백
+CENTER_OFFSET  = 10    # 중앙선에서 각 갈래 노드의 최소 거리
 
 # 챕터별 타입 분포 제약 (전체 맵 기준)
 TYPE_CONSTRAINTS = {
@@ -85,6 +92,7 @@ class Node:
         self.on_path   = False
         # 자연스러운 위치 분산용 x offset (픽셀)
         self.x_offset: int = random.randint(-12, 12)
+        self.x_pos: int    = 0   # 계층별 배치 계산 후 설정
 
     def to_dict(self) -> Dict[str, Any]:
         return {
@@ -99,6 +107,7 @@ class Node:
             "available": self.available,
             "on_path":   self.on_path,
             "x_offset":  self.x_offset,
+            "x_pos":     self.x_pos,
         }
 
     @classmethod
@@ -109,6 +118,7 @@ class Node:
         n.available = d["available"]
         n.on_path   = d.get("on_path", False)
         n.x_offset  = d.get("x_offset", 0)
+        n.x_pos     = d.get("x_pos", 0)
         return n
 
 
@@ -162,6 +172,13 @@ class FloorMap:
                     layer_nodes.append(node)
                     nodes[node.node_id] = node
                 branch_layers[branch].append(layer_nodes)
+
+        # 1-b) 계층별 x_pos 계산
+        for layer in range(1, NORMAL_LAYERS + 1):
+            left_nodes  = branch_layers["left"][layer - 1]
+            right_nodes = branch_layers["right"][layer - 1]
+            _assign_x_pos(left_nodes, "left")
+            _assign_x_pos(right_nodes, "right")
 
         # 2) 보스 노드 (계층 15, branch="boss")
         boss_type = "boss"
@@ -347,3 +364,38 @@ def _connect_branch_layers(cur: List[Node], nxt: List[Node]) -> None:
             extras = [n for n in nxt if n.node_id not in cn.next_ids]
             if extras and random.random() < 0.3:
                 cn.next_ids.append(random.choice(extras).node_id)
+
+
+def _assign_x_pos(nodes: list, branch: str) -> None:
+    """
+    같은 계층/갈래 내 노드들에 x_pos 할당.
+    left : 중앙선 기준 왼쪽 영역 (음수)
+    right: 중앙선 기준 오른쪽 영역 (양수)
+    최소 NODE_MIN_GAP 간격 보장, 갈래 영역 밖 clamp.
+    """
+    if not nodes:
+        return
+
+    if branch == "left":
+        area_min = -(LANE_WIDTH - LANE_PADDING)
+        area_max = -CENTER_OFFSET
+    else:
+        area_min = CENTER_OFFSET
+        area_max = LANE_WIDTH - LANE_PADDING
+
+    area_size = area_max - area_min
+    n = len(nodes)
+
+    if n == 1:
+        mid = (area_min + area_max) // 2
+        nodes[0].x_pos = mid + random.randint(-12, 12)
+        return
+
+    spacing = min(NODE_MAX_GAP, max(NODE_MIN_GAP, area_size // n))
+    total_span = spacing * (n - 1)
+    start = (area_min + area_max - total_span) // 2
+
+    for i, node in enumerate(nodes):
+        base   = start + spacing * i
+        jitter = random.randint(-8, 8)
+        node.x_pos = max(area_min, min(area_max, base + jitter))
