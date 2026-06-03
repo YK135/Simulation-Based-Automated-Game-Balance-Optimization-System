@@ -13,6 +13,7 @@ async function loadStatus() {
 
     state.player = r.player;
     state.exploreTurn = r.turn || 0;
+    if (r.gold !== undefined) state.gold = r.gold;
     refreshPlayer();
 
     if (r.in_battle) {
@@ -53,6 +54,7 @@ async function newGame(name, job) {
         const r = await api('/new_game', { name, job });
         if (r.ok) {
             state.player = r.player;
+            if (r.gold !== undefined) state.gold = r.gold;
             refreshPlayer();
             document.getElementById('modal-newgame')?.classList.remove('active');
             clearLog();

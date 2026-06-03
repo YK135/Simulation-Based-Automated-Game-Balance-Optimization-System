@@ -516,10 +516,9 @@ async function buyShopItem(itemId, price) {
             }
             return;
         }
-        if (r.player) {
-            state.player = r.player;
-            if (typeof refreshPlayer === "function") refreshPlayer();
-        }
+        if (r.player) state.player = r.player;
+        if (r.gold !== undefined) state.gold = r.gold;
+        if (typeof refreshPlayer === "function") refreshPlayer();
         logLine(`🛒 ${r.message || itemId + " 구매!"}`, "skill");
         toast(r.message || `${itemId} 구매!`, "ok");
 

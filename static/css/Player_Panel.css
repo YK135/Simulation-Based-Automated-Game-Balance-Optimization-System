@@ -210,3 +210,29 @@ img.combatant-art {
     color: transparent;
     font-size: 0;
 }
+
+/* ── 골드 표시 ── */
+.player-gold-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-top: 8px;
+    padding: 5px 6px;
+    border: 1px solid rgba(250, 204, 21, 0.25);
+    background: rgba(250, 204, 21, 0.06);
+    border-radius: 3px;
+    font-size: 10px;
+}
+
+.player-gold-label {
+    color: var(--text-dim, #6b7a8d);
+    letter-spacing: 0.1em;
+    font-size: 9px;
+}
+
+#player-gold {
+    color: rgba(250, 204, 21, 0.9);
+    font-weight: 700;
+    font-size: 11px;
+    letter-spacing: 0.05em;
+}

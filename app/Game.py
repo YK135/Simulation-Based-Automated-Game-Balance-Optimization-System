@@ -103,6 +103,7 @@ def new_game():
         "ok":         True,
         "player":     _player_dict(player, inv),
         "db_user_id": db_user_id,
+        "gold":       100,
         "message":    f"안녕하세요, {name}님! ({job}) 모험을 시작합니다.",
     })
 
@@ -121,6 +122,7 @@ def status():
         "player":    _player_dict(player, gs["inventory"]),
         "turn":      gs["turn"],
         "in_battle": in_battle,
+        "gold":      gs.get("gold", 0),
         "user": {
             "db_user_id": gs.get("db_user_id"),
             "nickname":   gs.get("nickname"),
