@@ -428,3 +428,9 @@
     z-index: 10;
     animation: none;
 }
+
+/* ─── 스크롤은 .map-scroll 하나만 ─── */
+.map-layer-row,
+.map-branch-col {
+    overflow: visible !important;
+}

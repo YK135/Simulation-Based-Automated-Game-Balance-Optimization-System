@@ -236,7 +236,13 @@ function _buildNodeEl(nodeData, availSet) {
     }
 
     if (available) {
-        el.addEventListener("click", () => chooseNode(nodeData.node_id, nodeData.node_type));
+        el.addEventListener("click", () => {
+            // 즉시 비활성화 (중복 클릭 방지)
+            el.classList.remove("available");
+            el.classList.add("locked");
+            el.style.pointerEvents = "none";
+            chooseNode(nodeData.node_id, nodeData.node_type);
+        });
     }
 
     return el;
@@ -334,7 +340,9 @@ async function chooseNode(nodeId, nodeType) {
             return;
         }
         _pendingNodeId = nodeId;
+        // 백엔드 최신 맵 상태로 즉시 재렌더
         if (r.map) refreshMap(r.map);
+        else await _reloadMapState();
         handleNodeResult(r);
     } catch (e) {
         console.error("[chooseNode]", e);
@@ -475,6 +483,13 @@ async function buyShopItem(itemId, price) {
             const msg = r.error || "구매 실패";
             toast(msg, "error");
             logLine(`🛒 ${msg}`, "warn");
+            // 포션 가득 찬 경우 상점 버튼 시각적 표시
+            if (r.reason === "potion_full") {
+                document.querySelectorAll(`.shop-item[data-id="${itemId}"]`).forEach(el => {
+                    el.classList.add("cant-afford");
+                    el.title = "포션 슬롯 가득 참";
+                });
+            }
             return;
         }
         if (r.player) {
