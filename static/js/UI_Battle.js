@@ -14,6 +14,8 @@ function refreshBattle(bs) {
     state.inBattle = !bs.done && (bs.player_hp > 0);
 
     const mapModeEl = document.getElementById('map-mode');
+    const invPanel = document.getElementById('player-inventory-panel');
+    if (invPanel) invPanel.style.display = state.inBattle ? 'none' : '';
     if (mapModeEl) mapModeEl.style.display = 'none';
     const exploreModeEl = document.getElementById('explore-mode');
     if (exploreModeEl) exploreModeEl.style.display = 'none';
