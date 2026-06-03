@@ -38,77 +38,97 @@ function refreshPlayer() {
         <div class="stat-row"><span>LUC</span><span class="v">${p.luc}</span></div>
     `;
 
-    // ── 골드 표시 ──
+    // ── 골드 ──
     const goldEl = document.getElementById('player-gold');
     if (goldEl) goldEl.textContent = `${state.gold || 0} G`;
 
-    // ── 버프/디버프 표시 ──
-    refreshStatusChips(p);
+    // ── 아이템 패널 (노드 선택 필드 전용) ──
+    refreshInventoryPanel(p);
 
+    // ── 버프/디버프는 UI_Battle.js의 refreshPlayerStatusList가 전투 중 처리 ──
     if (typeof refreshExploreInfo === 'function') refreshExploreInfo();
 }
 
-/** 버프/디버프 칩 렌더링 */
-function refreshStatusChips(p) {
-    const buffsEl   = document.getElementById('player-buffs');
-    const debuffsEl = document.getElementById('player-debuffs');
-    if (!buffsEl || !debuffsEl) return;
+/** 왼쪽 패널 아이템 렌더링 (포션 클릭 사용 가능, 특수 표시만) */
+function refreshInventoryPanel(p) {
+    const potionEl  = document.getElementById('player-potion-list');
+    const specialEl = document.getElementById('player-special-list');
+    if (!potionEl && !specialEl) return;
 
-    // 전투 상태에서 buffs/debuffs 가져오기
-    const bs = state.battleState || null;
+    const inv     = (p && p.inventory) || {};
+    const potions = inv.potions || [];
+    const special = inv.special || [];
 
-    buffsEl.innerHTML   = '';
-    debuffsEl.innerHTML = '';
-
-    // 전투 중: BattleSession 상태에서 읽음
-    if (bs && bs.player_buffs) {
-        bs.player_buffs.forEach(buff => {
-            const chip = _makeChip(buff.name || buff, buff.turns, 'buff');
-            buffsEl.appendChild(chip);
-        });
+    // ── 포션 목록 ──
+    if (potionEl) {
+        potionEl.innerHTML = '';
+        if (potions.length === 0) {
+            potionEl.innerHTML = '<div class="pip-empty">포션 없음</div>';
+        } else {
+            potions.forEach(({ name, count }) => {
+                const row = document.createElement('div');
+                // 전투 중에는 클릭 비활성
+                const usable = !state.inBattle;
+                row.className = `pip-item${usable ? ' usable' : ''}`;
+                row.innerHTML = `<span class="pip-item-name">${name}</span><span class="pip-item-count">×${count}</span>`;
+                if (usable) {
+                    row.onclick = () => usePotionFromPanel(name);
+                    row.title = '클릭하여 사용';
+                } else {
+                    row.title = '전투 중에는 액션 메뉴에서 사용하세요';
+                }
+                potionEl.appendChild(row);
+            });
+        }
     }
 
-    if (bs && bs.player_debuffs) {
-        bs.player_debuffs.forEach(debuff => {
-            const chip = _makeChip(debuff.name || debuff.stat || debuff, debuff.turns, 'debuff');
-            debuffsEl.appendChild(chip);
-        });
-    }
-
-    // 전투 외: player 객체에 status_effects가 있으면 표시
-    if (!bs && p.status_effects) {
-        p.status_effects.forEach(eff => {
-            const type = eff.type === 'buff' ? 'buff' : 'debuff';
-            const chip = _makeChip(eff.name || eff.stat, eff.turns, type);
-            (type === 'buff' ? buffsEl : debuffsEl).appendChild(chip);
-        });
+    // ── 특수 아이템 (표시만, 클릭 비활성) ──
+    if (specialEl) {
+        specialEl.innerHTML = '';
+        if (special.length === 0) {
+            specialEl.innerHTML = '<div class="pip-empty">특수 없음</div>';
+        } else {
+            special.forEach(name => {
+                const row = document.createElement('div');
+                row.className = 'pip-item pip-special';
+                row.innerHTML = `<span class="pip-item-name">${name}</span><span class="pip-item-badge">★</span>`;
+                row.title = '필드에서 사용 불가';
+                specialEl.appendChild(row);
+            });
+        }
     }
 }
 
-function _makeChip(label, turns, type) {
-    const chip = document.createElement('span');
-    chip.className = `status-chip ${type}`;
-    const turnsText = turns ? `<span class="turns">${turns}T</span>` : '';
-    chip.innerHTML = `${label}${turnsText}`;
-    return chip;
+/** 필드에서 포션 사용 */
+async function usePotionFromPanel(itemName) {
+    if (state.inBattle) {
+        toast('전투 중에는 액션 메뉴에서 사용하세요.', 'warn');
+        return;
+    }
+    if (typeof useItemInField !== 'function') {
+        console.warn('[usePotionFromPanel] useItemInField not found');
+        return;
+    }
+    await useItemInField(itemName);
+    // useItemInField 내부에서 state.player 갱신 + refreshPlayer() 호출됨
 }
 
 // 스킬 아이콘 매핑
 function skillIcon(sk) {
-    if (sk.includes('파이어'))    return '🔥';
-    if (sk.includes('힐'))        return '✚';
-    if (sk.includes('실드'))      return '⛨';
-    if (sk.includes('강타'))      return '⚒';
-    if (sk.includes('연속'))      return '⚔';
-    if (sk.includes('찌르기'))    return '⚡';
-    if (sk.includes('아이스'))    return '❄';
-    if (sk.includes('라이트닝'))  return '⚡';
-    if (sk.includes('수비'))      return '⛨';
-    if (sk.includes('몸통'))      return '◆';
-    if (sk.includes('추진력'))    return '➤';
-    if (sk.includes('급소'))      return '✦';
-    if (sk.includes('홀리'))      return '✝';
-    if (sk.includes('축복'))      return '★';
-    if (sk.includes('셰이드'))    return '🌑';
+    if (sk.includes('파이어'))   return '🔥';
+    if (sk.includes('힐'))       return '✚';
+    if (sk.includes('실드'))     return '⛨';
+    if (sk.includes('강타'))     return '⚒';
+    if (sk.includes('연속'))     return '⚔';
+    if (sk.includes('찌르기'))   return '⚡';
+    if (sk.includes('아이스'))   return '❄';
+    if (sk.includes('라이트닝')) return '⚡';
+    if (sk.includes('수비'))     return '⛨';
+    if (sk.includes('몸통'))     return '◆';
+    if (sk.includes('추진력'))   return '➤';
+    if (sk.includes('급소'))     return '✦';
+    if (sk.includes('홀리'))     return '✝';
+    if (sk.includes('축복'))     return '★';
+    if (sk.includes('셰이드'))   return '🌑';
     return '★';
 }

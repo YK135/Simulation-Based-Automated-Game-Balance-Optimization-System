@@ -236,3 +236,83 @@ img.combatant-art {
     font-size: 11px;
     letter-spacing: 0.05em;
 }
+
+/* ── 아이템 패널 (포션/특수) ── */
+.player-inventory-panel {
+    margin-top: 8px;
+    border-top: 1px dashed var(--border, rgba(0,255,208,0.15));
+    padding-top: 8px;
+}
+
+.pip-section {
+    margin-top: 6px;
+}
+
+.pip-section-title {
+    font-size: 9px;
+    letter-spacing: 0.12em;
+    color: var(--text-dim, #6b7a8d);
+    margin-bottom: 4px;
+    font-weight: 700;
+}
+
+.pip-section-title.special {
+    color: var(--accent-cyan, #00ffd0);
+}
+
+.pip-item-list {
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+}
+
+.pip-item {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 4px 6px;
+    border: 1px solid rgba(255,255,255,0.07);
+    background: rgba(255,255,255,0.03);
+    border-radius: 3px;
+    font-size: 9px;
+    color: var(--text-dim, #6b7a8d);
+}
+
+.pip-item.usable {
+    cursor: pointer;
+    color: var(--text-main, #c8d8e8);
+    border-color: rgba(255,255,255,0.12);
+}
+
+.pip-item.usable:hover {
+    border-color: rgba(0,255,208,0.5);
+    background: rgba(0,255,208,0.06);
+    color: var(--accent-cyan, #00ffd0);
+}
+
+.pip-item.pip-special {
+    border-color: rgba(0,255,208,0.2);
+    cursor: not-allowed;
+    opacity: 0.6;
+}
+
+.pip-item-name { flex: 1; }
+
+.pip-item-count {
+    color: rgba(250, 204, 21, 0.8);
+    font-weight: 700;
+    margin-left: 6px;
+}
+
+.pip-item-badge {
+    color: var(--accent-cyan, #00ffd0);
+    margin-left: 6px;
+    font-size: 8px;
+}
+
+.pip-empty {
+    font-size: 9px;
+    color: var(--text-dim, #6b7a8d);
+    opacity: 0.5;
+    padding: 2px 0;
+}
