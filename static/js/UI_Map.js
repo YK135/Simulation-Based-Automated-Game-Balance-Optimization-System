@@ -242,12 +242,15 @@ function _drawConnections(container, nodes, availSet) {
     requestAnimationFrame(() => {
         const svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
         svg.classList.add("map-connections-svg");
+        const scrollH = container.scrollHeight || container.offsetHeight;
+        const scrollW = container.scrollWidth  || container.offsetWidth;
         svg.style.cssText = `
             position:absolute; top:0; left:0;
-            width:100%; height:100%;
+            width:${scrollW}px; height:${scrollH}px;
             pointer-events:none; z-index:0;
             overflow:visible;
         `;
+        svg.setAttribute("viewBox", `0 0 ${scrollW} ${scrollH}`);
         container.style.position = "relative";
         container.appendChild(svg);
 
@@ -266,10 +269,13 @@ function _drawConnections(container, nodes, availSet) {
                 const sRect = srcEl.getBoundingClientRect();
                 const dRect = dstEl.getBoundingClientRect();
 
-                const x1 = sRect.left + sRect.width / 2  - containerRect.left;
-                const y1 = sRect.top  + sRect.height / 2 - containerRect.top;
-                const x2 = dRect.left + dRect.width / 2  - containerRect.left;
-                const y2 = dRect.top  + dRect.height / 2 - containerRect.top;
+                // scrollTop/scrollLeft 보정 (스크롤 시 선 어긋남 방지)
+                const scrollTop  = container.scrollTop  || 0;
+                const scrollLeft = container.scrollLeft || 0;
+                const x1 = sRect.left + sRect.width / 2  - containerRect.left + scrollLeft;
+                const y1 = sRect.top  + sRect.height / 2 - containerRect.top  + scrollTop;
+                const x2 = dRect.left + dRect.width / 2  - containerRect.left + scrollLeft;
+                const y2 = dRect.top  + dRect.height / 2 - containerRect.top  + scrollTop;
 
                 const line = document.createElementNS("http://www.w3.org/2000/svg", "line");
                 line.setAttribute("x1", x1); line.setAttribute("y1", y1);

@@ -139,22 +139,21 @@ class FloorMap:
         # 1) 각 branch별 계층 1~14 노드 생성
         branch_layers: Dict[str, List[List[Node]]] = {"left": [], "right": []}
 
-        # 타입 할당 계획 (branch별)
-        type_plans = {b: _make_type_plan(chapter, b) for b in BRANCHES}
+        # 타입 할당 계획 — 챕터 전체 기준 1회 생성
+        type_plan = _make_chapter_type_plan()
 
         for layer in range(1, NORMAL_LAYERS + 1):
             max_total = NODES_LAYER_14_MAX if layer == NORMAL_LAYERS else NODES_TOTAL_MAX
             total = random.randint(NODES_TOTAL_MIN, max_total)
 
-            # 좌/우 분배: 최소 1개씩 보장, 나머지 랜덤
+            # 좌/우 분배: 최소 1개씩 보장
             left_count  = random.randint(1, total - 1)
             right_count = total - left_count
 
             for branch, count in [("left", left_count), ("right", right_count)]:
                 layer_nodes = []
                 for idx in range(count):
-                    plan = type_plans[branch]
-                    ntype = plan.pop(0) if plan else "battle"
+                    ntype = type_plan.pop(0) if type_plan else "battle"
                     node  = Node(chapter, layer, branch, idx, ntype)
                     layer_nodes.append(node)
                     nodes[node.node_id] = node
@@ -290,21 +289,20 @@ class FloorMap:
 # 내부 헬퍼
 # ─────────────────────────────────────────────
 
-def _make_type_plan(chapter: int, branch: str) -> List[str]:
+def _make_chapter_type_plan() -> List[str]:
     """
-    한 branch(14계층)의 타입 시퀀스 생성.
-    TYPE_CONSTRAINTS 제약을 만족하면서 나머지는 battle.
+    챕터 전체 노드 타입 시퀀스 생성 (좌/우 합산 기준).
+    TYPE_CONSTRAINTS 제약을 한 번만 적용하고 나머지는 battle.
+    반환된 리스트를 노드 생성 순서대로 pop(0)해서 사용.
     """
     plan: List[str] = []
 
-    # 제약 충족 타입 먼저 추가
     for ntype, (mn, mx) in TYPE_CONSTRAINTS.items():
         count = random.randint(mn, mx)
         plan.extend([ntype] * count)
 
-    # 나머지 슬롯 계산 (branch당 평균 노드 수 추정)
-    # 계층 1~13: 1~2개, 계층 14: 1~2개 → 평균 ~20개 슬롯
-    target_total = 20
+    # 전체 슬롯 추정: 14계층 × 평균 3개 = ~42개
+    target_total = 42
     remaining = max(0, target_total - len(plan))
     plan.extend(["battle"] * remaining)
 
