@@ -51,6 +51,15 @@ function refreshPlayer() {
 
 /** 왼쪽 패널 아이템 렌더링 (포션 클릭 사용 가능, 특수 표시만) */
 function refreshInventoryPanel(p) {
+    const panel = document.getElementById('player-inventory-panel');
+
+    // 전투 중에는 아이템 패널 숨김 (액션 메뉴에서 사용)
+    if (state.inBattle) {
+        if (panel) panel.style.display = 'none';
+        return;
+    }
+    if (panel) panel.style.display = '';
+
     const potionEl  = document.getElementById('player-potion-list');
     const specialEl = document.getElementById('player-special-list');
     if (!potionEl && !specialEl) return;
