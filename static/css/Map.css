@@ -152,6 +152,7 @@
     border: 2px solid transparent;
     flex-shrink: 0;
     z-index: 1;
+    transform: translateX(var(--node-x, 0px));
 }
 
 /* 방문 완료 */
@@ -174,7 +175,7 @@
 }
 
 .map-node.available:hover {
-    transform: scale(1.18);
+    transform: translateX(var(--node-x, 0px)) scale(1.18);
     z-index: 10;
     animation: none;
 }
@@ -418,16 +419,7 @@
     min-height: 72px;
 }
 
-/* ─── 노드 x_offset 분산 배치 ─── */
-.map-node {
-    transform: translateX(var(--node-x, 0px));
-}
-
-.map-node.available:hover {
-    transform: translateX(var(--node-x, 0px)) scale(1.18);
-    z-index: 10;
-    animation: none;
-}
+/* x_offset transform → 기본 .map-node 블록에 통합됨 */
 
 /* ─── 스크롤은 .map-scroll 하나만 ─── */
 .map-layer-row,

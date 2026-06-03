@@ -86,6 +86,7 @@ async function battleAction(action) {
         const r = await api('/battle/action', { action });
         if (!r.ok) {
             toast(r.error || 'action 실패', 'error');
+            showPlayerTurn();
             return;
         }
 
@@ -171,7 +172,7 @@ function _withTarget(action) {
     const enemies = state.battleState.enemies || [];
     if (enemies.length <= 1) return action;
     const idx = state.battleState.target_idx ?? 0;
-    return `${action}:t${idx}`;
+    return `${action}:${idx}`;
 }
 
 async function useSkill(skillName) {

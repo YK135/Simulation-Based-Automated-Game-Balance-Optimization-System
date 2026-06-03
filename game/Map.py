@@ -84,7 +84,7 @@ class Node:
         self.available = False
         self.on_path   = False
         # 자연스러운 위치 분산용 x offset (픽셀)
-        self.x_offset: int = random.randint(-36, 36)
+        self.x_offset: int = random.randint(-12, 12)
 
     def to_dict(self) -> Dict[str, Any]:
         return {

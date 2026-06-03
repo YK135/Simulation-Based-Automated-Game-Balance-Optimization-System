@@ -73,8 +73,16 @@ async function initMap(chapter = 1) {
 function refreshMap(mapState) {
     _mapState = mapState;
     renderMap(_mapState);
-    // 다음 선택 가능 노드로 자동 스크롤
-    setTimeout(scrollToAvailableNode, 80);
+    // 스크롤 + 연결선은 renderMap 내부 _redrawMapLater에서 처리
+}
+
+function _redrawMapLater(scroll, nodes, availSet) {
+    setTimeout(() => {
+        scrollToAvailableNode();
+        requestAnimationFrame(() => {
+            _drawConnections(scroll, nodes, availSet);
+        });
+    }, 80);
 }
 
 function scrollToAvailableNode() {
@@ -201,7 +209,8 @@ function renderMap(mapState) {
     }
 
     // ── SVG 연결선 (available 노드 → next_ids) ──
-    _drawConnections(scroll, nodes, availSet);
+    // 스크롤 이동 후 연결선 계산 (순서 보장)
+    _redrawMapLater(scroll, nodes, availSet);
 }
 
 /** 단일 노드 DOM 요소 생성 */
