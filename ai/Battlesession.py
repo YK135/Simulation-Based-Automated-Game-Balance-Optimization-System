@@ -21,6 +21,9 @@ import copy
 from random import randint, random as _random
 
 from Battle_Engine import (
+    apply_element_and_react, check_element_reaction, try_apply_element_aura_and_status,
+    _current_element,
+    SKILL_META as _SKILL_META_REF,
     EntitySnapshot, DamageCalc, execute_skill,
     SKILL_META, BattleEngine, Action, BattleResult, TurnLog
 )
@@ -252,6 +255,30 @@ class BattleSession:
 
             self.turn += 1
 
+            # ── 원소 상태이상 틱 (점화 데미지 등) ──
+            if hasattr(self.player, "tick_status_effects"):
+                for m in self.player.tick_status_effects():
+                    msgs.append(m)
+            # 점화로 사망
+            if self.player.hp <= 0:
+                self.done = True
+                self.winner = "enemy"
+                msgs.append(f"🔥 {self.player.name}이(가) 점화 데미지로 쓰러졌다...")
+                return self._state(messages=msgs, next_actor="done")
+
+            # ── 마비 행동 실패 ──
+            if hasattr(self.player, "is_paralyzed") and self.player.is_paralyzed():
+                msgs.append(f"⚡ {self.player.name}이(가) 마비로 행동에 실패했다!")
+                self.player.tick_buffs()
+                self.action_queue.pop(0)
+                self._accumulate_atb_all()
+                self._cleanup_dead_from_queue()
+                if not self.action_queue:
+                    self._build_round_queue()
+                    self._cleanup_dead_from_queue()
+                next_actor, next_idx = self._peek_next_actor()
+                return self._state(messages=msgs, next_actor=next_actor, acting_enemy_idx=next_idx)
+
             # 전사 패시브: 행동 3회마다 maxhp 10% 회복
             self._warrior_action_count += 1
             if (self.player.job == "전사" and
@@ -342,6 +369,38 @@ class BattleSession:
                 return self._state(messages=msgs,
                                    next_actor=next_actor,
                                    acting_enemy_idx=next_idx)
+
+            # ── 원소 상태이상 틱 (점화 데미지 등) ──
+            if hasattr(enemy, "tick_status_effects"):
+                for m in enemy.tick_status_effects():
+                    msgs.append(m)
+            # 점화로 사망
+            if enemy.hp <= 0:
+                self.action_queue.pop(0)
+                self._cleanup_dead_from_queue()
+                msgs.append(f"🔥 {enemy.name}이(가) 점화 데미지로 쓰러졌다!")
+                if not self._alive_enemies():
+                    self.done = True
+                    self.winner = "player"
+                    msgs.append("모든 적을 처치했다!")
+                    return self._state(messages=msgs, next_actor="done")
+                if not self.action_queue:
+                    self._build_round_queue()
+                    self._cleanup_dead_from_queue()
+                next_actor, next_idx = self._peek_next_actor()
+                return self._state(messages=msgs, next_actor=next_actor, acting_enemy_idx=next_idx)
+
+            # ── 적 마비 행동 실패 ──
+            if hasattr(enemy, "is_paralyzed") and enemy.is_paralyzed():
+                msgs.append(f"⚡ {enemy.name}이(가) 마비로 행동에 실패했다!")
+                self.action_queue.pop(0)
+                self._accumulate_atb_all()
+                self._cleanup_dead_from_queue()
+                if not self.action_queue:
+                    self._build_round_queue()
+                    self._cleanup_dead_from_queue()
+                next_actor, next_idx = self._peek_next_actor()
+                return self._state(messages=msgs, next_actor=next_actor, acting_enemy_idx=next_idx)
 
             # 적 행동
             self._single_enemy_action(enemy, msgs)
@@ -566,7 +625,10 @@ class BattleSession:
             if dodge:
                 msgs.append(f"{target.name}이(가) 공격을 회피했다!")
             else:
-                target.hp -= dmg
+                # ── 물리 원소 반응 (빙결+물리=깨짐 등) ──
+                actual = apply_element_and_react(self.player, target, "physical", actual, msgs)
+                target.hp -= actual
+                dmg = actual
                 tag = " (치명타!)" if crit else ""
                 msgs.append(f"{self.player.name} → 공격{tag} | {dmg} 데미지")
                 msgs.append(f"{target.name} HP: {max(0, int(target.hp))}")
@@ -658,6 +720,9 @@ class BattleSession:
                         if not dodge:
                             raw += int(r)
                     if raw > 0:
+                        # AoE 원소 반응
+                        elem = meta.get("element", "")
+                        raw = apply_element_and_react(self.player, tgt, elem, raw, msgs)
                         tgt.hp -= raw
                         msgs.append(f"  └ {tgt.name}에게 {raw} 데미지")
                         msgs.append(f"     {tgt.name} HP: {max(0, int(tgt.hp))}")
@@ -726,6 +791,11 @@ class BattleSession:
                         mp_after=self.player.mp,
                     ))
                 else:
+                    # ── 원소 반응 메시지 파싱 (execute_skill 반환값) ──
+                    if debuff_name and "|" in debuff_name:
+                        parts = [p for p in debuff_name.split("|") if p]
+                        extra_msgs = [p for p in parts[1:] if p]
+                        msgs.extend(extra_msgs)
                     target.hp -= dmg
                     msgs.append(f"{skill_name} 사용 → {dmg} 데미지")
                     msgs.append(f"{target.name} HP: {max(0, int(target.hp))}")
@@ -869,7 +939,11 @@ class BattleSession:
                 if dodge:
                     msgs.append(f"{self.player.name}이(가) {enemy.name}의 공격을 회피했다!")
                 else:
-                    self.player.hp -= dmg
+                    # ── 물리 원소 반응 (적 기본공격) ──
+                    atk_elem = getattr(enemy, "attack_element", "")
+                    actual = apply_element_and_react(enemy, self.player, atk_elem or "physical", actual, msgs)
+                    self.player.hp -= actual
+                    dmg = actual
                     tag = " (치명타!)" if crit else ""
                     msgs.append(f"{enemy.name} → 공격{tag} | {dmg} 데미지")
                     msgs.append(f"{self.player.name} HP: {max(0, int(self.player.hp))}")
@@ -1117,8 +1191,7 @@ class BattleSession:
 
     def _pack_status_list(self, entity) -> dict:
         """
-        엔티티의 buffs / debuffs 를 JSON 직렬화 가능 dict 리스트로.
-        UI는 stat / amount / turns / name 4필드를 사용.
+        엔티티의 buffs / debuffs / 원소 상태 를 JSON 직렬화 가능 dict로.
         """
         return {
             "buffs": [
@@ -1130,6 +1203,12 @@ class BattleSession:
                 {"stat": d.stat, "amount": round(d.amount, 3),
                  "turns": d.turns, "name": d.name}
                 for d in getattr(entity, "debuffs", [])
+            ],
+            "element_aura": _current_element(entity),
+            "element_queue": list(getattr(entity, "element_queue", [])),
+            "status_effects": [
+                {"type": s.effect_type, "name": s.name, "turns": s.turns}
+                for s in getattr(entity, "status_effects", [])
             ],
         }
 
@@ -1143,6 +1222,11 @@ class BattleSession:
         # 플레이어 / 적 상태이상
         p_status = self._pack_status_list(self.player)
         e_status = self._pack_status_list(e)
+        # 원소 상태 (UI 연동)
+        player_element_aura   = p_status.get("element_aura", "")
+        player_status_effects = p_status.get("status_effects", [])
+        enemy_element_aura    = e_status.get("element_aura", "")
+        enemy_status_effects  = e_status.get("status_effects", [])
 
         # 모든 적의 정보 — 다대일용 (UI는 이 배열을 받아서 슬롯 3·4·5에 매핑)
         # 각 적도 본인의 effective_* + buffs/debuffs 포함
@@ -1175,6 +1259,8 @@ class BattleSession:
                 # ── 상태이상 ──
                 "buffs":            en_status["buffs"],
                 "debuffs":          en_status["debuffs"],
+                "element_aura":     en_status["element_aura"],
+                "status_effects":   en_status["status_effects"],
                 "difficulty":       en_diff,
                 "difficulty_label": self._DIFF_LABEL.get(en_diff, en_diff),
             })
@@ -1195,6 +1281,10 @@ class BattleSession:
             # ── 플레이어 상태이상 ──
             "player_buffs":   p_status["buffs"],
             "player_debuffs": p_status["debuffs"],
+            "player_element_aura":   player_element_aura,
+            "player_status_effects": player_status_effects,
+            "enemy_element_aura":    enemy_element_aura,
+            "enemy_status_effects":  enemy_status_effects,
             # ── 1대1 호환 (단수) — 기존 UI는 이 필드들 사용 ──
             "enemy_hp":   max(0.0, round(e.hp, 1)),
             "enemy_maxhp": e.maxhp,

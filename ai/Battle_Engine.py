@@ -50,6 +50,26 @@ class Buff:
 
 
 # ────────────────────────────────────────────
+# StatusEffect (원소 기반 행동 제어형 상태이상)
+# ────────────────────────────────────────────
+
+@dataclass
+class StatusEffect:
+    """
+    원소 기반 상태이상.
+    effect_type: "ignite" | "frostbite" | "paralyze"
+    turns   : 남은 지속 행동 수
+    dot_rate: 점화 데미지 비율 (기본 maxhp 4%)
+    fail_prob: 마비 행동 실패 확률 (기본 40%)
+    """
+    effect_type: str
+    turns: int
+    name: str
+    dot_rate: float = 0.04
+    fail_prob: int  = 40
+
+
+# ────────────────────────────────────────────
 # EntitySnapshot
 # ────────────────────────────────────────────
 
@@ -107,6 +127,26 @@ class EntitySnapshot:
     #             (DamageCalc.physical 에서 처리)
     job: str = ""
 
+    # ── 원소 시스템 ──
+    # element_queue: 원소 부착 큐 (최대 2개)
+    # status_effects: 실제 상태이상 리스트 (StatusEffect)
+    # attack_element: 몬스터 기본공격 원소
+    element_queue: list = field(default_factory=list)
+    status_effects: list = field(default_factory=list)
+    attack_element: str = ""
+
+    # 하위 호환 property
+    @property
+    def element_aura(self) -> str:
+        return self.element_queue[-1] if self.element_queue else ""
+
+    @element_aura.setter
+    def element_aura(self, val: str):
+        if val:
+            self.element_queue = [val]
+        else:
+            self.element_queue.clear()
+
     def effective_stg(self) -> float:
         debuff_r = sum(d.amount for d in self.debuffs if d.stat == "stg")
         buff_r = sum(b.amount for b in self.buffs if b.stat == "stg")
@@ -124,7 +164,11 @@ class EntitySnapshot:
     def effective_spd(self) -> float:
         debuff_r = sum(d.amount for d in self.debuffs if d.stat == "spd")
         buff_r = sum(b.amount for b in self.buffs if b.stat == "spd")
-        return max(1.0, self.spd * (1 - debuff_r + buff_r))
+        base = max(1.0, self.spd * (1 - debuff_r + buff_r))
+        # 동상: ATB 50% 감소
+        if any(e.effect_type == "frostbite" for e in self.status_effects):
+            base *= 0.5
+        return max(1.0, base)
 
     def mp_cost_multiplier(self) -> float:
         # 기존 buff 기반 효율 (한정 시간 효과)
@@ -227,6 +271,47 @@ class EntitySnapshot:
                 alive.append(b)
         self.buffs = alive
 
+    # ── 원소 상태이상 ──
+    def apply_status_effect(self, effect: "StatusEffect") -> None:
+        """상태이상 적용. 같은 타입은 남은 턴 갱신(중복 허용X)."""
+        for existing in self.status_effects:
+            if existing.effect_type == effect.effect_type:
+                existing.turns = max(existing.turns, effect.turns)
+                return
+        import copy as _copy
+        self.status_effects.append(_copy.copy(effect))
+
+    def tick_status_effects(self) -> list:
+        """
+        행동자 턴 시작 시 호출.
+        점화: 이 턴 데미지 적용.
+        동상/마비: 메시지만 반환 (실제 효과는 effective_spd/is_paralyzed에서).
+        반환: 메시지 리스트 (UI 표시용)
+        """
+        msgs = []
+        alive = []
+        for eff in self.status_effects:
+            if eff.effect_type == "ignite":
+                dmg = max(1, int(self.maxhp * eff.dot_rate))
+                self.hp = max(0.0, self.hp - dmg)
+                msgs.append(f"🔥 [{self.name}] 점화 -{dmg} HP")
+            elif eff.effect_type == "frostbite":
+                msgs.append(f"❄ [{self.name}] 동상 — SPD 50% ({eff.turns}T 남음)")
+            elif eff.effect_type == "paralyze":
+                msgs.append(f"⚡ [{self.name}] 마비 중 ({eff.turns}T 남음)")
+            if eff.turns > 1:
+                eff.turns -= 1
+                alive.append(eff)
+        self.status_effects = alive
+        return msgs
+
+    def is_paralyzed(self) -> bool:
+        """마비 행동 실패 판정. 호출 시 확률 롤."""
+        for eff in self.status_effects:
+            if eff.effect_type == "paralyze":
+                return randint(1, 100) <= eff.fail_prob
+        return False
+
     @classmethod
     def from_player(cls, player) -> "EntitySnapshot":
         skills = []
@@ -254,7 +339,7 @@ class EntitySnapshot:
 
     @classmethod
     def from_enemy(cls, enemy) -> "EntitySnapshot":
-        return cls(
+        snap = cls(
             name=enemy.name,
             hp=enemy.hp,
             maxhp=getattr(enemy, "maxhp", enemy.hp),
@@ -276,7 +361,13 @@ class EntitySnapshot:
             first_strike=getattr(enemy, "first_strike", False),
             first_attack_bonus=getattr(enemy, "first_attack_bonus", 1.0),
             enemy_type=getattr(enemy, "enemy_type", ""),
+            attack_element=getattr(enemy, "attack_element", ""),
         )
+        # 원소 슬라임 등: 전투 시작 시 초기 원소 큐 설정
+        init_q = getattr(enemy, "init_element_queue", [])
+        if init_q:
+            snap.element_queue = list(init_q)
+        return snap
 
 
 # ────────────────────────────────────────────
@@ -590,28 +681,30 @@ SKILL_META = {
     },
 
     "파이어볼1": {
-        "mp": 10, "mult": 1.50, "type": "magical", "hits": 1
+        "mp": 10, "mult": 1.50, "type": "magical", "hits": 1, "element": "fire"
     },
     "파이어볼2": {
         # 스펙: mult 1.55 (후반 화력 억제)
-        "mp": 16, "mult": 1.55, "type": "magical", "hits": 1
+        "mp": 16, "mult": 1.55, "type": "magical", "hits": 1, "element": "fire"
     },
     "아이스볼릿1": {
         "mp": 11, "mult": 1.25, "type": "magical", "hits": 1,
+        "element": "ice",
         "debuff_stat": "spd", "debuff_chance": 0.3,
         "debuff_amount": (0.10, 0.15), "debuff_turns": (2, 3)
     },
     "아이스볼릿2": {
         "mp": 17, "mult": 1.45, "type": "magical", "hits": 1,
+        "element": "ice",
         "debuff_stat": "spd", "debuff_chance": 0.5,
         "debuff_amount": (0.15, 0.20), "debuff_turns": (2, 3)
     },
     "라이트닝1": {
-        "mp": 12, "mult": 1.55, "type": "magical", "hits": 1
+        "mp": 12, "mult": 1.55, "type": "magical", "hits": 1, "element": "lightning"
     },
     "라이트닝2": {
         # 스펙: mult 1.60
-        "mp": 19, "mult": 1.60, "type": "magical", "hits": 1
+        "mp": 19, "mult": 1.60, "type": "magical", "hits": 1, "element": "lightning"
     },
     "힐1": {
         "mp": 12, "type": "heal",
@@ -712,6 +805,124 @@ SKILL_META = {
 }
 
 
+
+# ────────────────────────────────────────────
+# 원소 시스템 — element_queue 기반
+# ────────────────────────────────────────────
+
+# 반응 테이블: (큐[0], 큐[1]) → 반응명
+REACTIONS = {
+    ("ice",       "fire"):      "melt",
+    ("fire",      "ice"):       "melt",
+    ("fire",      "lightning"): "overload",
+    ("lightning", "fire"):      "overload",
+}
+
+REACTION_EFFECTS = {
+    "melt":     {"bonus_mult": 1.5, "label": "💧 융해"},
+    "shatter":  {"bonus_mult": 1.2, "label": "💎 파쇄"},
+    "overload": {"bonus_mult": 1.3, "label": "⚡ 과부하"},
+}
+
+# 원소 → 상태이상
+ELEMENT_STATUS = {
+    "fire":      ("ignite",    30),
+    "ice":       ("frostbite", 35),
+    "lightning": ("paralyze",  25),
+}
+ELEMENT_STATUS_TURNS = {"ignite": 3, "frostbite": 2, "paralyze": 3}
+ELEMENT_STATUS_LABEL = {"ignite": "🔥 화상", "frostbite": "❄ 동상", "paralyze": "⚡ 마비"}
+SAME_ELEMENT_STATUS_BONUS = {"fire": 15, "ice": 15, "lightning": 15}
+
+
+def _current_element(entity) -> str:
+    """큐의 최신 원소 반환."""
+    q = getattr(entity, "element_queue", [])
+    return q[-1] if q else ""
+
+
+def apply_element_and_react(
+    attacker,
+    defender,
+    attack_element: str,
+    base_damage: int,
+    messages: list,
+) -> int:
+    """
+    원소 큐 업데이트 + 반응 판정 + 상태이상 처리.
+    반환: 최종 데미지
+    """
+    q = getattr(defender, "element_queue", [])
+
+    # physical: 파쇄 체크만 (큐에 추가 안 함)
+    if attack_element == "physical" or not attack_element:
+        if q and q[-1] == "ice":
+            eff = REACTION_EFFECTS["shatter"]
+            bonus = int(base_damage * (eff["bonus_mult"] - 1.0))
+            defender.element_queue.clear()
+            messages.append(f"{eff['label']} 발동! +{bonus} 추가 데미지")
+            messages.append(f"{defender.name}의 원소 큐가 초기화되었다.")
+            return base_damage + bonus
+        return base_damage
+
+    status_bonus = 0
+
+    if len(q) == 0:
+        defender.element_queue.append(attack_element)
+        messages.append(f"{defender.name}에게 {attack_element} 원소가 부착되었다.")
+
+    elif len(q) == 1:
+        existing = q[0]
+        if existing == attack_element:
+            status_bonus = SAME_ELEMENT_STATUS_BONUS.get(attack_element, 0)
+            messages.append(f"{defender.name}에게 {attack_element} 원소 중첩! 상태이상 확률 ↑")
+            defender.element_queue = [attack_element]
+        else:
+            defender.element_queue.append(attack_element)
+            key = (existing, attack_element)
+            reaction_name = REACTIONS.get(key)
+            if reaction_name:
+                eff = REACTION_EFFECTS[reaction_name]
+                bonus = int(base_damage * (eff["bonus_mult"] - 1.0))
+                defender.element_queue.clear()
+                messages.append(f"{eff['label']} 반응 발동!")
+                messages.append(f"{defender.name}에게 추가 {bonus} 피해!")
+                messages.append(f"{defender.name}의 원소 큐가 초기화되었다.")
+                base_damage += bonus
+            else:
+                defender.element_queue = [attack_element]
+                messages.append(f"{defender.name}에게 {attack_element} 원소가 부착되었다.")
+
+    # 상태이상 부여
+    entry = ELEMENT_STATUS.get(attack_element)
+    if entry:
+        effect_type, base_prob = entry
+        prob = min(95, base_prob + status_bonus)
+        if randint(1, 100) <= prob:
+            turns = ELEMENT_STATUS_TURNS[effect_type]
+            eff_obj = StatusEffect(effect_type=effect_type, turns=turns, name=attack_element)
+            if hasattr(defender, "apply_status_effect"):
+                defender.apply_status_effect(eff_obj)
+            label = ELEMENT_STATUS_LABEL[effect_type]
+            messages.append(f"{defender.name}에게 {label} 상태가 부여되었다. ({turns}T)")
+
+    return base_damage
+
+
+# 하위 호환 래퍼
+def check_element_reaction(defender, attack_element: str, base_damage: int, messages: list) -> int:
+    return apply_element_and_react(None, defender, attack_element, base_damage, messages)
+
+
+def try_apply_element_aura_and_status(attacker, defender, element: str, messages: list) -> None:
+    if element:
+        apply_element_and_react(attacker, defender, element, 0, messages)
+
+
+# 구버전 호환
+REACTION_TABLE = {}
+
+
 def execute_skill(
     skill_name: str,
     attacker: EntitySnapshot,
@@ -769,13 +980,18 @@ def execute_skill(
     if stype == "tank_attack":
         damage = (attacker.effective_arm() * meta["arm_mult"]) + (attacker.maxhp * meta["hp_mult"])
         damage *= uniform(0.9, 1.1)
-        return int(damage), False, ""
+        _d = int(damage); _em=[]
+        _d = apply_element_and_react(attacker, defender, meta.get("element",""), _d, _em)
+        return _d, False, ("|".join(_em)) if _em else ""
 
     if stype == "counter":
         damage = (attacker.last_damage_taken * meta["counter_mult"]) + (attacker.effective_arm() * meta["arm_mult"])
         damage = min(damage, attacker.maxhp * meta["cap"])
         damage *= uniform(0.9, 1.1)
-        return int(damage), False, ""
+        _d = int(damage); _em=[]
+        _d = apply_element_and_react(attacker, defender, meta.get("element",""), _d, _em)
+        return _d, False, ("|".join(_em)) if _em else ""
+
 
     if stype == "multi_hit":
         total = 0
@@ -808,7 +1024,12 @@ def execute_skill(
             )
             total += int(raw * (dmg_decay ** i))
 
-        return total, False, ""
+        # multi_hit 원소 반응
+        _elem = meta.get("element", "")
+        _msgs: list = []
+        if total > 0 or _elem:
+            total = apply_element_and_react(attacker, defender, _elem, total, _msgs)
+        return total, False, ("|".join(_msgs)) if _msgs else ""
 
     total = 0
     hits = meta.get("hits", 1)
@@ -858,9 +1079,14 @@ def execute_skill(
             turns=turns,
             name=skill_name,
         ))
-        return total, False, skill_name
 
-    return total, False, ""
+    # ── 원소 큐 + 반응 + 상태이상 ──
+    element = meta.get("element", "")
+    extra_msgs: list = []
+    if total > 0 or element:
+        total = apply_element_and_react(attacker, defender, element, total, extra_msgs)
+    info = skill_name if extra_msgs else (skill_name if "debuff_stat" in meta else "")
+    return total, False, (info + "|" + "|".join(extra_msgs)) if extra_msgs else info
 
 
 # ────────────────────────────────────────────

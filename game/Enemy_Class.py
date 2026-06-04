@@ -26,7 +26,8 @@ class Unit:
                  physical_resist=1.0, magical_resist=1.0,
                  dodge_bonus=0.0, dodge_penalty_per_extra_hit=0.10,
                  first_strike=False, first_attack_bonus=1.0,
-                 enemy_type=""):
+                 enemy_type="",
+                 attack_element="", init_element_queue=None):
         self.name          = name
         self.lv            = lv
         self.hp            = hp
@@ -51,6 +52,9 @@ class Unit:
         self.first_attack_bonus = first_attack_bonus
         self.has_attacked    = False
         self.enemy_type      = enemy_type or name
+        # 원소 시스템
+        self.attack_element      = attack_element        # 기본 공격 원소
+        self.init_element_queue  = init_element_queue or []  # 전투 시작 초기 큐
 
     def exp_reward(self, player_maxexp: int) -> int:
         ratio = {"상": 0.8, "중": 0.55, "하": 0.45}.get(self.grade, 0.34)
@@ -167,6 +171,91 @@ def Make_Slime(player_lv: int, grade: str) -> Unit:
         physical_resist = 0.65,
         magical_resist  = 1.10,
         enemy_type = "슬라임",
+    )
+    return _apply_grade(unit, grade)
+
+
+
+def Make_FireSlime(player_lv: int, grade: str) -> Unit:
+    """
+    화염 슬라임: 화염 원소 특화 (Lv4+ 등장)
+    - 기본 공격: fire 원소 부여
+    - 전투 시작 시 fire 큐 보유 → 빙결 공격에 즉시 융해 반응
+    - 물리 저항 / 빙결 약점
+    """
+    lv = max(1, player_lv)
+    unit = Unit(
+        name  = "화염 슬라임",
+        lv    = lv,
+        hp    = int(75  + 16 * (lv - 1)),
+        mp    = int(20  + lv * 3),
+        stg   = round(4   + 1.4 * (lv - 1), 1),
+        arm   = round(3   + 0.8 * (lv - 1), 1),
+        sparm = round(4   + 0.9 * (lv - 1), 1),
+        sp    = round(8   + 1.5 * (lv - 1), 1),
+        spd   = round(7   + 0.5 * (lv - 1), 1),
+        luc   = round(4   + 0.4 * (lv - 1), 1),
+        physical_resist     = 0.65,
+        magical_resist      = 1.10,
+        enemy_type          = "화염 슬라임",
+        attack_element      = "fire",
+        init_element_queue  = ["fire"],
+    )
+    return _apply_grade(unit, grade)
+
+
+def Make_IceSlime(player_lv: int, grade: str) -> Unit:
+    """
+    빙결 슬라임: 빙결 원소 특화 (Lv4+ 등장)
+    - 기본 공격: ice 원소 부여
+    - 전투 시작 시 ice 큐 보유 → 화염 공격에 즉시 융해 / 물리 공격에 파쇄
+    - 물리 저항 / 화염 약점
+    """
+    lv = max(1, player_lv)
+    unit = Unit(
+        name  = "빙결 슬라임",
+        lv    = lv,
+        hp    = int(85  + 19 * (lv - 1)),
+        mp    = int(20  + lv * 3),
+        stg   = round(3   + 1.3 * (lv - 1), 1),
+        arm   = round(4   + 0.9 * (lv - 1), 1),
+        sparm = round(7   + 1.2 * (lv - 1), 1),
+        sp    = round(6   + 1.1 * (lv - 1), 1),
+        spd   = round(5   + 0.3 * (lv - 1), 1),
+        luc   = round(3   + 0.3 * (lv - 1), 1),
+        physical_resist     = 0.65,
+        magical_resist      = 1.10,
+        enemy_type          = "빙결 슬라임",
+        attack_element      = "ice",
+        init_element_queue  = ["ice"],
+    )
+    return _apply_grade(unit, grade)
+
+
+def Make_LightningSlime(player_lv: int, grade: str) -> Unit:
+    """
+    번개 슬라임: 번개 원소 특화 (Lv4+ 등장)
+    - 기본 공격: lightning 원소 부여
+    - 전투 시작 시 lightning 큐 보유 → 화염 공격에 즉시 과부하
+    - 물리 저항 / 화염 약점
+    """
+    lv = max(1, player_lv)
+    unit = Unit(
+        name  = "번개 슬라임",
+        lv    = lv,
+        hp    = int(70  + 15 * (lv - 1)),
+        mp    = int(20  + lv * 3),
+        stg   = round(5   + 1.6 * (lv - 1), 1),
+        arm   = round(3   + 0.7 * (lv - 1), 1),
+        sparm = round(4   + 0.8 * (lv - 1), 1),
+        sp    = round(7   + 1.3 * (lv - 1), 1),
+        spd   = round(9   + 0.6 * (lv - 1), 1),
+        luc   = round(5   + 0.5 * (lv - 1), 1),
+        physical_resist     = 0.65,
+        magical_resist      = 1.10,
+        enemy_type          = "번개 슬라임",
+        attack_element      = "lightning",
+        init_element_queue  = ["lightning"],
     )
     return _apply_grade(unit, grade)
 
@@ -303,6 +392,7 @@ def Make_Random_Monster(player_lv: int) -> Unit:
 
     pool = [Make_Goblin, Make_Bat]
     if player_lv >= 3:  pool.append(Make_Slime)
+    if player_lv >= 4:  pool.extend([Make_FireSlime, Make_IceSlime, Make_LightningSlime])
     if player_lv >= 5:  pool.append(Make_Golem)
     if player_lv >= 6:  pool.append(Make_Ghost)
     if player_lv >= 6:  pool.append(Make_Assassin)

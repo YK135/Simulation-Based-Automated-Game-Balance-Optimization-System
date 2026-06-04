@@ -470,3 +470,26 @@ img.combatant-art {
 .cb-row.atb-row.enemy .cb-text {
     color: rgba(251, 146, 60, 0.9);
 }
+/* ── 원소 부착 이름 색상 ── */
+.element-fire {
+    color: #ff5a3c;
+    text-shadow: 0 0 8px rgba(255, 90, 60, 0.5);
+}
+
+.element-ice {
+    color: #5ecbff;
+    text-shadow: 0 0 8px rgba(94, 203, 255, 0.5);
+}
+
+.element-lightning {
+    color: #b47cff;
+    text-shadow: 0 0 8px rgba(180, 124, 255, 0.5);
+}
+
+/* ── 상태이상 이모지 ── */
+.name-status-icons {
+    margin-left: 6px;
+    font-size: 0.85em;
+    vertical-align: middle;
+    opacity: 0.95;
+}

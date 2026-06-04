@@ -9,6 +9,48 @@
    - showPlayerTurn / showEnemyTurn: ATB 차례 시각화
    ═══════════════════════════════════════════════════════════ */
 
+/** 원소 부착 → 이름 색상 class 부여 */
+function applyElementNameClass(el, aura) {
+    if (!el) return;
+    el.classList.remove('element-fire', 'element-ice', 'element-lightning');
+    if (aura === 'fire')      el.classList.add('element-fire');
+    else if (aura === 'ice')  el.classList.add('element-ice');
+    else if (aura === 'lightning') el.classList.add('element-lightning');
+}
+ 
+/** 버프/디버프/상태이상 이모지 반환
+ *  ※ 원소 부착(element_aura/element_queue)만으로는 이모지 미표시
+ *     색상은 applyElementNameClass가 담당
+ *     이모지는 실제 상태이상이 걸렸을 때만 표시
+ */
+function statusEmojiList(entity) {
+    if (!entity) return '';
+    const emojis = [];
+
+    // 원소 상태이상 (실제 StatusEffect만)
+    (entity.status_effects || []).forEach(e => {
+        if (e.type === 'ignite')         emojis.push('🔥');
+        else if (e.type === 'frostbite') emojis.push('❄');
+        else if (e.type === 'paralyze')  emojis.push('⚡');
+    });
+
+    // 일반 디버프/버프
+    if ((entity.debuffs || []).length > 0) emojis.push('↓');
+    if ((entity.buffs   || []).length > 0) emojis.push('↑');
+
+    return [...new Set(emojis)].join(' ');
+}
+ 
+/** 이름 + 이모지 한번에 렌더 */
+function renderNameWithStatus(el, entity) {
+    if (!el) return;
+    applyElementNameClass(el, entity.element_aura || '');
+    el.innerHTML = `
+        <span class="name-text">${entity.name}</span>
+        <span class="name-status-icons">${statusEmojiList(entity)}</span>
+    `;
+}
+
 function refreshBattle(bs) {
     state.battleState = bs;
     state.inBattle = !bs.done && (bs.player_hp > 0);
@@ -91,7 +133,13 @@ function refreshBattle(bs) {
     // 이모지 폴백 동기화 (이미지 없으면 이게 보임)
     const playerArtIconEl = document.getElementById('player-combatant-art');
     document.getElementById('player-combatant-art').textContent = JOB_ICONS[p.job] || '?';
-    document.getElementById('player-combatant-name').textContent = p.name;
+    renderNameWithStatus(document.getElementById('player-combatant-name'), {
+    name: p.name,
+    element_aura: bs.player_element_aura || p.element_aura || '',
+    status_effects: bs.player_status_effects || [],
+    buffs: bs.player_buffs || [],
+    debuffs: bs.player_debuffs || []
+    });
     document.getElementById('player-combatant-meta').textContent = `LV ${p.lv} ${p.job}`;
     document.getElementById('player-cb-hp').style.width = (bs.player_hp/bs.player_maxhp*100) + '%';
     document.getElementById('player-cb-hp-text').textContent = `${Math.round(bs.player_hp)}/${bs.player_maxhp}`;
@@ -155,7 +203,16 @@ function refreshBattle(bs) {
         // 이름/레벨
         const nameEl = document.getElementById(`enemy-name${enemyIdSuffix(i)}`);
         const metaEl = document.getElementById(`enemy-meta${enemyIdSuffix(i)}`);
-        if (nameEl) nameEl.textContent = en.name + (en.alive ? '' : ' ✖');
+        if (nameEl) {
+            renderNameWithStatus(nameEl, {
+                ...en,
+                name: en.name + (en.alive ? '' : ' ✖'),
+                element_aura: en.element_aura || '',
+                status_effects: en.status_effects || [],
+                buffs: en.buffs || [],
+                debuffs: en.debuffs || []
+            });
+        }
         if (metaEl) metaEl.textContent = `LV ${en.lv ?? '--'} ${en.difficulty_label ? '[' + en.difficulty_label + ']' : ''}`;
 
 
