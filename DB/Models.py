@@ -26,6 +26,7 @@ class User(Base):
 
     # 관계: User 1 ─ N Battle
     battles = relationship("Battle", back_populates="user", cascade="all, delete-orphan")
+    runs = relationship("Run", back_populates="user", cascade="all, delete-orphan")
 
     # 인덱스: 이메일로 자주 조회
     __table_args__ = (
@@ -118,35 +119,31 @@ class Battle(Base):
     def __repr__(self):
         return f"<Battle id={self.id} user={self.user_id} {self.result} turns={self.turns}>"
 
-# ═══════════════════════════════════════════════════════════
-# runs 테이블
-# ───────────────────────────────────────────────────────────
-# 플레이어의 런(챕터 시작~보스 클리어 or 사망) 1회 = 1 레코드.
-# ═══════════════════════════════════════════════════════════
 class Run(Base):
     __tablename__ = "runs"
-
+ 
     id           = Column(Integer, primary_key=True, autoincrement=True)
     user_id      = Column(Integer, ForeignKey("users.id"), nullable=False)
     created_at   = Column(DateTime, default=datetime.utcnow, nullable=False)
-
+ 
     chapter      = Column(Integer, nullable=False, default=1)   # 1 or 2
     player_job   = Column(String(16), nullable=False)
     player_lv_start = Column(Integer, nullable=False, default=1)
     player_lv_end   = Column(Integer, nullable=True)
-
+ 
     result       = Column(String(16), nullable=True)  # 'clear' | 'dead' | 'abandon'
     total_nodes  = Column(Integer, default=0)          # 방문한 노드 수
     boss_cleared = Column(Boolean, default=False)
-
+ 
     # 관계
     choices = relationship("NodeChoice", back_populates="run", cascade="all, delete-orphan")
-
+    user = relationship("User", back_populates="runs")
+ 
     __table_args__ = (
         Index("ix_runs_user_id", "user_id"),
         Index("ix_runs_chapter_result", "chapter", "result"),
     )
-
+ 
     def to_dict(self) -> dict:
         return {
             "id":              self.id,
@@ -160,11 +157,11 @@ class Run(Base):
             "boss_cleared":    self.boss_cleared,
             "created_at":      self.created_at.isoformat() if self.created_at else None,
         }
-
+ 
     def __repr__(self):
         return f"<Run id={self.id} user={self.user_id} ch={self.chapter} {self.result}>"
-
-
+ 
+ 
 # ═══════════════════════════════════════════════════════════
 # node_choices 테이블
 # ───────────────────────────────────────────────────────────
@@ -173,32 +170,33 @@ class Run(Base):
 # ═══════════════════════════════════════════════════════════
 class NodeChoice(Base):
     __tablename__ = "node_choices"
-
+ 
     id           = Column(Integer, primary_key=True, autoincrement=True)
     run_id       = Column(Integer, ForeignKey("runs.id"), nullable=False)
     created_at   = Column(DateTime, default=datetime.utcnow, nullable=False)
-
+ 
     turn         = Column(Integer, nullable=False)        # 몇 번째 선택 (1부터)
     layer        = Column(Integer, nullable=False)        # 맵의 층 번호
     node_id      = Column(String(16), nullable=False)     # "3_1" 형식
     node_type    = Column(String(16), nullable=False)     # "battle" | "rest" | ...
-
+ 
     # 선택 당시 플레이어 상태 스냅샷 (분석용)
     player_hp_ratio  = Column(Float, nullable=True)       # hp / maxhp
     player_lv        = Column(Integer, nullable=True)
-
+ 
     # 전투 노드일 때 추가 정보
     battle_result    = Column(String(16), nullable=True)  # 'win' | 'lose' | 'escape'
     battle_turns     = Column(Integer, nullable=True)
-
+    extra_data       = Column(Text, nullable=True)  # JSON: node_type/grades/stat_scale 등
+ 
     # 관계
     run = relationship("Run", back_populates="choices")
-
+ 
     __table_args__ = (
         Index("ix_nc_run_id", "run_id"),
         Index("ix_nc_node_type", "node_type"),
     )
-
+ 
     def to_dict(self) -> dict:
         return {
             "id":             self.id,
@@ -211,15 +209,8 @@ class NodeChoice(Base):
             "player_lv":      self.player_lv,
             "battle_result":  self.battle_result,
             "battle_turns":   self.battle_turns,
+            "extra_data":     self.extra_data,
         }
-
+ 
     def __repr__(self):
         return f"<NodeChoice run={self.run_id} turn={self.turn} {self.node_type}>"
-
-
-# ─────────────────────────────────────────────
-# User 클래스에 추가할 relationship (Models.py의 User 클래스 내부에 넣기)
-# ─────────────────────────────────────────────
-# runs = relationship("Run", back_populates="user", cascade="all, delete-orphan")
-# Run 클래스에도 추가:
-# user = relationship("User", back_populates="runs")

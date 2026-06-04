@@ -55,7 +55,6 @@ async function confirmInvSwap() {
         if (!r.ok) { toast(r.error || '교체 실패', 'error'); return; }
         state.player = r.player;
         if (typeof refreshPlayer === 'function') refreshPlayer();
-        if (typeof refreshExploreInfo === 'function') refreshExploreInfo();
         toast(r.message || '교체 완료', 'ok');
         closeInvSwap();
     } catch (e) {

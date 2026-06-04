@@ -309,7 +309,7 @@ class BalanceHook:
 
     # ── 1. 전투 전: 몬스터 생성 ──────────────
 
-    def get_enemy(self, enemy_type: str = "고블린") -> EntitySnapshot:
+    def get_enemy(self, enemy_type: str = "고블린", difficulty: str = None) -> EntitySnapshot:
         """AI 밸런싱된 몬스터 반환. 시뮬 미완료 시 기본 스탯 사용."""
 
         # 레벨업 감지 → 캐시 무효화 + 재시뮬
@@ -327,7 +327,8 @@ class BalanceHook:
             return self._make_fallback(enemy_type)
 
         # 가중치 기반 난이도 선택
-        difficulty = self._pick_difficulty()
+        if difficulty is None:
+            difficulty = self._pick_difficulty()
         self._last_difficulty = difficulty
         enemy_snap, sim_result = monsters[difficulty]
 

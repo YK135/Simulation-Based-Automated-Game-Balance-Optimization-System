@@ -52,6 +52,59 @@ _ITEM_DROP_POOL = [
     ("HP_L_potion", 1), ("MP_L_potion", 1),
 ]
 
+# ─────────────────────────────────────────────
+# 전투 노드 생성 규칙
+# ─────────────────────────────────────────────
+# 일반 전투: 1~3마리, 3마리일 때 hard 금지
+# 엘리트:    1~2마리, hard 고정
+# 스탯 보정:
+#   일반 1마리: 100%  / 2마리: 90%  / 3마리: 80%
+#   엘리트 1마리: 100% / 2마리: 90%
+
+NORMAL_GRADE_POOL  = {"하": 0.35, "중": 0.45, "상": 0.20}
+NORMAL_GRADE_3     = {"하": 0.45, "중": 0.55}          # 3마리: hard 금지
+ELITE_GRADE        = {"상": 1.0}                        # 엘리트: hard 고정
+STAT_SCALE         = {1: 1.00, 2: 0.90, 3: 0.80}
+ELITE_STAT_SCALE   = {1: 1.00, 2: 0.90}
+
+
+def _pick_grade(pool: dict) -> str:
+    """가중치 기반 난이도 선택."""
+    from random import choices as _rc
+    keys = list(pool.keys())
+    wts  = list(pool.values())
+    return _rc(keys, weights=wts, k=1)[0]
+
+
+def _apply_stat_scale(enemies: list, scale: float) -> None:
+    """다대일 스탯 보정 적용 (인플레이스)."""
+    if scale >= 1.0:
+        return
+    for e in enemies:
+        for attr in ("hp", "maxhp", "stg", "sp", "arm", "sparm"):
+            if hasattr(e, attr):
+                setattr(e, attr, round(getattr(e, attr) * scale, 1))
+
+
+# 난이도 한글 → 내부 키 매핑 (BalanceHook 캐시 키)
+_GRADE_TO_KEY = {"하": "easy", "중": "normal", "상": "hard"}
+
+
+def _make_enemies(hook, n: int, grade_pool: dict) -> list:
+    """n마리 적 생성 (각자 독립 grade 선택, BalanceHook 캐시에서 조회)."""
+    enemies = []
+    grades  = []
+    for _ in range(n):
+        enemy_type = hook.pick_random_enemy_type()
+        grade      = _pick_grade(grade_pool)
+        diff_key   = _GRADE_TO_KEY.get(grade, "normal")
+        # difficulty 파라미터로 원하는 난이도 직접 지정
+        snap       = hook.get_enemy(enemy_type, difficulty=diff_key)
+        unit       = hook.make_battle_unit(snap)
+        enemies.append(unit)
+        grades.append(grade)
+    return enemies, grades
+
 
 def _event_item_found(gs: dict) -> dict:
     """이벤트: 아이템 발견."""
@@ -85,11 +138,12 @@ def _event_item_found(gs: dict) -> dict:
 # ─────────────────────────────────────────────
 
 def _log_node_choice(gs: dict, node, battle_result: str = None,
-                     battle_turns: int = None) -> None:
+                     battle_turns: int = None, extra: dict = None) -> None:
     """노드 선택을 DB에 기록."""
     try:
         from DB import get_session as db_session
         from DB.Models import NodeChoice
+        import json as _json
 
         run_id = gs.get("run_id")
         if not run_id:
@@ -107,6 +161,7 @@ def _log_node_choice(gs: dict, node, battle_result: str = None,
                 player_lv      = player.lv,
                 battle_result  = battle_result,
                 battle_turns   = battle_turns,
+                extra_data     = _json.dumps(extra or {}, ensure_ascii=False),
             )
             db.add(nc)
     except Exception as e:
@@ -263,43 +318,56 @@ def map_choose():
                 "battle_state": state,
             })
 
-        # 다대일 확률 결정 (battle: 1~3마리, elite: 1마리 고정)
-        if node_type == "elite":
-            n_enemies = 1
-        else:
-            rd = randint(1, 20)
-            n_enemies = 1 if rd <= 11 else (2 if rd <= 15 else 3)
-
         hook = gs["hook"]
-        if n_enemies == 1:
-            enemy_type = hook.pick_random_enemy_type()
-            enemy = hook.make_battle_unit(hook.get_enemy(enemy_type))
-            state = _start_battle(gs, enemy)
-            _log_node_choice(gs, node)
-            _save_map(gs, fmap)
-            return jsonify({
-                "ok": True, "event": node_type,
-                "node_id": node_id,
-                "enemy": {"name": enemy.name, "hp": enemy.hp},
-                "battle_state": state,
-            })
+
+        if node_type == "elite":
+            # ── 엘리트: 1~2마리, hard 고정, 스탯 보정 적용 ──
+            n_enemies  = randint(1, 2)
+            grade_pool = ELITE_GRADE
+            scale      = ELITE_STAT_SCALE[n_enemies]
         else:
-            enemies = []
-            for _ in range(n_enemies):
-                et   = hook.pick_random_enemy_type()
-                unit = hook.make_battle_unit(hook.get_enemy(et))
-                enemies.append(unit)
-            # 스탯 보정은 BattleSession.__init__에서 처리 (중복 방지)
+            # ── 일반: 1~3마리, 3마리일 때 hard 금지 ──
+            rd = randint(1, 20)
+            n_enemies  = 1 if rd <= 11 else (2 if rd <= 15 else 3)
+            grade_pool = NORMAL_GRADE_3 if n_enemies == 3 else NORMAL_GRADE_POOL
+            scale      = STAT_SCALE[n_enemies]
+
+        enemies, grades = _make_enemies(hook, n_enemies, grade_pool)
+
+        # 다대일 스탯 보정 (BattleSession 내 보정과 중복 방지 — 외부에서만 처리)
+        if n_enemies > 1:
+            _apply_stat_scale(enemies, scale)
+
+        # 전투 시작
+        if n_enemies == 1:
+            state = _start_battle(gs, enemies[0])
+        else:
             state = _start_battle_multi(gs, enemies)
-            _log_node_choice(gs, node)
-            _save_map(gs, fmap)
-            return jsonify({
-                "ok": True, "event": node_type,
-                "node_id":    node_id,
-                "enemy_count": n_enemies,
-                "enemies":    [{"name": e.name, "hp": e.hp} for e in enemies],
-                "battle_state": state,
-            })
+
+        # 로그 기록
+        _log_node_choice(gs, node, extra={
+            "node_type":   node_type,
+            "enemy_count": n_enemies,
+            "grades":      grades,
+            "stat_scale":  scale,
+        })
+        _save_map(gs, fmap)
+
+        resp = {
+            "ok":          True,
+            "event":       node_type,
+            "node_id":     node_id,
+            "enemy_count": n_enemies,
+            "grades":      grades,
+            "stat_scale":  scale,
+            "battle_state": state,
+        }
+        if n_enemies == 1:
+            resp["enemy"] = {"name": enemies[0].name, "hp": enemies[0].hp}
+        else:
+            resp["enemies"] = [{"name": e.name, "hp": e.hp} for e in enemies]
+
+        return jsonify(resp)
 
     # ── 이벤트 ────────────────────────────────
     elif node_type == "event":
@@ -514,5 +582,5 @@ def shop_buy():
         "message":   f"{item_id} 구매! (-{price}G)",
         "gold":      gs["gold"],
         "player":    _player_dict(gs["player"], inv),
-        "shop_items": _get_shop_items(["player"].lv),  # 상점 UI 재렌더용
+        "shop_items": _get_shop_items(gs["player"].lv),  # 상점 UI 재렌더용
     })

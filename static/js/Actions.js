@@ -192,7 +192,6 @@ async function useItemInField(itemName) {
     if (r.player) {
         state.player = r.player;
         refreshPlayer();
-        if (typeof refreshExploreInfo === 'function') refreshExploreInfo();
     }
     logLine(r.message || `${itemName} 사용`, 'heal');
     toast(r.message || `${itemName} 사용`, 'ok');
