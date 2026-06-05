@@ -25,6 +25,7 @@ from ai.Visualizer     import Visualizer
 from game.Enemy_Class  import (
     Make_Goblin, Make_Bat,
     Make_Slime, Make_Golem, Make_Ghost, Make_Assassin, Make_Priest,
+    Make_FireSlime, Make_IceSlime, Make_LightningSlime,
 )
 
 # 루트 디렉토리 (Main.py가 있는 곳)
@@ -130,6 +131,9 @@ class BalanceHook:
         "고블린":   Make_Goblin,
         "박쥐":     Make_Bat,
         "슬라임":   Make_Slime,
+        "화염 슬라임": Make_FireSlime,
+        "빙결 슬라임": Make_IceSlime,
+        "번개 슬라임": Make_LightningSlime,
         "골렘":     Make_Golem,
         "유령":     Make_Ghost,
         "암살자":   Make_Assassin,
@@ -143,6 +147,9 @@ class BalanceHook:
         {"type": "고블린",  "min_lv": 1},
         {"type": "박쥐",    "min_lv": 1},
         {"type": "슬라임",  "min_lv": 3},
+        {"type": "화염 슬라임", "min_lv": 4},
+        {"type": "빙결 슬라임", "min_lv": 4},
+        {"type": "번개 슬라임", "min_lv": 4},
         {"type": "골렘",    "min_lv": 5},
         {"type": "유령",    "min_lv": 6},
         {"type": "암살자",  "min_lv": 8},
@@ -171,7 +178,7 @@ class BalanceHook:
         if self.verbose:
             print(f"  [AI] 시뮬 대기 중 — {enemy_type} 폴백 사용 (Lv{self.player.lv} 중급 기준)")
         # Unit → EntitySnapshot 변환 (Phase 1 신규 필드 보존)
-        return EntitySnapshot(
+        _snap = EntitySnapshot(
             name=unit.name,
             hp=unit.hp,     maxhp=unit.hp,
             mp=unit.mp,     maxmp=unit.mp,
@@ -188,7 +195,13 @@ class BalanceHook:
             first_strike=getattr(unit, "first_strike", False),
             first_attack_bonus=getattr(unit, "first_attack_bonus", 1.0),
             enemy_type=getattr(unit, "enemy_type", unit.name),
+            attack_element=getattr(unit, "attack_element", ""),
         )
+        # 원소 슬라임: 전투 시작 초기 원소 큐 설정
+        _init_q = getattr(unit, "init_element_queue", [])
+        if _init_q:
+            _snap.element_queue = list(_init_q)
+        return _snap
 
     def __init__(self, player, item_list, show_graph=False, verbose=True):
         self.player     = player
