@@ -40,6 +40,18 @@ def use_item():
     if not meta:
         return jsonify({"ok": False, "error": "알 수 없는 아이템입니다."})
 
+    # 특수 아이템(폭탄/원소병/버프물약)은 전투 중에만 사용 가능
+    if meta.get("slot") == "special" or meta.get("category"):
+        return jsonify({
+            "ok": False,
+            "error": "특수 아이템은 전투 중에만 사용할 수 있습니다.",
+            "reason": "battle_only",
+        })
+
+    # 포션만 회복 처리 (amount 필수)
+    if "amount" not in meta:
+        return jsonify({"ok": False, "error": "필드에서 사용할 수 없는 아이템입니다."})
+
     amount = meta["amount"](player) if callable(meta["amount"]) else meta["amount"]
 
     if meta["stat"] == "hp":
