@@ -9,63 +9,29 @@ try:
 except ModuleNotFoundError:
     try:
         from ai.Battle_Engine import SKILL_META
-    except:
+    except Exception:
         SKILL_META = {}
+
+# 스킬 해금 테이블 단일 소스: game/Lv.py JOB_SKILL_UNLOCKS
+# 순환 import 방지 — 모듈 로드 시점이 아닌 최초 접근 시 lazy 로드
 
 
 class Ply_Skill:
     # ────────────────────────────────────────────
     # 직업별 스킬 트리
     # ────────────────────────────────────────────
-    JOB_SKILLS = {
-        "전사": {
-            1:  ["강타1"],
-            3:  ["연속공격1"],
-            2:  ["강화1"],
-            3:  ["약화1"],
-            4:  ["슬래시1"],
-            6: ["강타2"],
-            6: ["약화2"],
-            8: ["연속공격2"],
-            16: ["강화2"],
-            20: ["슬래시2"],
-        },
-        "마법사": {
-            1:  ["파이어볼1"],
-            3:  ["힐1"],
-            2:  ["아이스볼릿1"],
-            3:  ["마약화1"],
-            5:  ["라이트닝1"],
-            10: ["효율성1"],
-            12: ["마약화2"],
-            13: ["파이어볼2"],
-            16: ["힐2"],
-            19: ["아이스볼릿2"],
-            22: ["라이트닝2"],
-            25: ["효율성2"],
-        },
-        "탱커": {
-            1:  ["몸통박치기1"],
-            3:  ["수비태세1"],
-            5:  ["실드"],
-            6:  ["저주1"],
-            7:  ["되갚기1"],
-            10: ["몸통박치기2"],
-            12: ["저주2"],
-            14: ["수비태세2"],
-            18: ["되갚기2"],
-        },
-        "도적": {
-            1:  ["급소찌르기1"],
-            3:  ["추진력"],
-            5:  ["연속찌르기"],
-            6:  ["둔화1"],
-            7:  ["난사1"],
-            10: ["급소찌르기2"],
-            12: ["둔화2"],
-            14: ["난사2"],
-        },
-    }
+    # 스킬 해금 테이블은 game/Lv.py의 JOB_SKILL_UNLOCKS가 단일 소스(정본).
+    # 순환 import 방지를 위해 lazy 접근.
+    @staticmethod
+    def _get_unlocks():
+        try:
+            from game.Lv import JOB_SKILL_UNLOCKS
+        except ModuleNotFoundError:
+            try:
+                from Lv import JOB_SKILL_UNLOCKS
+            except Exception:
+                JOB_SKILL_UNLOCKS = {}
+        return JOB_SKILL_UNLOCKS
     
     # ────────────────────────────────────────────
     # 상위 스킬 → 하위 스킬 매핑
@@ -97,10 +63,11 @@ class Ply_Skill:
 
     def update_skills(self, lv: int):
         """레벨업 시 스킬 습득 + 상위 스킬 자동 대체"""
-        if self.job not in self.JOB_SKILLS:
+        unlocks = self._get_unlocks()
+        if self.job not in unlocks:
             return
 
-        skill_tree = self.JOB_SKILLS[self.job]
+        skill_tree = unlocks[self.job]
 
         if lv in skill_tree:
             for new_skill in skill_tree[lv]:
@@ -166,3 +133,30 @@ class Ply_Skill:
             print("  ── 보조 스킬 ──────────────────────")
             _print_2col(support_skills)
         print()
+
+# ────────────────────────────────────────────
+# 데이터 무결성 검증 (개발용)
+# ────────────────────────────────────────────
+
+def validate_skill_data() -> list:
+    """
+    JOB_SKILL_UNLOCKS에 있는 모든 스킬이 SKILL_META에 정의됐는지 검사.
+    반환: 누락된 스킬 이름 리스트 (비어있으면 정상)
+    """
+    missing = []
+    for job, table in Ply_Skill._get_unlocks().items():
+        for lv, skills in table.items():
+            for sk in skills:
+                if sk not in SKILL_META:
+                    missing.append(f"{job} Lv{lv}: {sk}")
+    return missing
+
+
+if __name__ == "__main__":
+    miss = validate_skill_data()
+    if miss:
+        print("⚠ SKILL_META에 누락된 스킬:")
+        for m in miss:
+            print(f"  - {m}")
+    else:
+        print("✅ 모든 해금 스킬이 SKILL_META에 정의됨")
