@@ -22,6 +22,7 @@ from random import randint, random as _random
 
 from Battle_Engine import (
     apply_element_and_react, check_element_reaction, try_apply_element_aura_and_status,
+    ITEM_META, Debuff, Buff,
     _current_element,
     SKILL_META as _SKILL_META_REF,
     EntitySnapshot, DamageCalc, execute_skill,
@@ -122,6 +123,9 @@ class BattleSession:
         # DB 저장용 액션 카운터 (Phase 3)
         self.skills_used = 0
         self.items_used  = 0
+        # 특수 아이템 버프 상태
+        self._next_skill_bonus  = 1.0   # 집중물약: 다음 스킬 데미지 배율
+        self._pending_atb_bonus = 0     # 신속물약: 다음 행동 후 ATB 추가
 
         # ★ ATB 시스템 (사용자 모델 — 큐 기반 턴제 + 추가 행동권):
         # 시작값: 이전 전투 atb_remainder 그대로 (SPD 안 더함)
@@ -290,6 +294,10 @@ class BattleSession:
 
             # 플레이어 행동 처리
             p_result = self._player_action(action, msgs)
+            # 신속물약: 행동 후 ATB 추가 획득
+            if self._pending_atb_bonus > 0:
+                self.player_atb += float(self._pending_atb_bonus)
+                self._pending_atb_bonus = 0
             self.player.tick_buffs()
 
             # 큐에서 자신 제거
@@ -666,6 +674,8 @@ class BattleSession:
                 # 1) 첫 대상 — execute_skill로 MP 정상 차감
                 first = alive_targets[0]
                 dmg, mp_lack, _info = execute_skill(skill_name, self.player, first)
+                if self._next_skill_bonus > 1.0 and dmg > 0:
+                    dmg = int(dmg * self._next_skill_bonus)
                 if mp_lack:
                     msgs.append("MP가 부족합니다!")
                     self.logs.append(TurnLog(
@@ -738,6 +748,9 @@ class BattleSession:
                     hp_after=max(0, first.hp),
                     mp_after=self.player.mp,
                 ))
+                if self._next_skill_bonus > 1.0:
+                    msgs.append(f"✨ 집중 효과 적용됨!")
+                    self._next_skill_bonus = 1.0
                 self.skills_used += 1   # ★ AoE 스킬 사용 성공 (Phase 3)
                 return "ok"
 
@@ -796,6 +809,11 @@ class BattleSession:
                         parts = [p for p in debuff_name.split("|") if p]
                         extra_msgs = [p for p in parts[1:] if p]
                         msgs.extend(extra_msgs)
+                    # 집중물약 보너스 적용
+                    if self._next_skill_bonus > 1.0 and dmg > 0:
+                        dmg = int(dmg * self._next_skill_bonus)
+                        msgs.append(f"✨ 집중 효과! 데미지 {int((self._next_skill_bonus-1)*100)}% 증가")
+                        self._next_skill_bonus = 1.0
                     target.hp -= dmg
                     msgs.append(f"{skill_name} 사용 → {dmg} 데미지")
                     msgs.append(f"{target.name} HP: {max(0, int(target.hp))}")
@@ -817,10 +835,13 @@ class BattleSession:
         # 아이템
         # ═══════════════════════════════════════════════════════════
         elif action.startswith("item:"):
-            item_name = action.split(":", 1)[1]
+            # "item:이름" 또는 "item:이름:타깃idx" 형식 모두 지원
+            _parts = action.split(":")
+            item_name = _parts[1]
+            target_idx = int(_parts[2]) if len(_parts) > 2 and _parts[2].isdigit() else 0
+
             if item_name not in self.items:
                 msgs.append("해당 아이템이 없습니다.")
-                # 실패한 아이템도 기록 (행동 의도 분석용)
                 self.logs.append(TurnLog(
                     turn=self.turn,
                     actor="player",
@@ -828,8 +849,10 @@ class BattleSession:
                     action_detail=f"{item_name}(not_in_inventory)",
                 ))
             else:
-                from Battle_Engine import ITEM_META
                 meta = ITEM_META.get(item_name, {})
+                category = meta.get("category", "")
+
+                # ── 포션 (HP/MP 회복) ──
                 if meta.get("stat") == "hp":
                     before = int(self.player.hp)
                     amount = meta["amount"](self.player)
@@ -840,16 +863,64 @@ class BattleSession:
                     amount = meta["amount"](self.player)
                     self.player.mp = min(self.player.maxmp, self.player.mp + amount)
                     msgs.append(f"{item_name} 사용 → MP {before} → {int(self.player.mp)} (+{amount})")
+
+                # ── AoE 데미지 (폭탄/거미줄폭탄) ──
+                elif category == "aoe_damage":
+                    ratio = meta.get("damage_ratio", 0.2)
+                    alive = self._alive_enemies()
+                    msgs.append(f"💣 {item_name} 사용!")
+                    for tgt in alive:
+                        dmg = max(1, int(tgt.maxhp * ratio))
+                        tgt.hp = max(0, tgt.hp - dmg)
+                        msgs.append(f"  └ {tgt.name}에게 {dmg} 피해")
+                        # 속도 디버프 (거미줄 폭탄)
+                        if meta.get("debuff_stat"):
+                            tgt.apply_debuff(Debuff(
+                                stat=meta["debuff_stat"],
+                                amount=meta["debuff_amount"],
+                                turns=meta["debuff_turns"],
+                                name=item_name,
+                            ))
+                    if meta.get("debuff_stat"):
+                        msgs.append(f"  적 전체 속도 {int(meta['debuff_amount']*100)}% 감소 ({meta['debuff_turns']}T)")
+
+                # ── 원소 부착 (화염병/냉기병/전격수정) ──
+                elif category == "element":
+                    alive = self._alive_enemies()
+                    if not alive:
+                        msgs.append("대상이 없습니다.")
+                    else:
+                        idx = target_idx if target_idx < len(alive) else 0
+                        tgt = alive[idx]
+                        elem = meta.get("element", "")
+                        ratio = meta.get("damage_ratio", 0.1)
+                        dmg = max(1, int(tgt.maxhp * ratio))
+                        msgs.append(f"🧪 {item_name} → {tgt.name}")
+                        # 직접 피해 + 원소 반응/부착
+                        dmg = apply_element_and_react(self.player, tgt, elem, dmg, msgs)
+                        tgt.hp = max(0, tgt.hp - dmg)
+                        msgs.append(f"  └ {tgt.name}에게 {dmg} 피해")
+
+                # ── 버프 (집중물약/신속물약) ──
+                elif category == "buff":
+                    btype = meta.get("buff_type", "")
+                    if btype == "next_skill_bonus":
+                        self._next_skill_bonus = meta.get("bonus_mult", 1.5)
+                        msgs.append(f"✨ {item_name} 사용 — 다음 스킬 {int((meta.get('bonus_mult',1.5)-1)*100)}% 추가 피해!")
+                    elif btype == "atb_gain":
+                        self._pending_atb_bonus = meta.get("atb_bonus", 50)
+                        msgs.append(f"💨 {item_name} 사용 — 다음 행동 후 ATB +{meta.get('atb_bonus',50)}!")
+
                 self.items.remove(item_name)
                 self.logs.append(TurnLog(
                     turn=self.turn,
                     actor="player",
                     action="item",
                     action_detail=item_name,
-                    hp_after=self.enemy.hp,  # 적 HP는 변화 없음
+                    hp_after=self.player.hp,
                     mp_after=self.player.mp,
                 ))
-                self.items_used += 1   # ★ 아이템 사용 성공 (Phase 3)
+                self.items_used += 1
 
         # ═══════════════════════════════════════════════════════════
         # 도망
@@ -1066,7 +1137,6 @@ class BattleSession:
             target_ally = max(allies, key=lambda a: a.effective_stg())
             meta = SKILL_META["사제축복"]
             priest.mp -= meta["mp"]
-            from Battle_Engine import Buff
             target_ally.apply_buff(Buff(
                 stat=meta["buff_stat"],
                 amount=meta["buff_amount"],

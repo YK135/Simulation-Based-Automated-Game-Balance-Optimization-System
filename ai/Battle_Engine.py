@@ -1128,6 +1128,67 @@ ITEM_META = {
         "stat": "mp", 
         "amount": lambda u: max(50,  int(u.maxmp * 0.35))
     },
+
+    # ── 특수 아이템 (special 슬롯, 최대 3개) ──
+    # 데미지는 적 maxhp 비례 % 피해.
+    # category: "aoe_damage" | "element" | "buff"
+    "bomb": {
+        "slot": "special",
+        "category": "aoe_damage",
+        "target": "all",
+        "damage_ratio": 0.25,            # 적 maxhp 25%
+        "desc": "적 전체 25% 피해",
+    },
+    "web_bomb": {
+        "slot": "special",
+        "category": "aoe_damage",
+        "target": "all",
+        "damage_ratio": 0.18,            # 적 maxhp 18%
+        "debuff_stat": "spd",
+        "debuff_amount": 0.30,           # 속도 30% 감소
+        "debuff_turns": 2,
+        "desc": "적 전체 18% 피해 + 2턴 속도↓",
+    },
+    "fire_vial": {
+        "slot": "special",
+        "category": "element",
+        "target": "single",
+        "element": "fire",
+        "damage_ratio": 0.10,            # 소량 직접 피해
+        "desc": "단일 적에게 화염 부착",
+    },
+    "ice_vial": {
+        "slot": "special",
+        "category": "element",
+        "target": "single",
+        "element": "ice",
+        "damage_ratio": 0.10,
+        "desc": "단일 적에게 빙결 부착",
+    },
+    "lightning_crystal": {
+        "slot": "special",
+        "category": "element",
+        "target": "single",
+        "element": "lightning",
+        "damage_ratio": 0.10,
+        "desc": "단일 적에게 번개 부착",
+    },
+    "focus_drug": {
+        "slot": "special",
+        "category": "buff",
+        "target": "self",
+        "buff_type": "next_skill_bonus",
+        "bonus_mult": 1.5,               # 다음 스킬 1.5배
+        "desc": "다음 스킬 추가 피해",
+    },
+    "haste_drug": {
+        "slot": "special",
+        "category": "buff",
+        "target": "self",
+        "buff_type": "atb_gain",
+        "atb_bonus": 50,                 # 행동 후 ATB +50
+        "desc": "다음 행동 후 ATB 추가 획득",
+    },
 }
 
 
