@@ -40,7 +40,7 @@ def _unit_to_snap(unit) -> "EntitySnapshot":
     BattleSession이 EntitySnapshot을 요구할 때 사용.
     이미 EntitySnapshot이면 그대로 반환.
     """
-    from ai.Battle_Engine import EntitySnapshot as ES
+    from ai.battle import EntitySnapshot as ES
     if isinstance(unit, ES):
         return unit
     return ES(
@@ -63,7 +63,7 @@ def _unit_to_snap(unit) -> "EntitySnapshot":
 
 def _start_battle(gs: dict, enemy, is_boss: bool = False) -> dict:
     """단일 전투 BattleSession 생성 후 초기 상태 반환."""
-    from ai.Battle_Engine import EntitySnapshot
+    from ai.battle import EntitySnapshot
     player_snap = _player_to_snap(gs["player"], gs["inventory"])
     enemy_snap  = EntitySnapshot.from_enemy(enemy)
 
@@ -80,7 +80,7 @@ def _start_battle(gs: dict, enemy, is_boss: bool = False) -> dict:
 
 def _start_battle_multi(gs: dict, enemies: list, is_boss: bool = False) -> dict:
     """다대일 전투 BattleSession 생성 후 초기 상태 반환."""
-    from ai.Battle_Engine import EntitySnapshot
+    from ai.battle import EntitySnapshot
     player_snap  = _player_to_snap(gs["player"], gs["inventory"])
     enemy_snaps  = [EntitySnapshot.from_enemy(e) for e in enemies]
 

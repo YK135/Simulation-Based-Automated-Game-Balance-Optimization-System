@@ -18,7 +18,7 @@ import time
 from datetime import datetime
 from dataclasses import asdict
 
-from ai.Battle_Engine import BattleResult, TurnLog
+from ai.battle import BattleResult, TurnLog
 
 
 # ────────────────────────────────────────────

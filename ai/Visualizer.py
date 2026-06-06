@@ -40,7 +40,7 @@ def _set_korean_font():
 _set_korean_font()
 matplotlib.rcParams['axes.unicode_minus'] = False
 
-from ai.Battle_Engine import BattleResult, EntitySnapshot
+from ai.battle import BattleResult, EntitySnapshot
 # SimulationResult는 사용 시점에 import (순환 import 방지)
 
 

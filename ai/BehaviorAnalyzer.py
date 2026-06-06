@@ -12,7 +12,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Iterable
 
-from ai.Battle_Engine import BattleResult
+from ai.battle import BattleResult
 
 
 @dataclass

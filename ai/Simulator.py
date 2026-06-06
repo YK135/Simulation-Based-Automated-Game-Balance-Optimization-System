@@ -16,14 +16,14 @@ import statistics
 from dataclasses import dataclass
 
 try:
-    from ai.Battle_Engine  import BattleEngine, EntitySnapshot, SKILL_META
+    from ai.battle  import BattleEngine, EntitySnapshot, SKILL_META
     from ai.Auto_AI        import PlayerAI, EnemyAI
     from game.Enemy_Class  import (
         Make_Goblin, Make_Bat,
         Make_Slime, Make_Golem, Make_Ghost, Make_Assassin, Make_Priest,
     )
 except ModuleNotFoundError:
-    from Battle_Engine import BattleEngine, EntitySnapshot, SKILL_META
+    from ai.battle import BattleEngine, EntitySnapshot, SKILL_META
     from Auto_AI       import PlayerAI, EnemyAI
     from game.Enemy_Class   import (
         Make_Goblin, Make_Bat,
@@ -250,7 +250,7 @@ class MultiBattleSimulator:
 
     사용 예시:
       from ai.Simulator import MultiBattleSimulator
-      from ai.Battle_Engine import EntitySnapshot
+      from ai.battle import EntitySnapshot
       from game.Enemy_Class import Make_Goblin, Make_Priest
 
       player_snap = EntitySnapshot.from_player(player)

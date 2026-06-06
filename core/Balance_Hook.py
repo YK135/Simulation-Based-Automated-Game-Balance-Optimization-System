@@ -16,7 +16,7 @@ import threading
 import subprocess
 import platform
 
-from ai.Battle_Engine  import BattleEngine, EntitySnapshot, BattleResult, TurnLog
+from ai.battle  import BattleEngine, EntitySnapshot, BattleResult, TurnLog
 from ai.Auto_AI        import PlayerAI, EnemyAI
 from ai.Simulator      import MonsterFactory, BattleSimulator, BASE_ENEMIES
 from ai.LOG_Manager    import LogManager

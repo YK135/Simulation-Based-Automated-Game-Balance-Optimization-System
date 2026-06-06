@@ -60,10 +60,7 @@ def get_slot(item_name: str) -> str:
     기본값: 모든 *_potion 은 "potion", 나머지는 "special".
     ITEM_META에 slot 명시되어 있으면 그걸 우선.
     """
-    try:
-        from ai.Battle_Engine import ITEM_META
-    except ModuleNotFoundError:
-        from ai.Battle_Engine import ITEM_META
+    from ai.battle import ITEM_META
 
     meta = ITEM_META.get(item_name, {})
     if "slot" in meta:

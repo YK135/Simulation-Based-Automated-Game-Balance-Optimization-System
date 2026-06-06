@@ -20,7 +20,7 @@ from __future__ import annotations
 import copy
 from random import randint, random as _random
 
-from Battle_Engine import (
+from ai.battle import (
     apply_element_and_react, check_element_reaction, try_apply_element_aura_and_status,
     ITEM_META, Debuff, Buff,
     _current_element,
@@ -28,7 +28,7 @@ from Battle_Engine import (
     EntitySnapshot, DamageCalc, execute_skill,
     SKILL_META, BattleEngine, Action, BattleResult, TurnLog
 )
-from Auto_AI import PlayerAI, EnemyAI
+from ai.Auto_AI import PlayerAI, EnemyAI
 
 
 class BattleSession:

@@ -1,0 +1,119 @@
+"""Battle/Elements.py — 원소 큐/반응/상태이상"""
+from __future__ import annotations
+
+import copy
+from dataclasses import dataclass, field
+from random import randint, random, uniform
+
+from .Entity import EntitySnapshot, StatusEffect
+
+REACTIONS = {
+    ("ice",       "fire"):      "melt",
+    ("fire",      "ice"):       "melt",
+    ("fire",      "lightning"): "overload",
+    ("lightning", "fire"):      "overload",
+}
+
+REACTION_EFFECTS = {
+    "melt":     {"bonus_mult": 1.5, "label": "💧 융해"},
+    "shatter":  {"bonus_mult": 1.2, "label": "💎 파쇄"},
+    "overload": {"bonus_mult": 1.3, "label": "⚡ 과부하"},
+}
+
+# 원소 → 상태이상
+ELEMENT_STATUS = {
+    "fire":      ("ignite",    30),
+    "ice":       ("frostbite", 35),
+    "lightning": ("paralyze",  25),
+}
+ELEMENT_STATUS_TURNS = {"ignite": 3, "frostbite": 2, "paralyze": 3}
+ELEMENT_STATUS_LABEL = {"ignite": "🔥 화상", "frostbite": "❄ 동상", "paralyze": "⚡ 마비"}
+SAME_ELEMENT_STATUS_BONUS = {"fire": 15, "ice": 15, "lightning": 15}
+
+
+def _current_element(entity) -> str:
+    """큐의 최신 원소 반환."""
+    q = getattr(entity, "element_queue", [])
+    return q[-1] if q else ""
+
+
+def apply_element_and_react(
+    attacker,
+    defender,
+    attack_element: str,
+    base_damage: int,
+    messages: list,
+) -> int:
+    """
+    원소 큐 업데이트 + 반응 판정 + 상태이상 처리.
+    반환: 최종 데미지
+    """
+    q = getattr(defender, "element_queue", [])
+
+    # physical: 파쇄 체크만 (큐에 추가 안 함)
+    if attack_element == "physical" or not attack_element:
+        if q and q[-1] == "ice":
+            eff = REACTION_EFFECTS["shatter"]
+            bonus = int(base_damage * (eff["bonus_mult"] - 1.0))
+            defender.element_queue.clear()
+            messages.append(f"{eff['label']} 발동! +{bonus} 추가 데미지")
+            messages.append(f"{defender.name}의 원소 큐가 초기화되었다.")
+            return base_damage + bonus
+        return base_damage
+
+    status_bonus = 0
+
+    if len(q) == 0:
+        defender.element_queue.append(attack_element)
+        messages.append(f"{defender.name}에게 {attack_element} 원소가 부착되었다.")
+
+    elif len(q) == 1:
+        existing = q[0]
+        if existing == attack_element:
+            status_bonus = SAME_ELEMENT_STATUS_BONUS.get(attack_element, 0)
+            messages.append(f"{defender.name}에게 {attack_element} 원소 중첩! 상태이상 확률 ↑")
+            defender.element_queue = [attack_element]
+        else:
+            defender.element_queue.append(attack_element)
+            key = (existing, attack_element)
+            reaction_name = REACTIONS.get(key)
+            if reaction_name:
+                eff = REACTION_EFFECTS[reaction_name]
+                bonus = int(base_damage * (eff["bonus_mult"] - 1.0))
+                defender.element_queue.clear()
+                messages.append(f"{eff['label']} 반응 발동!")
+                messages.append(f"{defender.name}에게 추가 {bonus} 피해!")
+                messages.append(f"{defender.name}의 원소 큐가 초기화되었다.")
+                base_damage += bonus
+            else:
+                defender.element_queue = [attack_element]
+                messages.append(f"{defender.name}에게 {attack_element} 원소가 부착되었다.")
+
+    # 상태이상 부여
+    entry = ELEMENT_STATUS.get(attack_element)
+    if entry:
+        effect_type, base_prob = entry
+        prob = min(95, base_prob + status_bonus)
+        if randint(1, 100) <= prob:
+            turns = ELEMENT_STATUS_TURNS[effect_type]
+            eff_obj = StatusEffect(effect_type=effect_type, turns=turns, name=attack_element)
+            if hasattr(defender, "apply_status_effect"):
+                defender.apply_status_effect(eff_obj)
+            label = ELEMENT_STATUS_LABEL[effect_type]
+            messages.append(f"{defender.name}에게 {label} 상태가 부여되었다. ({turns}T)")
+
+    return base_damage
+
+
+# 하위 호환 래퍼
+def check_element_reaction(defender, attack_element: str, base_damage: int, messages: list) -> int:
+    return apply_element_and_react(None, defender, attack_element, base_damage, messages)
+
+
+def try_apply_element_aura_and_status(attacker, defender, element: str, messages: list) -> None:
+    if element:
+        apply_element_and_react(attacker, defender, element, 0, messages)
+
+
+# 구버전 호환
+REACTION_TABLE = {}

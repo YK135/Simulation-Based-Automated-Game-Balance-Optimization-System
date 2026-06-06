@@ -18,7 +18,7 @@ from flask import Blueprint, jsonify, request, session
 from game.Player_Class import create_player_by_job
 from game.Inventory    import Inventory
 from game.Lv           import Allocate_Stat_Points
-from ai.Battle_Engine  import SKILL_META
+from ai.battle  import SKILL_META
 from core.Balance_Hook import BalanceHook
 
 from .Shared import GAME_SESSIONS, _get_session, _player_dict

@@ -5,10 +5,10 @@ Skill.py — 직업별 스킬 트리 시스템
 from __future__ import annotations
 
 try:
-    from ai.Battle_Engine import SKILL_META
+    from ai.battle import SKILL_META
 except ModuleNotFoundError:
     try:
-        from ai.Battle_Engine import SKILL_META
+        from ai.battle import SKILL_META
     except Exception:
         SKILL_META = {}
 

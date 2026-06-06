@@ -17,7 +17,7 @@ from typing import Optional
 from flask import session
 
 from game.Inventory import Inventory
-from ai.Battle_Engine import EntitySnapshot
+from ai.battle import EntitySnapshot
 
 
 # ─────────────────────────────────────────────

@@ -9,10 +9,10 @@ from collections import Counter
 # 회복량 단일 소스: ai/Battle_Engine.py ITEM_META
 # Digital Twin 원칙 — 웹/콘솔/시뮬 회복량 일치
 try:
-    from ai.Battle_Engine import ITEM_META
+    from ai.battle import ITEM_META
 except ModuleNotFoundError:
     try:
-        from ai.Battle_Engine import ITEM_META
+        from ai.battle import ITEM_META
     except Exception:
         ITEM_META = {}
 

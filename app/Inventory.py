@@ -10,7 +10,7 @@ from __future__ import annotations
 from flask import Blueprint, jsonify, request
 
 from game.Inventory    import Inventory
-from ai.Battle_Engine  import ITEM_META
+from ai.battle  import ITEM_META
 
 from .Shared import _get_session, _player_dict
 
