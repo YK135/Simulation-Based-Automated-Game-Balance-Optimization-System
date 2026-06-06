@@ -1,0 +1,410 @@
+"""
+battle_session/player_actions.py — 플레이어 행동
+"""
+from __future__ import annotations
+import copy
+from random import randint, random as _random
+
+from ai.battle import (
+    apply_element_and_react, check_element_reaction, try_apply_element_aura_and_status,
+    ITEM_META, Debuff, Buff, _current_element,
+    EntitySnapshot, DamageCalc, execute_skill,
+    SKILL_META, BattleEngine, Action, BattleResult, TurnLog,
+)
+
+
+class PlayerActionsMixin:
+    """BattleSession에 플레이어 행동 기능을 제공하는 mixin."""
+
+    def _player_action(self, action: str, msgs: list) -> str:
+        """처리 후 "ok" | "escaped" 반환. 모든 분기에서 TurnLog를 self.logs에 추가.
+
+        action 형식:
+          - "attack"          → 현재 타깃 공격 (UI에서 슬롯 클릭으로 선택된 적)
+          - "attack:0"        → 슬롯 인덱스 0 적 공격 (다대일)
+          - "skill:이름"        → 현재 타깃에게 스킬
+          - "skill:이름:0"      → 슬롯 0 적에게 스킬
+          - "item:이름"         → 아이템 사용 (대상 무관)
+          - "escape"          → 도망
+        """
+        # 타깃 인덱스 파싱 (있으면 적용)
+        # "attack:1" 또는 "skill:파이어볼1:2" 같은 형식 지원.
+        target_idx = None
+        if action.startswith("attack:"):
+            try:
+                target_idx = int(action.split(":", 1)[1])
+                action = "attack"
+            except (ValueError, IndexError):
+                pass
+        elif action.startswith("skill:"):
+            parts = action.split(":")
+            # skill:이름 또는 skill:이름:인덱스
+            if len(parts) == 3:
+                try:
+                    target_idx = int(parts[2])
+                    action = f"skill:{parts[1]}"
+                except ValueError:
+                    pass
+
+        # 타깃 인덱스 적용 (살아있고 유효한 경우만)
+        if target_idx is not None and 0 <= target_idx < len(self.enemies):
+            if self.enemies[target_idx].hp > 0:
+                self._target_idx = target_idx
+
+        # 현재 타깃 결정 (자동 폴백 포함)
+        target = self._current_target()
+        if target is None:
+            # 모든 적 사망 (이론상 도달 불가 - step에서 먼저 체크)
+            return "ok"
+
+        # ═══════════════════════════════════════════════════════════
+        # 기본 공격
+        # ═══════════════════════════════════════════════════════════
+        if action == "attack":
+            dmg, dodge, crit = DamageCalc.physical(
+                self.player.effective_stg(), self.player.luc,
+                target.effective_arm(),       target.luc,
+                skill_mult=1.0,
+                role="player",
+                attacker=self.player,
+                defender=target,
+            )
+            actual = 0 if dodge else int(dmg)
+            if dodge:
+                msgs.append(f"{target.name}이(가) 공격을 회피했다!")
+            else:
+                # ── 물리 원소 반응 (빙결+물리=깨짐 등) ──
+                actual = apply_element_and_react(self.player, target, "physical", actual, msgs)
+                target.hp -= actual
+                dmg = actual
+                tag = " (치명타!)" if crit else ""
+                msgs.append(f"{self.player.name} → 공격{tag} | {dmg} 데미지")
+                msgs.append(f"{target.name} HP: {max(0, int(target.hp))}")
+
+            self.logs.append(TurnLog(
+                turn=self.turn,
+                actor="player",
+                action="attack",
+                action_detail="basic_attack",
+                damage_dealt=actual,
+                hp_after=max(0, target.hp),
+                mp_after=self.player.mp,
+                is_dodge=dodge,
+                is_crit=crit,
+            ))
+            # 일반 공격은 카운트 안 함 (DB skills_used 대상 X)
+
+        # ═══════════════════════════════════════════════════════════
+        # 스킬
+        # ═══════════════════════════════════════════════════════════
+        elif action.startswith("skill:"):
+            skill_name = action[6:]
+            meta = SKILL_META.get(skill_name, {})
+            is_aoe = bool(meta.get("aoe", False))
+
+            # ── AoE 스킬: 살아있는 모든 적에게 적용 ────────────
+            # 슬래시1/2, 난사1/2가 해당. SKILL_META의 "aoe": True 플래그.
+            # MP는 한 번만 차감, 두 번째 대상부터는 DamageCalc 직접 호출.
+            # 적별로 상성·회피·크리·랜덤계수 모두 독립 판정.
+            if is_aoe:
+                alive_targets = self._alive_enemies()
+                if not alive_targets:
+                    return "ok"
+
+                # 1) 첫 대상 — execute_skill로 MP 정상 차감
+                first = alive_targets[0]
+                dmg, mp_lack, _info = execute_skill(skill_name, self.player, first)
+                if self._next_skill_bonus > 1.0 and dmg > 0:
+                    dmg = int(dmg * self._next_skill_bonus)
+                if mp_lack:
+                    msgs.append("MP가 부족합니다!")
+                    self.logs.append(TurnLog(
+                        turn=self.turn, actor="player",
+                        action="skill_failed",
+                        action_detail=f"{skill_name}(mp_lack)",
+                        damage_dealt=0,
+                        hp_after=first.hp,
+                        mp_after=self.player.mp,
+                    ))
+                    return "ok"
+
+                first.hp -= dmg
+                msgs.append(f"{skill_name} (전체 공격!) → {first.name}에게 {dmg} 데미지")
+                msgs.append(f"{first.name} HP: {max(0, int(first.hp))}")
+                total_dmg = dmg
+
+                # 2) 나머지 대상 — DamageCalc 직접 호출 (MP 차감 X)
+                stype = meta.get("type", "physical")
+                skill_mult = meta.get("mult", 1.0)
+                hits = meta.get("hits", 1)
+
+                for tgt in alive_targets[1:]:
+                    raw = 0
+                    for _ in range(hits):
+                        if stype == "physical":
+                            r, dodge, _crit = DamageCalc.physical(
+                                self.player.effective_stg(),
+                                self.player.luc,
+                                tgt.effective_arm(),
+                                tgt.luc,
+                                skill_mult=skill_mult,
+                                role="player",
+                                attacker=self.player,
+                                defender=tgt,
+                                hit_count=hits,
+                            )
+                        elif stype == "magical":
+                            r, dodge, _crit = DamageCalc.magical(
+                                self.player.sp,
+                                self.player.luc,
+                                tgt.effective_sparm(),
+                                tgt.luc,
+                                skill_mult=skill_mult,
+                                role="player",
+                                attacker=self.player,
+                                defender=tgt,
+                                hit_count=hits,
+                            )
+                        else:
+                            r, dodge = 0, False
+                        if not dodge:
+                            raw += int(r)
+                    if raw > 0:
+                        # AoE 원소 반응
+                        elem = meta.get("element", "")
+                        raw = apply_element_and_react(self.player, tgt, elem, raw, msgs)
+                        tgt.hp -= raw
+                        msgs.append(f"  └ {tgt.name}에게 {raw} 데미지")
+                        msgs.append(f"     {tgt.name} HP: {max(0, int(tgt.hp))}")
+                        total_dmg += raw
+                    else:
+                        msgs.append(f"  └ {tgt.name}이(가) 회피!")
+
+                self.logs.append(TurnLog(
+                    turn=self.turn, actor="player",
+                    action="skill",
+                    action_detail=f"{skill_name}(aoe)",
+                    damage_dealt=int(total_dmg),
+                    hp_after=max(0, first.hp),
+                    mp_after=self.player.mp,
+                ))
+                if self._next_skill_bonus > 1.0:
+                    msgs.append(f"✨ 집중 효과 적용됨!")
+                    self._next_skill_bonus = 1.0
+                self.skills_used += 1   # ★ AoE 스킬 사용 성공 (Phase 3)
+                return "ok"
+
+            # ── 단일 타깃 스킬 (기존 로직 + buff/heal/shield 메시지 보강) ──
+            mp_before = self.player.mp
+            dmg, mp_lack, debuff_name = execute_skill(
+                skill_name, self.player, target
+            )
+            if mp_lack:
+                msgs.append("MP가 부족합니다!")
+                self.logs.append(TurnLog(
+                    turn=self.turn,
+                    actor="player",
+                    action="skill_failed",
+                    action_detail=f"{skill_name}(mp_lack)",
+                    damage_dealt=0,
+                    hp_after=target.hp,
+                    mp_after=self.player.mp,
+                ))
+            else:
+                stype = meta.get("type")
+                if stype == "debuff":
+                    stat_kor = {"arm":"방어력","sparm":"마법방어력",
+                                "stg":"공격력","spd":"스피드"}.get(
+                        meta.get("debuff_stat",""), "스탯")
+                    msgs.append(f"{skill_name} 사용 → {target.name} {stat_kor} 감소!")
+                    self.logs.append(TurnLog(
+                        turn=self.turn,
+                        actor="player",
+                        action="skill",
+                        action_detail=skill_name,
+                        damage_dealt=0,
+                        hp_after=target.hp,
+                        mp_after=self.player.mp,
+                        debuff_applied=debuff_name or meta.get("debuff_stat", ""),
+                    ))
+                elif stype in ("buff", "heal", "shield"):
+                    if stype == "buff":
+                        msgs.append(f"{skill_name} 사용 → 능력치 강화!")
+                    elif stype == "heal":
+                        msgs.append(f"{skill_name} 사용 → HP {int(self.player.hp)}/{int(self.player.maxhp)}")
+                    elif stype == "shield":
+                        msgs.append(f"{skill_name} 사용 → 실드 {int(self.player.shield)} 생성!")
+                    self.logs.append(TurnLog(
+                        turn=self.turn,
+                        actor="player",
+                        action="skill",
+                        action_detail=skill_name,
+                        damage_dealt=0,
+                        hp_after=self.player.hp,
+                        mp_after=self.player.mp,
+                    ))
+                else:
+                    # ── 원소 반응 메시지 파싱 (execute_skill 반환값) ──
+                    if debuff_name and "|" in debuff_name:
+                        parts = [p for p in debuff_name.split("|") if p]
+                        extra_msgs = [p for p in parts[1:] if p]
+                        msgs.extend(extra_msgs)
+                    # 집중물약 보너스 적용
+                    if self._next_skill_bonus > 1.0 and dmg > 0:
+                        dmg = int(dmg * self._next_skill_bonus)
+                        msgs.append(f"✨ 집중 효과! 데미지 {int((self._next_skill_bonus-1)*100)}% 증가")
+                        self._next_skill_bonus = 1.0
+                    target.hp -= dmg
+                    msgs.append(f"{skill_name} 사용 → {dmg} 데미지")
+                    msgs.append(f"{target.name} HP: {max(0, int(target.hp))}")
+                    self.logs.append(TurnLog(
+                        turn=self.turn,
+                        actor="player",
+                        action="skill",
+                        action_detail=skill_name,
+                        damage_dealt=int(dmg),
+                        hp_after=max(0, target.hp),
+                        mp_after=self.player.mp,
+                    ))
+
+                # ★ 단일 스킬 사용 성공 (Phase 3) — else 블록 맨 끝
+                # debuff / buff / heal / shield / 일반 데미지 모두 카운트
+                self.skills_used += 1
+
+        # ═══════════════════════════════════════════════════════════
+        # 아이템
+        # ═══════════════════════════════════════════════════════════
+        elif action.startswith("item:"):
+            # "item:이름" 또는 "item:이름:타깃idx" 형식 모두 지원
+            _parts = action.split(":")
+            item_name = _parts[1]
+            target_idx = int(_parts[2]) if len(_parts) > 2 and _parts[2].isdigit() else 0
+
+            if item_name not in self.items:
+                msgs.append("해당 아이템이 없습니다.")
+                self.logs.append(TurnLog(
+                    turn=self.turn,
+                    actor="player",
+                    action="item_failed",
+                    action_detail=f"{item_name}(not_in_inventory)",
+                ))
+            else:
+                meta = ITEM_META.get(item_name, {})
+                category = meta.get("category", "")
+
+                # ── 포션 (HP/MP 회복) ──
+                if meta.get("stat") == "hp":
+                    before = int(self.player.hp)
+                    amount = meta["amount"](self.player)
+                    self.player.hp = min(self.player.maxhp, self.player.hp + amount)
+                    msgs.append(f"{item_name} 사용 → HP {before} → {int(self.player.hp)} (+{amount})")
+                elif meta.get("stat") == "mp":
+                    before = int(self.player.mp)
+                    amount = meta["amount"](self.player)
+                    self.player.mp = min(self.player.maxmp, self.player.mp + amount)
+                    msgs.append(f"{item_name} 사용 → MP {before} → {int(self.player.mp)} (+{amount})")
+
+                # ── AoE 데미지 (폭탄/거미줄폭탄) ──
+                elif category == "aoe_damage":
+                    ratio = meta.get("damage_ratio", 0.2)
+                    alive = self._alive_enemies()
+                    msgs.append(f"💣 {item_name} 사용!")
+                    for tgt in alive:
+                        dmg = max(1, int(tgt.maxhp * ratio))
+                        tgt.hp = max(0, tgt.hp - dmg)
+                        msgs.append(f"  └ {tgt.name}에게 {dmg} 피해")
+                        # 속도 디버프 (거미줄 폭탄)
+                        if meta.get("debuff_stat"):
+                            tgt.apply_debuff(Debuff(
+                                stat=meta["debuff_stat"],
+                                amount=meta["debuff_amount"],
+                                turns=meta["debuff_turns"],
+                                name=item_name,
+                            ))
+                    if meta.get("debuff_stat"):
+                        msgs.append(f"  적 전체 속도 {int(meta['debuff_amount']*100)}% 감소 ({meta['debuff_turns']}T)")
+
+                # ── 원소 부착 (화염병/냉기병/전격수정) ──
+                elif category == "element":
+                    alive = self._alive_enemies()
+                    if not alive:
+                        msgs.append("대상이 없습니다.")
+                    else:
+                        idx = target_idx if target_idx < len(alive) else 0
+                        tgt = alive[idx]
+                        elem = meta.get("element", "")
+                        ratio = meta.get("damage_ratio", 0.1)
+                        dmg = max(1, int(tgt.maxhp * ratio))
+                        msgs.append(f"🧪 {item_name} → {tgt.name}")
+                        # 직접 피해 + 원소 반응/부착
+                        dmg = apply_element_and_react(self.player, tgt, elem, dmg, msgs)
+                        tgt.hp = max(0, tgt.hp - dmg)
+                        msgs.append(f"  └ {tgt.name}에게 {dmg} 피해")
+
+                # ── 버프 (집중물약/신속물약) ──
+                elif category == "buff":
+                    btype = meta.get("buff_type", "")
+                    if btype == "next_skill_bonus":
+                        self._next_skill_bonus = meta.get("bonus_mult", 1.5)
+                        msgs.append(f"✨ {item_name} 사용 — 다음 스킬 {int((meta.get('bonus_mult',1.5)-1)*100)}% 추가 피해!")
+                    elif btype == "atb_gain":
+                        self._pending_atb_bonus = meta.get("atb_bonus", 50)
+                        msgs.append(f"💨 {item_name} 사용 — 다음 행동 후 ATB +{meta.get('atb_bonus',50)}!")
+
+                self.items.remove(item_name)
+                self.logs.append(TurnLog(
+                    turn=self.turn,
+                    actor="player",
+                    action="item",
+                    action_detail=item_name,
+                    hp_after=self.player.hp,
+                    mp_after=self.player.mp,
+                ))
+                self.items_used += 1
+
+        # ═══════════════════════════════════════════════════════════
+        # 도망
+        # ═══════════════════════════════════════════════════════════
+        elif action == "escape":
+            if self.is_boss:
+                msgs.append("...도망칠 수 없다!")
+                self.logs.append(TurnLog(
+                    turn=self.turn,
+                    actor="player",
+                    action="escape_blocked",
+                    action_detail="boss_battle",
+                    escaped=False,
+                ))
+                return "ok"
+            p_spd = self.player.effective_spd()
+            # 다대일 도망: 살아있는 모든 적의 평균 SPD 기준 (한 명만 빠르면 곤란하니까 평균)
+            alive = self._alive_enemies()
+            if alive:
+                e_spd = sum(e.effective_spd() for e in alive) / len(alive)
+            else:
+                e_spd = 1.0
+            ratio = p_spd / max(e_spd, 1.0)
+            if   ratio >= 2.0: chance = 0.95
+            elif ratio >= 1.5: chance = 0.80
+            elif ratio >= 1.0: chance = 0.60
+            elif ratio >= 0.7: chance = 0.35
+            else:              chance = 0.15
+            success = _random() <= chance
+            self.logs.append(TurnLog(
+                turn=self.turn,
+                actor="player",
+                action="escape",
+                action_detail=f"chance={chance:.2f}",
+                escaped=success,
+            ))
+            if success:
+                return "escaped"
+            else:
+                msgs.append(f"도망에 실패했다! (성공률 {int(chance*100)}%)")
+
+        else:
+            msgs.append("알 수 없는 행동입니다.")
+
+        return "ok"
+    
+    # ── 내부: 적 행동 처리 ───────────────────
