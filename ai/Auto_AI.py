@@ -37,6 +37,58 @@ def _best_mp_potion(entity: EntitySnapshot) -> str | None:
     return None
 
 
+# ── 특수 아이템 판단 헬퍼 ──
+
+def _has_item(entity: EntitySnapshot, name: str) -> bool:
+    return name in entity.items
+
+
+def _pick_special_item(attacker: EntitySnapshot, defender: EntitySnapshot,
+                       enemy_count: int = 1) -> str | None:
+    """
+    특수 아이템 사용 판단.
+    우선순위:
+      1. 적이 ice 큐 보유 + 화염병 → 즉시 융해
+      2. 적이 fire/lightning 큐 + 반응 가능한 원소병
+      3. 적 2마리+ + 폭탄/거미줄폭탄 → AoE
+      4. 강한 적(HP 비율 높음) + 집중물약 → 다음 스킬 강화
+      5. 원소병 일반 사용 (큐 비어있을 때 상태이상 노림)
+    """
+    def_queue = getattr(defender, "element_queue", [])
+    cur_elem = def_queue[-1] if def_queue else ""
+
+    # 1. ice 적 → 화염병 (융해)
+    if cur_elem == "ice" and _has_item(attacker, "fire_vial"):
+        return "fire_vial"
+    # 2. fire/lightning 적 → 반대 원소병 (과부하)
+    if cur_elem == "fire" and _has_item(attacker, "lightning_crystal"):
+        return "lightning_crystal"
+    if cur_elem == "lightning" and _has_item(attacker, "fire_vial"):
+        return "fire_vial"
+
+    # 3. 다수 적 → AoE 폭탄
+    if enemy_count >= 2:
+        for bomb in ["web_bomb", "bomb"]:
+            if _has_item(attacker, bomb):
+                return bomb
+
+    # 4. 적 HP 높음 + 집중물약 → 다음 스킬 강화
+    def_hp_ratio = defender.hp / defender.maxhp if defender.maxhp > 0 else 0
+    if def_hp_ratio >= 0.6 and _has_item(attacker, "focus_drug"):
+        # 강한 공격 스킬이 있을 때만 의미 있음
+        if any(SKILL_META.get(s, {}).get("type") in ATTACK_TYPES
+               for s in attacker.learned_skills):
+            return "focus_drug"
+
+    # 5. 큐 비어있는 적 → 원소병으로 상태이상 노림
+    if not cur_elem:
+        for vial in ["fire_vial", "ice_vial", "lightning_crystal"]:
+            if _has_item(attacker, vial):
+                return vial
+
+    return None
+
+
 def _skill_efficiency(skill_name: str, attacker: EntitySnapshot, defender: EntitySnapshot | None = None) -> float:
     meta = SKILL_META.get(skill_name)
     if not meta:
@@ -213,6 +265,12 @@ class PlayerAI:
             curse = _best_debuff_skill(attacker, stat="stg")
             if curse:
                 return Action("skill", curse)
+
+        # ── 특수 아이템 판단 (원소 반응/AoE/버프) ──
+        # 위급 상황(회복/실드)이 아닐 때만 — 위는 이미 위에서 처리됨
+        special = _pick_special_item(attacker, defender, enemy_count=1)
+        if special:
+            return Action("item", special)
 
         mp_threshold = {
             "aggressive": 0.0,

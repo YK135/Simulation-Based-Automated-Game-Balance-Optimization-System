@@ -132,6 +132,8 @@ class EntitySnapshot:
     # status_effects: 실제 상태이상 리스트 (StatusEffect)
     # attack_element: 몬스터 기본공격 원소
     element_queue: list = field(default_factory=list)
+    _next_skill_bonus: float = 1.0
+    _pending_atb_bonus: int = 0
     status_effects: list = field(default_factory=list)
     attack_element: str = ""
 
@@ -1130,77 +1132,95 @@ ITEM_META = {
     },
 
     # ── 특수 아이템 (special 슬롯, 최대 3개) ──
-    # 데미지는 적 maxhp 비례 % 피해.
-    # category: "aoe_damage" | "element" | "buff"
+    # 데미지는 적 maxhp 비례 % 피해. category로 처리 분기.
     "bomb": {
-        "slot": "special",
-        "category": "aoe_damage",
-        "target": "all",
-        "damage_ratio": 0.25,            # 적 maxhp 25%
-        "desc": "적 전체 25% 피해",
+        "slot": "special", "category": "aoe_damage", "target": "all",
+        "damage_ratio": 0.25, "desc": "적 전체 25% 피해",
     },
     "web_bomb": {
-        "slot": "special",
-        "category": "aoe_damage",
-        "target": "all",
-        "damage_ratio": 0.18,            # 적 maxhp 18%
-        "debuff_stat": "spd",
-        "debuff_amount": 0.30,           # 속도 30% 감소
-        "debuff_turns": 2,
+        "slot": "special", "category": "aoe_damage", "target": "all",
+        "damage_ratio": 0.18, "debuff_stat": "spd",
+        "debuff_amount": 0.30, "debuff_turns": 2,
         "desc": "적 전체 18% 피해 + 2턴 속도↓",
     },
     "fire_vial": {
-        "slot": "special",
-        "category": "element",
-        "target": "single",
-        "element": "fire",
-        "damage_ratio": 0.10,            # 소량 직접 피해
-        "desc": "단일 적에게 화염 부착",
+        "slot": "special", "category": "element", "target": "single",
+        "element": "fire", "damage_ratio": 0.10, "desc": "단일 적 화염 부착",
     },
     "ice_vial": {
-        "slot": "special",
-        "category": "element",
-        "target": "single",
-        "element": "ice",
-        "damage_ratio": 0.10,
-        "desc": "단일 적에게 빙결 부착",
+        "slot": "special", "category": "element", "target": "single",
+        "element": "ice", "damage_ratio": 0.10, "desc": "단일 적 빙결 부착",
     },
     "lightning_crystal": {
-        "slot": "special",
-        "category": "element",
-        "target": "single",
-        "element": "lightning",
-        "damage_ratio": 0.10,
-        "desc": "단일 적에게 번개 부착",
+        "slot": "special", "category": "element", "target": "single",
+        "element": "lightning", "damage_ratio": 0.10, "desc": "단일 적 번개 부착",
     },
     "focus_drug": {
-        "slot": "special",
-        "category": "buff",
-        "target": "self",
-        "buff_type": "next_skill_bonus",
-        "bonus_mult": 1.5,               # 다음 스킬 1.5배
+        "slot": "special", "category": "buff", "target": "self",
+        "buff_type": "next_skill_bonus", "bonus_mult": 1.5,
         "desc": "다음 스킬 추가 피해",
     },
     "haste_drug": {
-        "slot": "special",
-        "category": "buff",
-        "target": "self",
-        "buff_type": "atb_gain",
-        "atb_bonus": 50,                 # 행동 후 ATB +50
+        "slot": "special", "category": "buff", "target": "self",
+        "buff_type": "atb_gain", "atb_bonus": 50,
         "desc": "다음 행동 후 ATB 추가 획득",
     },
 }
 
 
-def use_item(item_name: str, user: EntitySnapshot) -> bool:
+def use_item(item_name: str, user: EntitySnapshot, enemies: list = None) -> bool:
+    """
+    공통 아이템 사용 (BattleEngine/시뮬/콘솔 공유 — Digital Twin).
+    포션: amount 기반 HP/MP 회복.
+    특수: category로 aoe_damage / element / buff 처리.
+    enemies: 특수 아이템 대상 (단일 전투는 [enemy]).
+    """
     meta = ITEM_META.get(item_name)
     if not meta or item_name not in user.items:
         return False
-    amount = meta["amount"](user)
-    if meta["stat"] == "hp":
-        user.hp = min(user.maxhp, user.hp + amount)
-    elif meta["stat"] == "mp":
-        user.mp = min(user.maxmp, user.mp + amount)
+
+    category = meta.get("category", "")
+    enemies = enemies or []
+    alive = [e for e in enemies if getattr(e, "hp", 0) > 0]
+
+    # ── 포션 (amount 기반) ──
+    if "amount" in meta:
+        amount = meta["amount"](user)
+        if meta.get("stat") == "hp":
+            user.hp = min(user.maxhp, user.hp + amount)
+        elif meta.get("stat") == "mp":
+            user.mp = min(user.maxmp, user.mp + amount)
+
+    # ── AoE 데미지 ──
+    elif category == "aoe_damage":
+        ratio = meta.get("damage_ratio", 0.2)
+        for tgt in alive:
+            dmg = max(1, int(tgt.maxhp * ratio))
+            tgt.hp = max(0, tgt.hp - dmg)
+            if meta.get("debuff_stat") and hasattr(tgt, "apply_debuff"):
+                tgt.apply_debuff(Debuff(
+                    stat=meta["debuff_stat"], amount=meta["debuff_amount"],
+                    turns=meta["debuff_turns"], name=item_name,
+                ))
+
+    # ── 원소 부착 ──
+    elif category == "element":
+        if alive:
+            tgt = alive[0]
+            elem = meta.get("element", "")
+            dmg = max(1, int(tgt.maxhp * meta.get("damage_ratio", 0.1)))
+            _msgs = []
+            dmg = apply_element_and_react(user, tgt, elem, dmg, _msgs)
+            tgt.hp = max(0, tgt.hp - dmg)
+
+    # ── 버프 ──
+    elif category == "buff":
+        btype = meta.get("buff_type", "")
+        if btype == "next_skill_bonus":
+            user._next_skill_bonus = meta.get("bonus_mult", 1.5)
+        elif btype == "atb_gain":
+            user._pending_atb_bonus = meta.get("atb_bonus", 50)
+
     user.items.remove(item_name)
     return True
 
@@ -1229,7 +1249,7 @@ def _apply_damage_with_shield(defender: EntitySnapshot, dmg: int) -> int:
         absorbed = min(defender.shield, actual)
         defender.shield -= absorbed
         actual -= absorbed
-    defender.hp -= actual
+    defender.hp = max(0, defender.hp - actual)
     defender.last_damage_taken = actual
     return actual
 
@@ -1339,6 +1359,11 @@ class BattleEngine:
             dmg, mp_lack, info = execute_skill(action.detail, attacker, defender)
             log.mp_after = attacker.mp
 
+            # 집중물약 보너스 (next_skill_bonus)
+            if not mp_lack and dmg > 0 and getattr(attacker, "_next_skill_bonus", 1.0) > 1.0:
+                dmg = int(dmg * attacker._next_skill_bonus)
+                attacker._next_skill_bonus = 1.0
+
             if not mp_lack:
                 if dmg > 0:
                     actual = _apply_damage_with_shield(defender, dmg)
@@ -1373,10 +1398,16 @@ class BattleEngine:
                 log.is_crit = is_crit
 
         elif action.action_type == "item":
-            success = use_item(action.detail, attacker)
+            before_hp = defender.hp
+            success = use_item(action.detail, attacker, enemies=[defender])
             log.action_detail = action.detail if success else "item_failed"
-            log.hp_after = attacker.hp
+            log.damage_dealt = max(0, int(before_hp - defender.hp))
+            log.hp_after = defender.hp
             log.mp_after = attacker.mp
+            # 신속물약: 행동 후 ATB 추가 (플레이어만)
+            if success and actor == "player" and getattr(attacker, "_pending_atb_bonus", 0) > 0:
+                self.atb.player_pt += float(attacker._pending_atb_bonus)
+                attacker._pending_atb_bonus = 0
 
         elif action.action_type == "escape":
             chance = _escape_chance(attacker.effective_spd(), defender.effective_spd())
