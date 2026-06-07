@@ -17,10 +17,12 @@ function _showEventResult(r) {
         <div class="event-result-panel">
             <div class="event-icon">${icon}</div>
             <div class="event-message">${r.message || "이벤트 발생!"}</div>
-            ${r.item ? `<div style="color:var(--accent-cyan);font-size:13px;font-weight:700;">${r.item} 획득!</div>` : ""}
-            <button class="btn event-continue-btn" onclick="closeEventPanel()">계속하기</button>
+            ${r.item ? `<div class="event-item-gained">${r.item} 획득!</div>` : ""}
+            <button class="btn event-continue-btn" id="event-continue-btn">계속하기</button>
         </div>
     `;
+    overlay.querySelector("#event-continue-btn")
+        ?.addEventListener("click", closeEventPanel);
     if (r.player) {
         state.player = r.player;
         if (typeof refreshPlayer === "function") refreshPlayer();

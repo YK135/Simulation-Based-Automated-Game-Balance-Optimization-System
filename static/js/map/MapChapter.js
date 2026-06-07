@@ -14,11 +14,23 @@ function _showChapterClear(result) {
             ${isGameClear ? "모든 챕터를 클리어했습니다!" : `챕터 ${nextCh}로 진행합니다.`}
         </div>
         <button class="btn chapter-clear-btn"
-            onclick="${isGameClear ? "restartGame()" : `startNextChapter(${nextCh})`}">
+            id="chapter-clear-btn"
+            data-action="${isGameClear ? "restart" : "next"}"
+            data-next-chapter="${nextCh || ""}">
             ${isGameClear ? "처음으로" : `챕터 ${nextCh} 시작 ▶`}
         </button>
     `;
     document.body.appendChild(overlay);
+
+    // 이벤트 바인딩 (인라인 onclick 대체)
+    const btn = overlay.querySelector("#chapter-clear-btn");
+    btn?.addEventListener("click", () => {
+        if (btn.dataset.action === "restart") {
+            restartGame();
+        } else {
+            startNextChapter(Number(btn.dataset.nextChapter));
+        }
+    });
 }
 
 async function startNextChapter(chapter) {

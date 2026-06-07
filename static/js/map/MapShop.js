@@ -15,16 +15,27 @@ function _showShopPanel(r) {
             <div class="shop-items-grid">
                 ${items.map(item => `
                     <div class="shop-item ${gold < item.price ? "cant-afford" : ""}"
-                         onclick="${gold >= item.price ? `buyShopItem('${item.id}',${item.price})` : ""}">
+                         data-item-id="${item.id}"
+                         data-price="${item.price}">
                         <span class="shop-item-name">${item.name}</span>
                         <span class="shop-item-effect">${item.effect}</span>
                         <span class="shop-item-price">${item.price} G</span>
                     </div>
                 `).join("")}
             </div>
-            <button class="btn shop-leave-btn" onclick="leaveShop()">나가기</button>
+            <button class="btn shop-leave-btn" id="shop-leave-btn">나가기</button>
         </div>
     `;
+
+    // 이벤트 바인딩 (인라인 onclick 대체)
+    overlay.querySelectorAll(".shop-item[data-item-id]").forEach(el => {
+        el.addEventListener("click", () => {
+            if (el.classList.contains("cant-afford")) return;
+            buyShopItem(el.dataset.itemId, Number(el.dataset.price));
+        });
+    });
+    overlay.querySelector("#shop-leave-btn")
+        ?.addEventListener("click", leaveShop);
 }
 
 async function buyShopItem(itemId, price) {
@@ -41,7 +52,7 @@ async function buyShopItem(itemId, price) {
             logLine(`🛒 ${msg}`, "warn");
             // 포션 가득 찬 경우 상점 버튼 시각적 표시
             if (r.reason === "potion_full") {
-                document.querySelectorAll(`.shop-item[data-id="${itemId}"]`).forEach(el => {
+                document.querySelectorAll(`.shop-item[data-item-id="${itemId}"]`).forEach(el => {
                     el.classList.add("cant-afford");
                     el.title = "포션 슬롯 가득 참";
                 });

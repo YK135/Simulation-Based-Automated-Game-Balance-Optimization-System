@@ -457,3 +457,10 @@
     justify-content: center;
     border-radius: 4px;
 }
+
+/* ── 이벤트 아이템 획득 메시지 (MapEvents.js 인라인 style에서 이동) ── */
+.event-item-gained {
+    color: var(--accent-cyan);
+    font-size: 13px;
+    font-weight: 700;
+}

@@ -1,0 +1,70 @@
+/* ═══════════════════════════════════════════════════════════
+   Modal_Base.css — 모달 공통 (modal-bg, modal, form-row, 공통 버튼)
+   로딩 순서: Base → Start → Game (반드시 Base 먼저)
+   ═══════════════════════════════════════════════════════════ */
+
+/* ═══════════════════════════════════════════════════════════
+   modal.css
+   - 공통 모달 배경/컨테이너
+   - 새 게임 모달 (form)
+   - 휴식 모달 (heal/train)
+   - 도망 모달 (yes/no, 휴식 모달과 동일 스타일)
+   ═══════════════════════════════════════════════════════════ */
+
+.modal-bg {
+    position: fixed; inset: 0;
+    background: rgba(5, 10, 13, 0.85);
+    display: none;
+    align-items: center;
+    justify-content: center;
+    z-index: 1000;
+    backdrop-filter: blur(4px);
+}
+.modal-bg.active { display: flex; }
+.modal {
+    background: var(--bg-panel);
+    border: 1px solid var(--accent-cyan);
+    border-radius: 4px;
+    padding: 24px;
+    width: 360px;
+    max-width: 90vw;
+}
+.modal h2 {
+    font-size: 13px;
+    color: var(--accent-cyan);
+    margin-bottom: 16px;
+    letter-spacing: 0.15em;
+}
+
+/* ── 새 게임 모달 폼 ── */
+.form-row { margin-bottom: 12px; }
+.form-row label {
+    font-size: 10px;
+    color: var(--text-dim);
+    display: block;
+    margin-bottom: 4px;
+    letter-spacing: 0.1em;
+}
+.form-row input,
+.form-row select {
+    width: 100%;
+    padding: 8px 10px;
+    background: var(--bg-darkest);
+    border: 1px solid var(--border);
+    color: var(--text-main);
+    font-family: inherit;
+    font-size: 11px;
+    border-radius: 3px;
+}
+.form-row input:focus, .form-row select:focus {
+    border-color: var(--accent-cyan);
+    outline: none;
+}
+.modal .btn.primary {
+    background: var(--accent-cyan);
+    color: var(--bg-darkest);
+    border-color: var(--accent-cyan);
+    font-weight: 700;
+    margin-top: 8px;
+}
+.modal .btn.primary:hover { background: #5eead4; }

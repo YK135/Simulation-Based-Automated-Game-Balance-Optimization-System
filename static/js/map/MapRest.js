@@ -10,13 +10,18 @@ function _showRestPanel(r) {
             <p class="event-message">${r.message || "휴식 지점에 도착했다."}</p>
             <div class="rest-options">
                 ${(r.options || []).map(opt => `
-                    <button class="rest-option-btn" onclick="chooseRestOption('${opt.key}')">
+                    <button class="rest-option-btn" data-choice="${opt.key}">
                         ${opt.label}
                     </button>
                 `).join("")}
             </div>
         </div>
     `;
+
+    // 이벤트 바인딩 (인라인 onclick 대체)
+    overlay.querySelectorAll(".rest-option-btn[data-choice]").forEach(btn => {
+        btn.addEventListener("click", () => chooseRestOption(btn.dataset.choice));
+    });
 }
 
 async function chooseRestOption(choice) {
