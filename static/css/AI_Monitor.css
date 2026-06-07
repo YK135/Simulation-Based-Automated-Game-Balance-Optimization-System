@@ -166,3 +166,10 @@
 .terminal-line .ts { color: var(--text-muted); }
 .terminal-line.ok   { color: #a7f3d0; }
 .terminal-line.warn { color: var(--accent-warn); }
+/* ── 터미널 패널 (index.html 인라인 style에서 이동) ── */
+.terminal-panel-wrap {
+    padding: 8px;
+}
+.terminal-panel-title {
+    margin-bottom: 6px;
+}

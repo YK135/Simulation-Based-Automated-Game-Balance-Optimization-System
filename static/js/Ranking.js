@@ -209,3 +209,17 @@ function escapeHtml(str) {
         .replace(/"/g, '&quot;')
         .replace(/'/g, '&#039;');
 }
+
+
+
+// ─────────────────────────────────────────────
+// 버튼 이벤트 바인딩 (index.html 인라인 onclick 제거 대체)
+// ─────────────────────────────────────────────
+document.addEventListener('DOMContentLoaded', function () {
+    document.getElementById('ranking-close-btn')
+        ?.addEventListener('click', closeRankingModal);
+    document.getElementById('ranking-prev-btn')
+        ?.addEventListener('click', toggleRanking);
+    document.getElementById('ranking-next-btn')
+        ?.addEventListener('click', toggleRanking);
+});

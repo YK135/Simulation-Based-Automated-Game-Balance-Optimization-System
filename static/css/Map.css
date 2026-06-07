@@ -445,3 +445,15 @@
     background: rgba(0,255,208,0.1);
     box-shadow: 0 0 12px rgba(0,255,208,0.25);
 }
+/* ── map-content-overlay (index.html 인라인 style에서 이동) ──
+   휴식/상점/이벤트 패널 오버레이. MapRest/Shop/Events.js가 display 토글. */
+#map-content-overlay {
+    display: none;
+    position: absolute;
+    inset: 0;
+    background: rgba(10, 18, 24, 0.93);
+    z-index: 20;
+    align-items: center;
+    justify-content: center;
+    border-radius: 4px;
+}

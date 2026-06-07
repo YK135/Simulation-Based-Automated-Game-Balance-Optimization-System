@@ -164,3 +164,22 @@ function resetAllSprites() {
         }
     }
 }
+
+
+// ─────────────────────────────────────────────
+// 이미지 폴백 바인딩 (index.html 인라인 onerror 제거 대체)
+//   data-fallback-id 속성을 가진 <img>에 error 핸들러 연결.
+//   ※ setCharState()가 src 세팅 시 imgEl.onerror를 별도로 덮어쓰므로
+//     공존 가능(여기는 초기/미갱신 이미지용 안전망).
+// ─────────────────────────────────────────────
+function bindImageFallbacks() {
+    document.querySelectorAll('img[data-fallback-id]').forEach(function (img) {
+        img.addEventListener('error', function () {
+            img.style.display = 'none';
+            var fb = document.getElementById(img.dataset.fallbackId);
+            if (fb) fb.style.display = '';
+        });
+    });
+}
+
+document.addEventListener('DOMContentLoaded', bindImageFallbacks);

@@ -12,7 +12,6 @@
 <link rel="stylesheet" href="css/Layout.css">        <!-- 상단바, 3컬럼 그리드, .panel -->
 <link rel="stylesheet" href="css/Player_Panel.css">  <!-- 좌측: 캐릭터/게이지/스킬북 -->
 <link rel="stylesheet" href="css/Battle.css">        <!-- 중앙 배틀 + 액션 + 로그 -->
-<!-- <link rel="stylesheet" href="css/Explore.css">       탐험 모드 + 진행 턴 -->
 <link rel="stylesheet" href="css/Map.css">           <!-- 맵 모달 + 노드맵 -->
 <link rel="stylesheet" href="css/Modal.css">         <!-- 모달 3종 -->
 <link rel="stylesheet" href="css/Ranking_BIG.css">   <!-- 랭킹 모달 -->
@@ -53,7 +52,7 @@
     <!-- 이미지가 없으면 onerror로 자동 숨김 → 이모지 표시 -->
             <img id="player-portrait" class="player-art-img"
                 src="" alt=""
-                onerror="this.style.display='none'; document.getElementById('player-icon').style.display='';" />
+                data-fallback-id="player-icon" />
             <div class="player-art-icon" id="player-icon">⚔</div>
         </div>
 
@@ -163,16 +162,7 @@
             <div class="map-scroll" id="map-scroll"></div>
  
             <!-- 휴식/상점/이벤트 오버레이 패널 -->
-            <div id="map-content-overlay" style="
-                display:none;
-                position:absolute;
-                inset:0;
-                background:rgba(10,18,24,0.93);
-                z-index:20;
-                align-items:center;
-                justify-content:center;
-                border-radius:4px;
-            "></div>
+            <div id="map-content-overlay"></div>
  
             <!-- 맵 하단 -->
             <div class="map-footer">
@@ -183,25 +173,14 @@
 
         <!-- ═════════════════════ 배틀 모드 ═════════════════════ -->
         <div id="battle-mode" style="display:none;">
-            <!-- ════════════════════════════════════════════════════════
-                 배틀 필드 — 5분할 그리드 구조
-                   슬롯1: 플레이어
-                   슬롯2: 공백 (거리감)
-                   슬롯3~5: 몬스터 (단일전 = 슬롯3, 다대일 = 3+4+5)
-
-                 ▼▼▼ [배경 이미지: 배틀 필드 배경] ▼▼▼
-                 권장 크기: 가로형 PNG (1280x500, 약 2.5:1 비율)
-                 파일: static/img/bg_field.png
-                 사용 방법: css/battle.css 안 .battle-stage 의
-                          background-image 한 줄 활성화
-                 ════════════════════════════════════════════════════════ -->
+            <!-- 배틀 필드 5분할 그리드: 슬롯1=플레이어, 슬롯2=공백, 슬롯3~5=몬스터(단일전=3, 다대일=3+4+5) -->
             <div class="battle-stage">
                 <!-- ─── 슬롯 1: 플레이어 ─── -->
                 <div class="battle-slot slot-player">
                             <div class="combatant player">
                                 <img class="combatant-art" id="player-combatant-art-img"
                                     src="" alt=""
-                                    onerror="this.style.display='none'; document.getElementById('player-combatant-art').style.display='';" />
+                                    data-fallback-id="player-combatant-art" />
                                 <div class="combatant-art" id="player-combatant-art">⚔</div>
                                 <div class="combatant-name" id="player-combatant-name">-</div>
                                 <div class="combatant-meta" id="player-combatant-meta">LV --</div>
@@ -233,15 +212,10 @@
                 <div class="battle-slot slot-enemy">
                     <div class="combatant enemy" id="enemy-slot-1" data-slot="0">
                         <div id="target-tag" class="target-tag" style="display:none;">▶ TARGET</div>
-                        <!-- ════════════════════════════════════════════════════════
-                             ▼ [이미지: 몬스터 도트 - 슬롯 3] ▼
-                             권장 크기: 96x96 PNG (투명배경)
-                             js/state.js의 ENEMY_SPRITES 매핑 활성화 시
-                             refreshBattle()에서 자동으로 종류별 이미지 변경
-                             ════════════════════════════════════════════════════════ -->
+                        <!-- 몬스터 스프라이트 슬롯3: enemy-art-img(이미지) 없으면 enemy-art(이모지) 폴백 -->
                         <img class="combatant-art" id="enemy-art-img"
                             src="" alt=""
-                            onerror="this.style.display='none'; document.getElementById('enemy-art').style.display='';" />
+                            data-fallback-id="enemy-art" />
                         <div class="combatant-art" id="enemy-art">👹</div>
                         <div class="combatant-name" id="enemy-name">--</div>
                         <div class="combatant-meta" id="enemy-meta">LV --</div>
@@ -263,19 +237,14 @@
 
                 <!-- ─── 슬롯 4: 추가 몬스터 (다대일 슬롯 1) ─── -->
                 <div class="battle-slot slot-enemy">
-                    <!-- ════════════════════════════════════════════════════════
-                         ▼ [이미지: 몬스터 도트 - 슬롯 4 (다대일)] ▼
-                         권장 크기: 96x96 PNG (투명배경)
-                         단일전에서는 display:none.
-                         다대일 (enemies.length >= 2) 일 때 자동 표시.
-                         ════════════════════════════════════════════════════════ -->
+                    <!-- 몬스터 슬롯4 (다대일 1번째): 단일전 display:none, enemies>=2일 때 표시 -->
                     <div class="combatant enemy" id="enemy-slot-2" data-slot="1" style="display:none;">
                         <div class="target-tag enemy-target-tag-2" style="display:none;">▶ TARGET</div>
                         <!-- <img class="combatant-art" id="enemy-art-2"
                                   src="/img/sprite_goblin.png" alt="" /> -->
                         <img class="combatant-art" id="enemy-art-2-img"
                              src="" alt=""
-                             onerror="this.style.display='none'; document.getElementById('enemy-art-2').style.display='';" />
+                             data-fallback-id="enemy-art-2" />
                         <div class="combatant-art" id="enemy-art-2">👺</div>
                         <div class="combatant-name" id="enemy-name-2">--</div>
                         <div class="combatant-meta" id="enemy-meta-2">LV --</div>
@@ -300,7 +269,7 @@
                         <div class="target-tag enemy-target-tag-3" style="display:none;">▶ TARGET</div>
                         <img class="combatant-art" id="enemy-art-3-img"
                              src="" alt=""
-                             onerror="this.style.display='none'; document.getElementById('enemy-art-3').style.display='';" />
+                             data-fallback-id="enemy-art-3" />
                         <div class="combatant-art" id="enemy-art-3">👺</div>
                         <div class="combatant-name" id="enemy-name-3">--</div>
                         <div class="combatant-meta" id="enemy-meta-3">LV --</div>
@@ -429,8 +398,8 @@
         </div>
     </div>
 
-    <div class="panel" style="padding:8px;">
-        <div class="panel-title" style="margin-bottom:6px;">SYSTEM TERMINAL</div>
+    <div class="panel terminal-panel-wrap">
+        <div class="panel-title terminal-panel-title">SYSTEM TERMINAL</div>
         <div class="terminal" id="terminal">
             <div class="terminal-line">[init] dashboard ready</div>
         </div>
@@ -650,14 +619,12 @@
     <div class="modal modal-ranking ranking-modal-big">
  
         <!-- 우상단 X 닫기 버튼 -->
-        <button class="ranking-close-btn"
-                onclick="closeRankingModal()"
+        <button id="ranking-close-btn" class="ranking-close-btn"
                 title="닫기">✕</button>
  
         <!-- 헤더 (좌우 화살표 + 제목) -->
         <div class="ranking-big-header">
-            <button class="ranking-arrow ranking-arrow-left"
-                    onclick="toggleRanking()"
+            <button id="ranking-prev-btn" class="ranking-arrow ranking-arrow-left"
                     title="다른 랭킹">◀</button>
  
             <div class="ranking-big-title-wrap">
@@ -665,8 +632,7 @@
                 <p id="ranking-subtitle">플레이 점수 기준 TOP 20</p>
             </div>
  
-            <button class="ranking-arrow ranking-arrow-right"
-                    onclick="toggleRanking()"
+            <button id="ranking-next-btn" class="ranking-arrow ranking-arrow-right"
                     title="다른 랭킹">▶</button>
         </div>
  
@@ -720,7 +686,6 @@
 <script src="js/Pentagon.js"></script>          <!-- 펜타곤 차트 -->
 <script src="js/UI_Player.js"></script>         <!-- 좌측 패널 -->
 <script src="js/InventorySwap.js"></script>         <!-- 인벤토리 UI + 관리 -->
-<!-- <script src="js/UI_Explore.js"></script>       탐험 모드 -->
 <!-- 배틀 UI 분리 모듈 (UI_Battle.js 오케스트레이터보다 먼저 로드) -->
 <script src="js/battle/BattleStatusUI.js"></script>
 <script src="js/battle/BattleEffects.js"></script>
@@ -730,7 +695,7 @@
 <script src="js/battle/BattleSidePanel.js"></script>
 <script src="js/UI_Battle.js"></script>         <!-- 배틀 모드 (오케스트레이터) -->
 <script src="js/Modals.js"></script>            <!-- 휴식/도망 + 시뮬 가시화 -->
-<script src="/js/StatAllocate.js"></script>     <!-- 레벨업 스탯 분배 모달 -->
+<script src="js/StatAllocate.js"></script>     <!-- 레벨업 스탯 분배 모달 -->
 <!-- 맵 UI 분리 모듈 (UI_Map.js 오케스트레이터보다 먼저 로드) -->
 <script src="js/map/MapRender.js"></script>
 <script src="js/map/MapRest.js"></script>
