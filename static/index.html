@@ -721,7 +721,11 @@
 <script src="js/UI_Player.js"></script>         <!-- 좌측 패널 -->
 <script src="js/InventorySwap.js"></script>         <!-- 인벤토리 UI + 관리 -->
 <!-- <script src="js/UI_Explore.js"></script>       탐험 모드 -->
-<script src="js/UI_Battle.js"></script>         <!-- 배틀 모드 -->
+<!-- 배틀 UI 분리 모듈 (UI_Battle.js보다 먼저 로드) -->
+<script src="js/battle/BattlestatusUI.js"></script>
+<script src="js/battle/BattleTurn.js"></script>
+<script src="js/battle/BattleEffects.js"></script>
+<script src="js/UI_Battle.js"></script>         <!-- 배틀 모드 (오케스트레이터) -->
 <script src="js/Modals.js"></script>            <!-- 휴식/도망 + 시뮬 가시화 -->
 <script src="/js/StatAllocate.js"></script>     <!-- 레벨업 스탯 분배 모달 -->
 <script src="js/UI_Map.js"></script>            <!-- 노드맵 UI + 관리 -->
