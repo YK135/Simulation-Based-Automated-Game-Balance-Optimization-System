@@ -129,3 +129,63 @@ function refreshBattleBackground(bs) {
 // ── 전투 중 좌측 stat-grid를 실효 스탯으로 다시 렌더 ──
 //   bs.player_effective_stg 등이 있으면 사용, 없으면 원본으로 폴백.
 //   원본과 다르면 .changed 클래스 (노란색 강조).
+
+// ═══════════════════════════════════════════════════════════
+// UI_Battle.js에서 이동: 타겟 태그 / 슬롯 클릭 바인딩 / 턴 시각화
+//   ※ 기존 refreshBattleTargetTags(targetIdx, 숫자)와 다른 함수:
+//     renderBattleTargetTags(bs, 상태객체) — 이름/시그니처 모두 구분됨
+// ═══════════════════════════════════════════════════════════
+
+// ── 타깃 태그: 현재 target_idx 슬롯에만 TARGET 표시 ──
+function renderBattleTargetTags(bs) {
+    const enemiesArr = bs.enemies || [];
+    const slotIdSuffix = (i) => i === 0 ? '-1' : `-${i + 1}`;
+    for (let i = 0; i < 3; i++) {
+        const en = enemiesArr[i];
+        const slotEl = document.getElementById(`enemy-slot${slotIdSuffix(i)}`);
+        if (!slotEl || !en) continue;
+        const targetTag = i === 0
+            ? document.getElementById('target-tag')
+            : slotEl.querySelector('.target-tag');
+        if (targetTag) {
+            targetTag.style.display = (i === bs.target_idx && en.alive) ? 'block' : 'none';
+        }
+    }
+}
+
+// ── 적 슬롯 클릭 바인딩 (다대일 + 살아있는 적만 타깃 변경 가능) ──
+function bindEnemyTargetClicks(bs) {
+    const enemiesArr = bs.enemies || [];
+    const slotIdSuffix = (i) => i === 0 ? '-1' : `-${i + 1}`;
+    for (let i = 0; i < 3; i++) {
+        const en = enemiesArr[i];
+        const slotEl = document.getElementById(`enemy-slot${slotIdSuffix(i)}`);
+        if (!slotEl || !en) continue;
+        if (enemiesArr.length > 1 && en.alive) {
+            slotEl.style.cursor = 'pointer';
+            slotEl.onclick = () => selectTarget(i);
+        } else {
+            slotEl.style.cursor = '';
+            slotEl.onclick = null;
+        }
+    }
+}
+
+// ── 턴 시각화: next_actor 기반 행동권 표시 ──
+function renderBattleTurnState(bs) {
+    const nextActor = bs.next_actor;
+    if (nextActor === 'player') {
+        showPlayerTurn();
+    } else if (nextActor === 'enemy') {
+        showEnemyTurn();
+    } else if (nextActor === 'done') {
+        // 종료 — battleAction에서 처리
+    } else {
+        showEnemyTurn();
+    }
+}
+
+// updateBattleTurnVisual: renderBattleTurnState 별칭 (호환)
+function updateBattleTurnVisual(bs) {
+    renderBattleTurnState(bs);
+}
