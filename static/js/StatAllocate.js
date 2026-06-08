@@ -55,14 +55,22 @@ function renderStatAllocList() {
                 ${added > 0 ? `<span class="added">→ ${newVal}</span>` : ""}
             </span>
             <span class="sa-stat-controls">
-                <button class="sa-btn-pm" onclick="saAdjust('${s.key}', -1)"
+                <button class="sa-btn-pm" data-stat="${s.key}" data-delta="-1"
                     ${alloc <= 0 ? "disabled" : ""}>−</button>
                 <span class="sa-alloc-count">${alloc}</span>
-                <button class="sa-btn-pm" onclick="saAdjust('${s.key}', 1)"
+                <button class="sa-btn-pm" data-stat="${s.key}" data-delta="1"
                     ${remaining <= 0 ? "disabled" : ""}>+</button>
             </span>
         </div>`;
     }).join("");
+
+    // +/- 버튼 이벤트 바인딩 (인라인 onclick 대체)
+    list.querySelectorAll(".sa-btn-pm[data-stat]").forEach(btn => {
+        btn.addEventListener("click", () => {
+            if (btn.disabled) return;
+            saAdjust(btn.dataset.stat, Number(btn.dataset.delta));
+        });
+    });
 
     // 확정 버튼: 1포인트 이상 분배해야 활성화
     const confirmBtn = document.getElementById("sa-confirm");

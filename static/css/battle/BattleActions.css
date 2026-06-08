@@ -1,0 +1,161 @@
+/* ═══════════════════════════════════════════════════════════
+   battle/Battle_Actions.css — 행동 버튼/스킬·아이템 메뉴/턴 인디케이터
+   ═══════════════════════════════════════════════════════════ */
+
+/* ── 액션 버튼 ── */
+.action-bar {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 8px;
+    margin-bottom: 8px;
+}
+.action-btn {
+    padding: 11px;
+    border: 1px solid var(--border);
+    background: var(--bg-darkest);
+    color: var(--text-main);
+    font-family: inherit;
+    font-size: 11px; font-weight: 700;
+    letter-spacing: 0.08em;
+    cursor: pointer;
+    border-radius: 3px;
+    transition: all 0.15s;
+}
+.action-btn:hover:not(:disabled) {
+    transform: translateY(-1px);
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+}
+.action-btn:disabled { opacity: 0.4; cursor: not-allowed; transform: none; }
+
+.action-btn.attack { border-color: rgba(239, 68, 68, 0.4); color: #fca5a5; background: rgba(239, 68, 68, 0.08); }
+.action-btn.attack:hover:not(:disabled) { background: rgba(239, 68, 68, 0.18); border-color: var(--hp-red); }
+.action-btn.skill { border-color: rgba(34, 211, 238, 0.4); color: var(--atb-cyan); background: rgba(34, 211, 238, 0.06); }
+.action-btn.skill:hover:not(:disabled) { background: rgba(34, 211, 238, 0.16); border-color: var(--atb-cyan); }
+.action-btn.item  { border-color: rgba(250, 204, 21, 0.4); color: var(--skill-yellow); background: rgba(250, 204, 21, 0.06); }
+.action-btn.item:hover:not(:disabled) { background: rgba(250, 204, 21, 0.16); border-color: var(--skill-yellow); }
+.action-btn.escape{ border-color: var(--border); color: var(--text-dim); }
+.action-btn.escape:hover:not(:disabled) { background: var(--bg-panel-2); color: var(--text-main); }
+.action-btn.escape-blocked {
+    background: rgba(239, 68, 68, 0.06) !important;
+    border-color: rgba(239, 68, 68, 0.3) !important;
+    color: rgba(239, 68, 68, 0.6) !important;
+    cursor: not-allowed;
+    opacity: 0.55;
+}
+
+/* ── 서브 메뉴 (스킬/아이템 선택) ── */
+.submenu {
+    background: var(--bg-darkest);
+    border: 1px solid var(--accent-cyan);
+    border-radius: 3px;
+    padding: 8px;
+    margin-bottom: 8px;
+    display: none;
+}
+.submenu.active { display: block; }
+.submenu-title {
+    font-size: 9px;
+    color: var(--accent-cyan);
+    margin-bottom: 6px;
+    letter-spacing: 0.1em;
+    font-weight: 700;
+}
+.submenu-list {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 6px;
+}
+.submenu-item {
+    padding: 6px 8px;
+    background: var(--bg-panel);
+    border: 1px solid var(--border);
+    border-radius: 2px;
+    font-size: 10px;
+    cursor: pointer;
+    color: var(--text-main);
+    text-align: center;
+    transition: all 0.1s;
+}
+.submenu-item:hover {
+    background: var(--bg-panel-2);
+    border-color: var(--accent-cyan);
+    color: var(--accent-cyan);
+}
+.submenu-item .cost {
+    font-size: 8px;
+    color: var(--text-muted);
+    margin-left: 4px;
+}
+
+/* ── 차례 인디케이터 ── */
+.action-bar.your-turn {
+    animation: turn-pulse 1.4s ease-in-out infinite;
+}
+@keyframes turn-pulse {
+    0%, 100% { box-shadow: 0 0 0 1px transparent; }
+    50%      { box-shadow: 0 0 12px 2px rgba(45, 212, 191, 0.35); }
+}
+
+.turn-indicator {
+    display: none;
+    text-align: center;
+    padding: 6px 12px;
+    margin-bottom: 8px;
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: 0.15em;
+    border-radius: 3px;
+    transition: all 0.3s;
+}
+.turn-indicator.player-turn {
+    display: block;
+    color: var(--bg-darkest);
+    background: var(--accent-cyan);
+    box-shadow: 0 0 16px rgba(45, 212, 191, 0.5);
+    animation: indicator-glow 1s ease-in-out infinite alternate;
+}
+.turn-indicator.enemy-turn {
+    display: block;
+    color: var(--enemy-orange);
+    background: rgba(251, 146, 60, 0.1);
+    border: 1px solid rgba(251, 146, 60, 0.4);
+}
+@keyframes indicator-glow {
+    from { box-shadow: 0 0 8px rgba(45, 212, 191, 0.4); }
+    to   { box-shadow: 0 0 20px rgba(45, 212, 191, 0.7); }
+}
+
+/* ═══════════════════════════════════════════════════════════
+   배틀 시퀀스 재생 중 — 액션 패널 시각적 비활성화
+   ─────────────────────────────────────────────────────────
+   showEnemyTurn() 호출 시 #action-bar, #actions-panel에 .processing
+   부착. showPlayerTurn() 시 제거.
+   ═══════════════════════════════════════════════════════════ */
+
+#action-bar.processing,
+#actions-panel.processing {
+    opacity: 0.45;
+    pointer-events: none;   /* 클릭 자체를 차단 */
+    filter: grayscale(40%);
+    transition: opacity 0.2s, filter 0.2s;
+}
+
+/* processing 상태일 때 버튼은 회색 */
+#action-bar.processing button,
+#actions-panel.processing button {
+    cursor: not-allowed;
+    background: var(--bg-darkest, #0a0e14);
+    color: var(--text-muted, #4a5660);
+}
+
+/* 메뉴(스킬/아이템) 강제 닫기용 */
+#action-bar.processing .submenu,
+#actions-panel.processing .submenu {
+    display: none !important;
+}
+
+/* 부드러운 전환 — 너무 갑작스럽지 않게 */
+#action-bar,
+#actions-panel {
+    transition: opacity 0.2s, filter 0.2s;
+}

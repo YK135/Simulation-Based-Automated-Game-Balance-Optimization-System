@@ -1,0 +1,103 @@
+/* ═══════════════════════════════════════════════════════════
+   battle/Battle_Stage.css — 전투 영역 레이아웃/배경/슬롯 5분할
+   ═══════════════════════════════════════════════════════════ */
+
+.battle-zone {
+    background: var(--bg-panel);
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    padding: 14px;
+    margin-bottom: 12px;
+    min-height: 280px;
+}
+.battle-header {
+    display: flex; justify-content: space-between; align-items: center;
+    margin-bottom: 14px;
+}
+.battle-title {
+    font-size: 11px; font-weight: 700;
+    letter-spacing: 0.15em;
+    color: var(--accent-cyan);
+}
+.field-name { font-size: 10px; color: var(--text-dim); }
+
+/* ── 배틀 스테이지 5분할 그리드 ── */
+.battle-stage {
+    display: grid;
+    grid-template-columns: 1fr 1fr 1fr 1fr 1fr;
+    gap: 4px;
+    align-items: end;
+    min-height: 320px;
+    padding: 20px 8px 28px 8px;
+    border-radius: 3px;
+    position: relative;
+    background-size: cover;
+    background-position: center bottom;
+    background-repeat: no-repeat;
+    transition: background-image 0.6s ease;
+
+    /* ═══════════════════════════════════════════════════════════════
+       ▼▼▼ 배틀 필드 배경 자리 (4종) ▼▼▼
+       JS가 .battle-stage에 단계 클래스를 토글:
+         .battle-bg-normal-early  →  turn 0~24, 일반 몬스터
+         .battle-bg-midboss       →  중간 보스 전투
+         .battle-bg-normal-late   →  turn 25~49, 일반 몬스터
+         .battle-bg-finalboss     →  최종 보스 전투
+
+       ▶ 권장 이미지 사이즈 (모두 가로형 PNG, JPG):
+         가로 1280px × 세로 500px (약 2.5:1 비율)
+         - 더 큰 사이즈도 OK (800x315 이상이면 무난)
+         - cover 모드로 잘려서 표시되니 위/아래는 살짝 잘릴 수 있음
+         - 이미지 하단에 풀밭/돌바닥 같은 "지면"이 있으면 자연스러움
+
+       ▶ 파일 경로:
+         static/img/bg_battle_normal_early.png
+         static/img/bg_battle_midboss.png
+         static/img/bg_battle_normal_late.png
+         static/img/bg_battle_finalboss.png
+
+       ▶ 사용 방법:
+         아래 4개 background-image 한 줄씩 활성화 (주석 풀기)
+       ═══════════════════════════════════════════════════════════════ */
+
+    /* 기본 배경 (이미지 없을 때 폴백) */
+    background-image:
+        linear-gradient(180deg, transparent 0%, rgba(45, 212, 191, 0.04) 100%),
+        repeating-linear-gradient(90deg,
+            transparent 0px,
+            transparent 19.8%,
+            rgba(45, 212, 191, 0.04) 19.8%,
+            rgba(45, 212, 191, 0.04) 20%);
+}
+
+/* ── 단계별 배경 (이미지 적용 시 주석 풀기) ── */
+/*
+.battle-stage.battle-bg-normal-early {
+    background-image: url('/img/bg_battle_normal_early.png');
+}
+.battle-stage.battle-bg-midboss {
+    background-image: url('/img/bg_battle_midboss.png');
+}
+.battle-stage.battle-bg-normal-late {
+    background-image: url('/img/bg_battle_normal_late.png');
+}
+.battle-stage.battle-bg-finalboss {
+    background-image: url('/img/bg_battle_finalboss.png');
+}
+*/
+.battle-stage::after {
+    content: '';
+    position: absolute;
+    bottom: 32px; left: 6%; right: 6%;
+    height: 1px;
+    background: linear-gradient(90deg, transparent, rgba(45, 212, 191, 0.3), transparent);
+}
+
+.battle-slot {
+    display: flex;
+    align-items: end;
+    justify-content: center;
+    min-height: 290px;
+    position: relative;
+}
+.battle-slot.slot-gap { /* 거리감 슬롯 — 비워둠 */ }

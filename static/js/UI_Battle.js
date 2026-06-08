@@ -73,8 +73,6 @@ function updateBattleModeVisibility(bs) {
     const invPanel = document.getElementById('player-inventory-panel');
     if (invPanel) invPanel.style.display = state.inBattle ? 'none' : '';
     if (mapModeEl) mapModeEl.style.display = 'none';
-    const exploreModeEl = document.getElementById('explore-mode');
-    if (exploreModeEl) exploreModeEl.style.display = 'none';
     const battleModeEl = document.getElementById('battle-mode');
     if (battleModeEl) battleModeEl.style.display = state.inBattle ? 'block' : 'none';
     const actionsPanelEl = document.getElementById('actions-panel');

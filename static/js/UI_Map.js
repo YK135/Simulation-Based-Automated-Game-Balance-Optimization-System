@@ -79,7 +79,7 @@ function scrollToAvailableNode() {
 // ═══════════════════════════════════════════════════════════
 
 function setMapMode() {
-    ["explore-mode", "battle-mode", "actions-panel"].forEach(id => {
+    ["battle-mode", "actions-panel"].forEach(id => {
         const el = document.getElementById(id);
         if (el) el.style.display = "none";
     });

@@ -46,7 +46,6 @@ function refreshPlayer() {
     refreshInventoryPanel(p);
 
     // ── 버프/디버프는 UI_Battle.js의 refreshPlayerStatusList가 전투 중 처리 ──
-    if (typeof refreshExploreInfo === 'function') refreshExploreInfo();
 }
 
 /** 왼쪽 패널 아이템 렌더링 (포션 클릭 사용 가능, 특수 표시만) */

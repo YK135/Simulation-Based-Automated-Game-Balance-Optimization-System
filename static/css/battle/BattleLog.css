@@ -1,0 +1,27 @@
+/* ═══════════════════════════════════════════════════════════
+   battle/Battle_Log.css — 배틀 로그 출력/색상/스크롤
+   ═══════════════════════════════════════════════════════════ */
+
+/* ── 배틀 로그 ── */
+.log-area {
+    background: var(--bg-darkest);
+    border: 1px solid var(--border);
+    border-radius: 3px;
+    padding: 10px 12px;
+    height: 300px;
+    overflow-y: auto;
+    font-size: 10px;
+    line-height: 1.6;
+    margin-bottom: 12px;
+}
+.log-area::-webkit-scrollbar { width: 6px; }
+.log-area::-webkit-scrollbar-track { background: var(--bg-darkest); }
+.log-area::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
+
+.log-line { color: var(--text-dim); }
+.log-line .ts { color: var(--text-muted); margin-right: 6px; }
+.log-line.crit  { color: var(--accent-warn); }
+.log-line.dmg   { color: #fcd5d5; }
+.log-line.heal  { color: #a7f3d0; }
+.log-line.skill { color: var(--accent-cyan); }
+.log-line.system { color: var(--text-muted); font-style: italic; }

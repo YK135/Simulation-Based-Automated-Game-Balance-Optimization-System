@@ -79,9 +79,6 @@ safeBind('btn-restart', () => {
     else document.getElementById('modal-newgame')?.classList.add('active');
 });
 
-// ── 탐험 버튼 — 노드맵으로 대체되어 사용 안 함 ──
-// safeBind('btn-explore', explore);
-
 // ── 휴식 모달 ──
 safeBind('btn-rest-heal',  () => performRest('heal'));
 safeBind('btn-rest-train', () => performRest('train'));

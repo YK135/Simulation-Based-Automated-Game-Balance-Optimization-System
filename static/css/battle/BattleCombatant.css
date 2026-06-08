@@ -1,0 +1,208 @@
+/* ═══════════════════════════════════════════════════════════
+   battle/Battle_Combatant.css — 유닛 카드/이미지/HP·MP·ATB 바/원소·상태 표시
+   ═══════════════════════════════════════════════════════════ */
+
+/* ── 캐릭터/몬스터 슬롯 (투명 직사각형) ── */
+.combatant {
+    display: flex; flex-direction: column; align-items: center;
+    gap: 6px;
+    position: relative;
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   캐릭터/몬스터 이미지 슬롯 — 투명 배경 직사각형
+   - 배경 / 테두리 / 그림자 모두 제거 (배틀 배경 위에 캐릭터만 떠있는 느낌)
+   - 도트 PNG (투명배경) 그대로 보이도록 background: transparent
+   - 가로보다 세로 살짝 긴 직사각형 (캐릭터 비율)
+   ═══════════════════════════════════════════════════════════════ */
+.combatant-art {
+    width: 100px;
+    height: 130px;
+    background: transparent;     /* 직사각형 — 동그라미/배경 제거 */
+    border: none;
+    border-radius: 0;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 60px;
+}
+img.combatant-art {
+    object-fit: contain;
+    padding: 0;
+    background: transparent;
+    image-rendering: pixelated;  /* 도트 PNG 선명하게 */
+}
+
+/* 활성 표시 (내 차례/적 차례 펄스) — 배경/테두리 제거하면서 발광만 남김 */
+.combatant.player .combatant-art {
+    filter: drop-shadow(0 0 12px rgba(45, 212, 191, 0.5));
+}
+.combatant.enemy .combatant-art {
+    filter: drop-shadow(0 0 10px rgba(251, 146, 60, 0.5));
+}
+.combatant.acting .combatant-art {
+    animation: combatant-pulse 0.8s ease-in-out infinite alternate;
+}
+@keyframes combatant-pulse {
+    from { transform: scale(1); }
+    to   { transform: scale(1.06); }
+}
+
+/* 다대일 — 클릭 가능한 적 슬롯 (cursor:pointer 인라인 스타일과 함께) */
+.combatant.enemy:hover .combatant-art {
+    filter: drop-shadow(0 0 16px rgba(251, 146, 60, 0.8));
+    transform: translateY(-3px);
+    transition: all 0.15s;
+}
+
+.combatant-name { font-size: 12px; font-weight: 700; letter-spacing: 0.04em; }
+.combatant-meta { font-size: 9px; color: var(--text-dim); }
+
+/* ── HP/MP 미니바 ── */
+.combatant-bars {
+    display: flex; flex-direction: column;
+    gap: 4px;
+    width: 130px;
+    margin-top: 6px;
+}
+.cb-row {
+    display: flex; align-items: center;
+    gap: 5px; font-size: 10px;
+}
+.cb-label {
+    width: 24px;
+    color: var(--text-dim);
+    font-weight: 700;
+    font-size: 9px;
+}
+.cb-track {
+    flex: 1;
+    height: 11px;
+    background: var(--bg-darkest);
+    border: 1px solid var(--border);
+    border-radius: 2px;
+    overflow: hidden;
+}
+.cb-fill { height: 100%; transition: width 0.4s; }
+.cb-fill.hp { background: linear-gradient(90deg, #f87171, var(--hp-red)); box-shadow: inset 0 0 4px rgba(255,255,255,0.15); }
+.cb-fill.mp { background: linear-gradient(90deg, #60a5fa, var(--mp-blue)); box-shadow: inset 0 0 4px rgba(255,255,255,0.15); }
+.cb-text {
+    width: 56px;
+    text-align: right;
+    font-size: 9px;
+    font-weight: 700;
+    color: var(--text-main);
+}
+
+/* ── 타깃 태그 (적 위에 ▶ TARGET) ── */
+.target-tag {
+    position: absolute;
+    top: -10px;
+    background: var(--accent-cyan);
+    color: var(--bg-darkest);
+    font-size: 8px; font-weight: 700;
+    padding: 2px 6px;
+    border-radius: 2px;
+    box-shadow: 0 0 8px rgba(45, 212, 191, 0.6);
+}
+
+
+/* ═══════════════════════════════════════════════════════════
+   ATB 바 (HP/MP 바와 동일 구조, 색만 다름)
+   ─────────────────────────────────────────────────────────
+   플레이어: 사이안 (cyber 톤)
+   적: 주황 (구분)
+   100% 도달 시 글로우 효과
+   ═══════════════════════════════════════════════════════════ */
+
+/* ATB 트랙 — 살짝 더 가늘게 */
+.cb-track.atb-track {
+    height: 5px;
+    border-color: rgba(0, 255, 208, 0.2);
+}
+
+/* 플레이어 ATB — 사이안 */
+.cb-fill.atb {
+    background: linear-gradient(90deg,
+        rgba(0, 255, 208, 0.4) 0%,
+        var(--accent-cyan, #00ffd0) 100%);
+    box-shadow: inset 0 0 4px rgba(255,255,255,0.2);
+    transition: width 0.3s ease;
+}
+
+/* 적 ATB — 주황 */
+.cb-fill.atb-enemy {
+    background: linear-gradient(90deg,
+        rgba(251, 146, 60, 0.4) 0%,
+        rgba(251, 146, 60, 0.9) 100%);
+    box-shadow: inset 0 0 4px rgba(255,255,255,0.2);
+    transition: width 0.3s ease;
+}
+
+/* 100% 도달 시 펄스 글로우 — 행동 임박 표시 */
+.cb-fill.atb.full,
+.cb-fill.atb-enemy.full {
+    animation: atb-ready-pulse 0.8s ease-in-out infinite;
+}
+
+@keyframes atb-ready-pulse {
+    0%, 100% {
+        box-shadow: 0 0 4px rgba(0, 255, 208, 0.5);
+    }
+    50% {
+        box-shadow: 0 0 12px rgba(0, 255, 208, 0.9);
+    }
+}
+
+.cb-fill.atb-enemy.full {
+    animation-name: atb-ready-pulse-enemy;
+}
+
+@keyframes atb-ready-pulse-enemy {
+    0%, 100% {
+        box-shadow: 0 0 4px rgba(251, 146, 60, 0.5);
+    }
+    50% {
+        box-shadow: 0 0 12px rgba(251, 146, 60, 0.9);
+    }
+}
+
+/* ATB 라벨 — 작게 */
+.cb-row.atb-row .cb-label {
+    color: var(--accent-cyan, #00ffd0);
+    font-size: 8px;
+    letter-spacing: 0.1em;
+}
+
+/* ATB 텍스트 — 수치 작게 */
+.cb-row.atb-row .cb-text {
+    color: var(--accent-cyan, #00ffd0);
+    font-size: 9px;
+    font-family: 'Cormorant Garamond', monospace;
+}
+
+.cb-row.atb-row.enemy .cb-label,
+.cb-row.atb-row.enemy .cb-text {
+    color: rgba(251, 146, 60, 0.9);
+}
+/* ── 원소 부착 이름 색상 ── */
+.element-fire {
+    color: #ff5a3c;
+    text-shadow: 0 0 8px rgba(255, 90, 60, 0.5);
+}
+
+.element-ice {
+    color: #5ecbff;
+    text-shadow: 0 0 8px rgba(94, 203, 255, 0.5);
+}
+
+.element-lightning {
+    color: #b47cff;
+    text-shadow: 0 0 8px rgba(180, 124, 255, 0.5);
+}
+
+/* ── 상태이상 이모지 ── */
+.name-status-icons {
+    margin-left: 6px;
+    font-size: 0.85em;
+    vertical-align: middle;
+    opacity: 0.95;
+}
