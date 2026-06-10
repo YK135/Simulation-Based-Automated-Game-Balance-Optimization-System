@@ -87,14 +87,14 @@ const JOB_DATA = {
 
 const CHAR_IMAGES = {
 
-    // 좌측 플레이어 패널 — 얼굴 (idle/hurt/happy)
+    // 좌측 플레이어 패널 — 직업별 초상화 (portraits/)
+    //   setCharState('player_panel','idle')이 이 경로를 player-portrait.src에 세팅.
+    //   이미지 없으면 onerror로 player-icon(이모지) 폴백 (CharSprite.js 처리).
     player_panel: {
-        '전사': {
-            idle:  '/img/face/warrior_face_A.png',
-            happy:  '/img/face/warrior_face_B.png',
-            hurt: '/img/face/warrior_face_C.png',
-        },
-        // 마법사, 탱커, 도적은 이미지 없음 → 이모지 폴백
+        '전사':   { idle: '/img/portraits/warrior.png' },
+        '마법사': { idle: '/img/portraits/mage.png' },
+        '탱커':   { idle: '/img/portraits/tanker.png' },
+        '도적':   { idle: '/img/portraits/rogue.png' },
     },
 
     // 배틀필드 플레이어 — 전신 (idle/attack/skill/hurt/dead)
