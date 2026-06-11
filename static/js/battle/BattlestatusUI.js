@@ -30,15 +30,44 @@ function statusEmojiList(entity) {
 
     return [...new Set(emojis)].join(' ');
 }
- 
+
+/** 상태이상 아이콘 키 목록 반환 (이미지/이모지 공통)
+ *  ignite/frostbite/paralyze + 버프/디버프. 원소 부착은 제외(이름 색상으로 표시). */
+function getStatusIconKeys(entity) {
+    if (!entity) return [];
+    const keys = [];
+    (entity.status_effects || []).forEach(e => {
+        if (e.type === 'ignite')         keys.push('ignite');
+        else if (e.type === 'frostbite') keys.push('frostbite');
+        else if (e.type === 'paralyze')  keys.push('paralyze');
+    });
+    if ((entity.debuffs || []).length > 0) keys.push('debuff');
+    if ((entity.buffs   || []).length > 0) keys.push('buff');
+    return [...new Set(keys)];
+}
 
 function renderNameWithStatus(el, entity) {
     if (!el) return;
     applyElementNameClass(el, entity.element_aura || '');
-    el.innerHTML = `
-        <span class="name-text">${entity.name}</span>
-        <span class="name-status-icons">${statusEmojiList(entity)}</span>
-    `;
+    el.innerHTML = '';
+
+    const nameText = document.createElement('span');
+    nameText.className = 'name-text';
+    nameText.textContent = entity.name;
+
+    const iconsWrap = document.createElement('span');
+    iconsWrap.className = 'name-status-icons';
+    getStatusIconKeys(entity).forEach(key => {
+        const meta = (typeof STATUS_ICONS !== 'undefined' ? STATUS_ICONS[key] : null) || { icon: '?' };
+        if (typeof renderIconWithFallback === 'function') {
+            iconsWrap.appendChild(renderIconWithFallback(meta, 'status-icon'));
+        } else {
+            iconsWrap.textContent += (meta.icon || '');
+        }
+    });
+
+    el.appendChild(nameText);
+    el.appendChild(iconsWrap);
 }
 
 function refreshLeftStatsBattle(bs) {

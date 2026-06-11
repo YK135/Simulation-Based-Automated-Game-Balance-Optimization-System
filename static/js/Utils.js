@@ -59,3 +59,34 @@ function logLine(msg, type='') {
 function clearLog() {
     document.getElementById('log-area').innerHTML = '';
 }
+
+
+// ── 공통 아이콘 렌더 (이미지 우선 + 이모지 fallback) ──
+//   meta: { icon: 이모지, img: 경로 } | undefined
+//   className: wrap 클래스 (예 'item-icon')
+function renderIconWithFallback(meta, className) {
+    const wrap = document.createElement('span');
+    wrap.className = className || 'icon-wrap';
+
+    const fallback = document.createElement('span');
+    fallback.className = 'icon-fallback';
+    fallback.textContent = (meta && meta.icon) || '?';
+
+    if (meta && meta.img) {
+        const img = document.createElement('img');
+        img.className = 'icon-img';
+        img.src = meta.img;
+        img.alt = '';
+        img.draggable = false;
+        img.addEventListener('error', () => {
+            img.style.display = 'none';
+            fallback.style.display = '';
+        });
+        img.addEventListener('load', () => {
+            fallback.style.display = 'none';
+        });
+        wrap.appendChild(img);
+    }
+    wrap.appendChild(fallback);
+    return wrap;
+}

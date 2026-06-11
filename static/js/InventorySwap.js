@@ -12,7 +12,7 @@ function openInvSwap(incoming, candidates) {
     ivCandidates   = candidates || [];
 
     const el = document.getElementById('iv-incoming');
-    if (el) el.textContent = incoming;
+    if (el) el.textContent = (typeof itemLabel === 'function') ? itemLabel(incoming) : incoming;
     renderInvCandidates();
 
     const modal = document.getElementById('modal-inv-swap');
@@ -27,8 +27,9 @@ function renderInvCandidates() {
     ivCandidates.forEach(name => {
         const row = document.createElement('div');
         row.className = 'iv-candidate' + (ivSelectedDrop === name ? ' selected' : '');
+        const dispName = (typeof itemLabel === 'function') ? itemLabel(name) : name;
         row.innerHTML = `
-            <span class="iv-cand-name">${name}</span>
+            <span class="iv-cand-name">${dispName}</span>
             <span class="iv-cand-mark">✕ 버림</span>
         `;
         row.onclick = () => {
@@ -64,7 +65,7 @@ async function confirmInvSwap() {
 }
 
 function cancelInvSwap() {
-    toast(`${ivIncomingItem} 획득 포기`, 'info');
+    toast(`${(typeof itemLabel === 'function') ? itemLabel(ivIncomingItem) : ivIncomingItem} 획득 포기`, 'info');
     closeInvSwap();
 }
 

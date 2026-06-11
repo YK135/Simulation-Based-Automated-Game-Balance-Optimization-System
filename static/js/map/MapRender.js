@@ -129,10 +129,35 @@ function _buildNodeEl(nodeData, availSet) {
 
     if (onPath) el.classList.add("on-path");
 
-    el.innerHTML = `
-        <span class="map-node-icon">${meta.icon}</span>
-        <span class="map-node-label">${meta.label}</span>
-    `;
+    // 아이콘: 이미지 우선, 실패/없으면 이모지 폴백
+    const iconWrap = document.createElement("span");
+    iconWrap.className = "map-node-icon";
+    const fallback = document.createElement("span");
+    fallback.className = "map-node-icon-fallback";
+    fallback.textContent = meta.icon || "?";
+    if (meta.img) {
+        const img = document.createElement("img");
+        img.className = "map-node-icon-img";
+        img.src = meta.img;
+        img.alt = "";
+        img.draggable = false;
+        img.addEventListener("error", () => {
+            img.style.display = "none";
+            fallback.style.display = "";
+        });
+        img.addEventListener("load", () => {
+            fallback.style.display = "none";
+        });
+        iconWrap.appendChild(img);
+    }
+    iconWrap.appendChild(fallback);
+
+    const labelEl = document.createElement("span");
+    labelEl.className = "map-node-label";
+    labelEl.textContent = meta.label;
+
+    el.appendChild(iconWrap);
+    el.appendChild(labelEl);
 
     // x_pos 좌표 기반 배치 (x_offset은 fallback)
     const xPos = nodeData.x_pos !== undefined ? nodeData.x_pos : (nodeData.x_offset || 0);

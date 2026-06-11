@@ -17,6 +17,7 @@ function _showShopPanel(r) {
                     <div class="shop-item ${gold < item.price ? "cant-afford" : ""}"
                          data-item-id="${item.id}"
                          data-price="${item.price}">
+                        <span class="shop-item-icon" data-icon-for="${item.id}"></span>
                         <span class="shop-item-name">${item.name}</span>
                         <span class="shop-item-effect">${item.effect}</span>
                         <span class="shop-item-price">${item.price} G</span>
@@ -26,6 +27,17 @@ function _showShopPanel(r) {
             <button class="btn shop-leave-btn" id="shop-leave-btn">나가기</button>
         </div>
     `;
+
+    // 아이콘 주입 (이미지 우선 + 이모지 폴백) — name 텍스트/구매 id 영향 없음
+    overlay.querySelectorAll(".shop-item-icon[data-icon-for]").forEach(span => {
+        const id = span.dataset.iconFor;
+        const meta = (typeof ITEM_ICONS !== "undefined" ? ITEM_ICONS[id] : null) || { icon: "□" };
+        if (typeof renderIconWithFallback === "function") {
+            span.replaceWith(renderIconWithFallback(meta, "shop-item-icon"));
+        } else {
+            span.textContent = meta.icon;
+        }
+    });
 
     // 이벤트 바인딩 (인라인 onclick 대체)
     overlay.querySelectorAll(".shop-item[data-item-id]").forEach(el => {

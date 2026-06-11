@@ -17,12 +17,13 @@
      handleMapNodeDone(r)     — 노드 완료 후 맵 복귀
    ═══════════════════════════════════════════════════════════ */
 const NODE_META = {
-    battle: { icon: "⚔",  label: "BATTLE",  color: "#ff5050" },
-    elite:  { icon: "💀", label: "ELITE",   color: "#ff9632" },
-    rest:   { icon: "🏕", label: "REST",    color: "#50dc78" },
-    shop:   { icon: "🛒", label: "SHOP",    color: "#ffd23c" },
-    event:  { icon: "❓", label: "EVENT",   color: "#a064ff" },
-    boss:   { icon: "💠", label: "BOSS",    color: "#ff2828" },
+    start:  { icon: "🧭", label: "START",  color: "#8aa0b0", img: "/img/icons/nodes/start.png" },
+    battle: { icon: "⚔",  label: "BATTLE", color: "#ff5050", img: "/img/icons/nodes/battle.png" },
+    elite:  { icon: "💀", label: "ELITE",  color: "#ff9632", img: "/img/icons/nodes/elite.png" },
+    rest:   { icon: "🏕", label: "REST",   color: "#50dc78", img: "/img/icons/nodes/rest.png" },
+    shop:   { icon: "🛒", label: "SHOP",   color: "#ffd23c", img: "/img/icons/nodes/shop.png" },
+    event:  { icon: "❓", label: "EVENT",  color: "#a064ff", img: "/img/icons/nodes/event.png" },
+    boss:   { icon: "💠", label: "BOSS",   color: "#ff2828", img: "img/icons/nodes/boss.png" },
 };
 
 // ─────────────────────────────────────────────

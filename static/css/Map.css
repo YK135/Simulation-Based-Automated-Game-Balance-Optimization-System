@@ -322,28 +322,44 @@
 }
 
 .shop-items-grid {
-    display: grid;
-    grid-template-columns: 1fr 1fr;
+    display: flex;
+    flex-direction: column;
     gap: 6px;
 }
 
+/* 카드형: [아이콘] [이름+설명] [가격] */
 .shop-item {
-    background: rgba(255,255,255,0.04);
+    background: rgba(212,175,106,0.04);
     border: 1px solid rgba(0,255,208,0.2);
     border-radius: 4px;
     padding: 8px;
     cursor: pointer;
     transition: all 0.15s;
-    display: flex;
-    flex-direction: column;
-    gap: 3px;
+    display: grid;
+    grid-template-columns: 30px 1fr auto;
+    gap: 8px;
+    align-items: center;
 }
 
 .shop-item:hover { border-color: rgba(255,210,60,0.6); }
 .shop-item.cant-afford { opacity: 0.4; cursor: not-allowed; }
-.shop-item-name { font-size: 11px; font-weight: 600; }
-.shop-item-effect { font-size: 10px; color: #6b7a8d; }
-.shop-item-price { font-size: 11px; color: rgba(255,210,60,0.8); font-weight: 700; align-self: flex-end; }
+
+.shop-item-icon {
+    display: inline-grid;
+    place-items: center;
+    width: 28px;
+    height: 28px;
+    grid-row: 1 / span 2;
+}
+.shop-item-icon .icon-img { width: 100%; height: 100%; object-fit: contain; }
+.shop-item-icon .icon-fallback { font-size: 18px; line-height: 1; }
+
+.shop-item-name { font-size: 11px; font-weight: 600; grid-column: 2; }
+.shop-item-effect { font-size: 10px; color: #6b7a8d; grid-column: 2; }
+.shop-item-price {
+    font-size: 11px; color: rgba(255,210,60,0.8); font-weight: 700;
+    grid-column: 3; grid-row: 1 / span 2; align-self: center;
+}
 .shop-leave-btn { margin-top: 4px; font-size: 10px; padding: 6px; }
 
 .rest-title {
@@ -463,4 +479,18 @@
     color: var(--accent-cyan);
     font-size: 13px;
     font-weight: 700;
+}
+
+/* ── 노드 아이콘 이미지 + 폴백 (이미지 없으면 이모지) ── */
+.map-node-icon-img {
+    width: 62%;
+    height: 62%;
+    object-fit: contain;
+    display: block;
+}
+.map-node-icon-fallback {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    line-height: 1;
 }

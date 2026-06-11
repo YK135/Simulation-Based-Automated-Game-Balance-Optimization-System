@@ -78,7 +78,20 @@ function refreshInventoryPanel(p) {
                 // 전투 중에는 클릭 비활성
                 const usable = !state.inBattle;
                 row.className = `pip-item${usable ? ' usable' : ''}`;
-                row.innerHTML = `<span class="pip-item-name">${name}</span><span class="pip-item-count">×${count}</span>`;
+                // 아이콘(이미지 우선 + 이모지 폴백) + 이름 + 수량
+                if (typeof renderIconWithFallback === 'function') {
+                    row.appendChild(renderIconWithFallback(
+                        (typeof ITEM_ICONS !== 'undefined' ? ITEM_ICONS[name] : null) || { icon: '□' },
+                        'item-icon'));
+                }
+                const nameSp = document.createElement('span');
+                nameSp.className = 'pip-item-name';
+                nameSp.textContent = name;
+                const countSp = document.createElement('span');
+                countSp.className = 'pip-item-count';
+                countSp.textContent = `×${count}`;
+                row.appendChild(nameSp);
+                row.appendChild(countSp);
                 if (usable) {
                     row.onclick = () => usePotionFromPanel(name);
                     row.title = '클릭하여 사용';
@@ -99,7 +112,19 @@ function refreshInventoryPanel(p) {
             special.forEach(name => {
                 const row = document.createElement('div');
                 row.className = 'pip-item pip-special';
-                row.innerHTML = `<span class="pip-item-name">${name}</span><span class="pip-item-badge">★</span>`;
+                if (typeof renderIconWithFallback === 'function') {
+                    row.appendChild(renderIconWithFallback(
+                        (typeof ITEM_ICONS !== 'undefined' ? ITEM_ICONS[name] : null) || { icon: '□' },
+                        'item-icon'));
+                }
+                const nameSp2 = document.createElement('span');
+                nameSp2.className = 'pip-item-name';
+                nameSp2.textContent = name;
+                const badgeSp = document.createElement('span');
+                badgeSp.className = 'pip-item-badge';
+                badgeSp.textContent = '★';
+                row.appendChild(nameSp2);
+                row.appendChild(badgeSp);
                 row.title = '필드에서 사용 불가';
                 specialEl.appendChild(row);
             });

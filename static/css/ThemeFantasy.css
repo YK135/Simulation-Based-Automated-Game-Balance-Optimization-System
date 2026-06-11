@@ -124,28 +124,37 @@ body {
     background-size: cover;
     background-position: center;
 }
-/* 추후 배경 이미지 — class별 override (gradient 오버레이는 유지해 가독성 확보):
+/* 전투 타입별 배경 이미지 — JS(refreshBattleBackground)가 클래스 부착.
+   url() 404여도 그 레이어만 무시되고 위 .battle-stage gradient가 남아 안 깨짐.
+   gradient 오버레이를 먼저 깔아 캐릭터/텍스트 가독성 확보. */
 .battle-stage.battle-bg-normal-early {
     background-image:
         linear-gradient(180deg, rgba(5,10,9,0.05), rgba(5,10,9,0.45)),
-        url('../img/backgrounds/battle_normal_early.png');
+        url('../img/backgrounds/battle_normal_early.png'),
+        radial-gradient(circle at 50% 30%, rgba(212,175,106,0.16), transparent 34%),
+        linear-gradient(180deg, #16271f 0%, #0b1412 100%);
 }
 .battle-stage.battle-bg-normal-late {
     background-image:
         linear-gradient(180deg, rgba(5,10,9,0.10), rgba(5,10,9,0.55)),
-        url('../img/backgrounds/battle_normal_late.png');
+        url('../img/backgrounds/battle_normal_late.png'),
+        radial-gradient(circle at 50% 30%, rgba(120,150,200,0.12), transparent 34%),
+        linear-gradient(180deg, #131c26 0%, #0a1016 100%);
 }
 .battle-stage.battle-bg-midboss {
     background-image:
         linear-gradient(180deg, rgba(10,5,5,0.15), rgba(10,5,5,0.55)),
-        url('../img/backgrounds/battle_midboss.png');
+        url('../img/backgrounds/battle_midboss.png'),
+        radial-gradient(circle at 50% 35%, rgba(224,120,60,0.16), transparent 32%),
+        linear-gradient(180deg, #241612 0%, #120a09 100%);
 }
 .battle-stage.battle-bg-finalboss {
     background-image:
         linear-gradient(180deg, rgba(15,5,5,0.20), rgba(15,5,5,0.60)),
-        url('../img/backgrounds/battle_finalboss.png');
+        url('../img/backgrounds/battle_finalboss.png'),
+        radial-gradient(circle at 50% 35%, rgba(200,40,40,0.18), transparent 32%),
+        linear-gradient(180deg, #2a1010 0%, #140707 100%);
 }
-*/
 
 /* ─────────────────────────────────────────────
    6. 발밑 그림자 — 전투 공간감 (이미지 없이)
@@ -269,3 +278,65 @@ body {
 img[src=""], img:not([src]) { /* 빈 src img는 표시 안 함 */ }
 .map-node-icon-img:not([src]),
 .map-node-icon-img[src=""] { display: none; }
+
+
+/* ─────────────────────────────────────────────
+   13. 아이템 아이콘 (이미지 + 이모지 폴백) — 13단계 추가
+   ───────────────────────────────────────────── */
+.icon-wrap,
+.item-icon {
+    display: inline-grid;
+    place-items: center;
+    width: 20px;
+    height: 20px;
+    flex: 0 0 auto;
+}
+.icon-img {
+    width: 100%;
+    height: 100%;
+    object-fit: contain;
+    display: block;
+}
+.icon-fallback {
+    font-size: 14px;
+    line-height: 1;
+}
+/* 아이템 row를 flex 정렬 (아이콘-이름-수량).
+   .pip-item은 기존 display:flex + space-between 유지 → gap만 보강.
+   .submenu-item은 기존 text-align:center(block) → flex로 override. */
+.pip-item { gap: 6px; }
+.submenu-item {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    text-align: left;
+}
+.submenu-item .item-name { flex: 1; }
+
+
+/* ─────────────────────────────────────────────
+   14. 상태이상 아이콘 (이름 옆) — 원소는 색상만, 상태이상만 아이콘
+   ───────────────────────────────────────────── */
+.name-status-icons {
+    display: inline-flex;
+    align-items: center;
+    gap: 3px;
+    margin-left: 4px;
+    vertical-align: middle;
+}
+.status-icon {
+    display: inline-grid;
+    place-items: center;
+    width: 16px;
+    height: 16px;
+    flex: 0 0 auto;
+}
+.status-icon .icon-img {
+    width: 100%;
+    height: 100%;
+    object-fit: contain;
+}
+.status-icon .icon-fallback {
+    font-size: 12px;
+    line-height: 1;
+}

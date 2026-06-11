@@ -45,7 +45,20 @@ if (battleItems.length === 0) {
     Object.entries(counts).forEach(([name, n]) => {
         const cell = document.createElement('div');
         cell.className = 'submenu-item';
-        cell.innerHTML = `${name}<span class="cost">×${n}</span>`;
+        // 아이콘(이미지 우선 + 이모지 폴백) + 이름 + 수량
+        if (typeof renderIconWithFallback === 'function') {
+            cell.appendChild(renderIconWithFallback(
+                (typeof ITEM_ICONS !== 'undefined' ? ITEM_ICONS[name] : null) || { icon: '□' },
+                'item-icon'));
+        }
+        const nameEl = document.createElement('span');
+        nameEl.className = 'item-name';
+        nameEl.textContent = name;
+        const costEl = document.createElement('span');
+        costEl.className = 'cost';
+        costEl.textContent = `×${n}`;
+        cell.appendChild(nameEl);
+        cell.appendChild(costEl);
         cell.onclick = () => useItem(name);
         il.appendChild(cell);
     });
