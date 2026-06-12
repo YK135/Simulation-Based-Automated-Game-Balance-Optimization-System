@@ -489,6 +489,10 @@ class _SnapUnit:
         self.first_attack_bonus = getattr(snap, 'first_attack_bonus', 1.0)
         self.has_attacked    = getattr(snap, 'has_attacked', False)
         self.enemy_type      = getattr(snap, 'enemy_type', snap.name)
+        # 원소 시스템 — 왕복 변환(EntitySnapshot→_SnapUnit→from_enemy) 시 유실 방지
+        #   (버그: 원소 슬라임 초기 큐가 make_battle_unit에서 사라지던 문제)
+        self.attack_element     = getattr(snap, 'attack_element', '')
+        self.init_element_queue = list(getattr(snap, 'element_queue', []) or [])
 
     def exp_reward(self, player_maxexp: int) -> int:
         ratio = {"상": 0.45, "중": 0.34, "하": 0.28}.get(self.grade, 0.34)

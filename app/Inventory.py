@@ -49,6 +49,22 @@ def use_item():
     if not meta:
         return jsonify({"ok": False, "error": "알 수 없는 아이템입니다."})
 
+    # ── 특수 아이템 방어: 필드에서 사용 불가 (UI는 막지만 API 직접 호출 방어) ──
+    #    특수 아이템은 amount/stat가 없어 아래 코드에서 500이 나므로 먼저 차단.
+    if meta.get("slot") == "special" or meta.get("category"):
+        return jsonify({
+            "ok": False,
+            "error": "특수 아이템은 전투 중에만 사용할 수 있습니다.",
+            "reason": "battle_only",
+        }), 400
+
+    if "amount" not in meta or "stat" not in meta:
+        return jsonify({
+            "ok": False,
+            "error": "필드에서 사용할 수 없는 아이템입니다.",
+            "reason": "not_field_item",
+        }), 400
+
     amount = meta["amount"](player) if callable(meta["amount"]) else meta["amount"]
 
     if meta["stat"] == "hp":

@@ -23,14 +23,17 @@ for p in (_HERE, os.path.join(_HERE, "ai"), os.path.join(_HERE, "game"),
         sys.path.insert(0, p)
 
 try:
-    from ai.battle import (
+    from ai.battle.Battle_Engine import (
         EntitySnapshot, StatusEffect, Debuff, Buff,
         execute_skill, use_item, apply_element_and_react,
         _apply_damage_with_shield, SKILL_META, ITEM_META, REACTIONS,
     )
-except ImportError as ex:
-    print(f"필수 모듈 import 실패: {ex}")
-    sys.exit(1)
+except ModuleNotFoundError:
+    from ai.battle.Battle_Engine import (
+        EntitySnapshot, StatusEffect, Debuff, Buff,
+        execute_skill, use_item, apply_element_and_react,
+        _apply_damage_with_shield, SKILL_META, ITEM_META, REACTIONS,
+    )
 
 
 # ─────────────────────────────────────────────
@@ -354,9 +357,9 @@ def test_battle_log():
     print("\n[15] 전투 로그 기록")
     try:
         try:
-            from ai.battle import TurnLog
+            from ai.battle.Battle_Engine import TurnLog
         except ModuleNotFoundError:
-            from ai.battle import TurnLog
+            from ai.battle.Battle_Engine import TurnLog
     except Exception as ex:
         check("TurnLog import", False, f"{ex}")
         return

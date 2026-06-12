@@ -37,6 +37,26 @@ def _current_element(entity) -> str:
     return q[-1] if q else ""
 
 
+# ── 원소 면역 (원소 슬라임은 자기 원소에 완전 면역) ──
+ELEMENT_IMMUNITY_BY_ENEMY_TYPE = {
+    "화염 슬라임": "fire",
+    "빙결 슬라임": "ice",
+    "번개 슬라임": "lightning",
+}
+
+
+def is_element_immune(defender, attack_element: str) -> bool:
+    """defender가 attack_element에 면역인지. physical/무원소는 면역 없음."""
+    if not attack_element or attack_element == "physical":
+        return False
+    enemy_type = getattr(defender, "enemy_type", "") or getattr(defender, "name", "")
+    immune = ELEMENT_IMMUNITY_BY_ENEMY_TYPE.get(enemy_type)
+    if immune is None:
+        # enemy_type이 비어있는 경우 name으로 재시도
+        immune = ELEMENT_IMMUNITY_BY_ENEMY_TYPE.get(getattr(defender, "name", ""))
+    return immune == attack_element
+
+
 def apply_element_and_react(
     attacker,
     defender,
@@ -49,6 +69,12 @@ def apply_element_and_react(
     반환: 최종 데미지
     """
     q = getattr(defender, "element_queue", [])
+
+    # ── 원소 면역: 같은 원소 슬라임에게는 완전 무효 ──
+    #    데미지 0 + 큐 중첩 X + 상태이상 X + 반응 X
+    if is_element_immune(defender, attack_element):
+        messages.append(f"{defender.name}에게 {attack_element} 공격은 효과가 없다!")
+        return 0
 
     # physical: 파쇄 체크만 (큐에 추가 안 함)
     if attack_element == "physical" or not attack_element:

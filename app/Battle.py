@@ -43,7 +43,7 @@ def _unit_to_snap(unit) -> "EntitySnapshot":
     from ai.battle import EntitySnapshot as ES
     if isinstance(unit, ES):
         return unit
-    return ES(
+    snap = ES(
         name   = unit.name,
         hp     = unit.hp,     maxhp  = unit.hp,
         mp     = getattr(unit, "mp", 0),
@@ -58,7 +58,13 @@ def _unit_to_snap(unit) -> "EntitySnapshot":
         first_strike    = getattr(unit, "first_strike", False),
         first_attack_bonus = getattr(unit, "first_attack_bonus", 1.0),
         enemy_type      = getattr(unit, "enemy_type", unit.name),
+        attack_element  = getattr(unit, "attack_element", ""),
     )
+    # 원소 초기 큐 보존 (원소 슬라임 유실 방지)
+    _init_q = getattr(unit, "init_element_queue", None) or getattr(unit, "element_queue", [])
+    if _init_q:
+        snap.element_queue = list(_init_q)
+    return snap
 
 
 def _start_battle(gs: dict, enemy, is_boss: bool = False) -> dict:

@@ -354,6 +354,19 @@ class EntitySnapshot:
         init_q = getattr(enemy, "init_element_queue", [])
         if init_q:
             snap.element_queue = list(init_q)
+        # 안전망: 변환 과정에서 큐가 유실됐어도 원소 슬라임은 이름으로 복구
+        if not snap.element_queue:
+            _elem_by_name = {
+                "화염 슬라임": "fire",
+                "빙결 슬라임": "ice",
+                "번개 슬라임": "lightning",
+            }
+            _key = snap.enemy_type or snap.name
+            _elem = _elem_by_name.get(_key) or _elem_by_name.get(snap.name)
+            if _elem:
+                snap.element_queue = [_elem]
+                if not snap.attack_element:
+                    snap.attack_element = _elem
         return snap
 
 
