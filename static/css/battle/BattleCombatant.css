@@ -206,3 +206,10 @@ img.combatant-art {
     vertical-align: middle;
     opacity: 0.95;
 }
+
+
+/* ── 빈/깨진 이미지 안전망 (첫 전투 src="" 박스 방지) ── */
+img.combatant-art[src=""],
+img.combatant-art:not([src]) {
+    display: none !important;
+}

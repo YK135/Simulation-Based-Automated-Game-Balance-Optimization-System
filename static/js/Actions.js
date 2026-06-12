@@ -187,6 +187,11 @@ async function useItem(itemName) {
 }
 
 async function useItemInField(itemName) {
+    // 사망 상태 차단 (백엔드도 막지만 프론트에서 1차 차단)
+    if (state.player && state.player.hp <= 0) {
+        toast('사망 상태에서는 아이템을 사용할 수 없습니다.', 'error');
+        return;
+    }
     const r = await api('/use_item', { item: itemName });
     if (!r.ok) { toast(r.error || '사용 실패', 'error'); return; }
     if (r.player) {

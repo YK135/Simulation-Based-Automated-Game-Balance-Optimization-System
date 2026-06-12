@@ -57,7 +57,11 @@ function setCharState(target, stateName, opts) {
         }
     } else if (iconEl) {
         // 매핑에 이미지 경로 없음 — 이모지 표시
-        if (imgEl) { imgEl.style.display = 'none'; imgEl.style.backgroundImage = ''; }
+        if (imgEl) {
+            if (typeof _clearSheet === 'function') _clearSheet(imgEl);
+            imgEl.removeAttribute('src');     // src="" 잔여로 깨진 박스 생기는 것 방지
+            imgEl.style.display = 'none';
+        }
         iconEl.style.display = '';
     }
 
@@ -231,7 +235,7 @@ function _playSheet(imgEl, iconEl, meta) {
         const dur = (frames / (meta.fps || 8)).toFixed(3) + 's';
         const iter = meta.loop ? 'infinite' : '1';
         const fill = meta.loop ? 'none' : 'forwards';
-        imgEl.style.animation = animName + ' ' + dur + ' steps(' + frames + ') ' + iter + ' ' + fill;
+        imgEl.style.animation = animName + ' ' + dur + ' linear ' + iter + ' ' + fill;
         if (iconEl) iconEl.style.display = 'none';
     };
     probe.onerror = function () {
@@ -257,9 +261,22 @@ function _clearSheet(imgEl) {
 const _injectedSheetAnims = {};
 function _injectSheetKeyframes(name, frames) {
     if (_injectedSheetAnims[name]) return;
-    // background-size-x = frames*100% 일 때, background-position-x: 100%는
-    // 마지막 프레임을 정렬한다 (CSS background %는 (container-img)*pct 기준).
-    const css = '@keyframes ' + name + ' { from { background-position-x: 0%; } to { background-position-x: 100%; } }';
+    // 프레임별 구간을 명시 → linear 재생 시 각 프레임이 정확히 고정된다.
+    //   background-size-x = frames*100% 이므로 프레임 i의 position-x는
+    //   (i/(frames-1))*100% (CSS background % 정렬 규칙).
+    //   시간 구간 [i/frames, (i+1)/frames)에 그 위치를 고정.
+    frames = Math.max(1, frames || 1);
+    const parts = [];
+    for (let i = 0; i < frames; i++) {
+        const start = (i / frames) * 100;
+        const end   = ((i + 1) / frames) * 100;
+        const pos   = frames <= 1 ? 0 : (i / (frames - 1)) * 100;
+        const safeEnd = (i === frames - 1) ? end : end - 0.001;
+        parts.push(
+            start.toFixed(3) + '%, ' + safeEnd.toFixed(3) + '% { background-position-x: ' + pos.toFixed(3) + '%; }'
+        );
+    }
+    const css = '@keyframes ' + name + ' { ' + parts.join(' ') + ' }';
     let styleEl = document.getElementById('sprite-sheet-keyframes');
     if (!styleEl) {
         styleEl = document.createElement('style');

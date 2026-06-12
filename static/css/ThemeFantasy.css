@@ -13,14 +13,21 @@
    1. 전역 색감 — 판타지 강조 변수 추가 (기존 변수 미변경)
    ───────────────────────────────────────────── */
 :root {
-    --fantasy-gold:       #d4af6a;
-    --fantasy-amber:      #e0a84e;
-    --fantasy-forest:     #111c18;
-    --fantasy-panel:      rgba(13, 24, 21, 0.88);
-    --fantasy-panel-soft: rgba(23, 36, 30, 0.78);
-    --fantasy-frame:      #6a5733;
-    --fantasy-line:       rgba(212, 175, 106, 0.35);
-    --fantasy-glow:       rgba(224, 168, 78, 0.22);
+    /* 청흑 + 낡은 금장 (초록 비중 최소화) */
+    --fantasy-bg-deep:    #05090b;
+    --fantasy-bg-blue:    #071116;
+    --fantasy-panel:      rgba(6, 14, 17, 0.85);
+    --fantasy-panel-soft: rgba(10, 20, 23, 0.78);
+
+    --fantasy-gold:       #ddb86f;
+    --fantasy-amber:      #f0c768;
+    --fantasy-forest:     #0a1519;   /* 레거시 변수명 유지, 청흑으로 */
+    --fantasy-frame:      rgba(221, 184, 111, 0.46);
+    --fantasy-line:       rgba(221, 184, 111, 0.34);
+    --fantasy-glow:       rgba(240, 199, 104, 0.18);
+
+    --fantasy-text-main:  #d8d1bd;
+    --fantasy-text-dim:   #948b78;
 }
 
 /* ─────────────────────────────────────────────
@@ -28,8 +35,10 @@
    ───────────────────────────────────────────── */
 body {
     background:
-        radial-gradient(circle at 50% 0%, rgba(212, 175, 106, 0.08), transparent 34%),
-        linear-gradient(180deg, #08100f 0%, #0d1714 55%, #060908 100%);
+        radial-gradient(circle at 50% 0%, rgba(199, 164, 93, 0.08), transparent 34%),
+        radial-gradient(circle at 80% 20%, rgba(24, 58, 65, 0.12), transparent 30%),
+        linear-gradient(180deg, #040708 0%, #071116 48%, #030506 100%);
+    color: var(--fantasy-text-main);
 }
 /* 추후 텍스처 에셋 준비 후 활성화:
 body {
@@ -47,15 +56,24 @@ body {
 .modal,
 .ranking-modal-big {
     background:
-        linear-gradient(180deg, rgba(22, 34, 29, 0.92), rgba(8, 14, 13, 0.94));
+        linear-gradient(180deg, rgba(8, 15, 18, 0.85), rgba(3, 7, 9, 0.88));
     border: 1px solid var(--fantasy-line);
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
     box-shadow:
-        inset 0 0 0 1px rgba(255, 255, 255, 0.03),
-        0 8px 24px rgba(0, 0, 0, 0.35);
+        0 0 0 1px rgba(221, 184, 111, 0.08),
+        0 20px 40px rgba(0, 0, 0, 0.70),
+        inset 0 0 40px rgba(0, 0, 0, 0.50);
+}
+/* 배틀 로그는 가독성 우선 — 더 불투명 + blur 없음 (Phase 2 주의) */
+.log-area {
+    backdrop-filter: none;
+    -webkit-backdrop-filter: none;
 }
 .panel-title {
     color: var(--fantasy-gold);
-    border-bottom-color: var(--fantasy-line);
+    border-bottom-color: rgba(199, 164, 93, 0.28);
+    text-shadow: 0 0 8px rgba(199, 164, 93, 0.16);
 }
 
 /* 좌/우 컬럼 패널 테두리 명시 (코덱스 요청) */
@@ -94,7 +112,7 @@ body {
    4. 상단바 — 엠블럼 + 금색 랭킹 버튼
    ───────────────────────────────────────────── */
 .topbar {
-    background: linear-gradient(180deg, rgba(26, 38, 32, 0.95), rgba(10, 16, 14, 0.95));
+    background: linear-gradient(180deg, rgba(8, 15, 18, 0.98), rgba(3, 7, 9, 0.98));
     border: 1px solid var(--fantasy-line);
 }
 .brand { color: var(--fantasy-gold); }
@@ -104,7 +122,7 @@ body {
     box-shadow: 0 0 10px var(--fantasy-glow);
 }
 .topbar-btn {
-    background: rgba(212, 175, 106, 0.06);
+    background: linear-gradient(180deg, rgba(13, 22, 24, 0.95), rgba(4, 8, 10, 0.95));
     border: 1px solid var(--fantasy-line);
     color: var(--fantasy-amber);
 }
@@ -118,9 +136,9 @@ body {
    ───────────────────────────────────────────── */
 .battle-stage {
     background-image:
-        linear-gradient(180deg, rgba(5, 10, 9, 0.15), rgba(5, 10, 9, 0.75)),
-        radial-gradient(circle at 50% 35%, rgba(212, 175, 106, 0.16), transparent 32%),
-        linear-gradient(180deg, #15251f 0%, #0b1412 100%);
+        linear-gradient(180deg, rgba(3, 6, 8, 0.12), rgba(3, 6, 8, 0.78)),
+        radial-gradient(circle at 50% 35%, rgba(199, 164, 93, 0.14), transparent 32%),
+        linear-gradient(180deg, #0a1519 0%, #05090b 100%);
     background-size: cover;
     background-position: center;
 }
@@ -129,31 +147,31 @@ body {
    gradient 오버레이를 먼저 깔아 캐릭터/텍스트 가독성 확보. */
 .battle-stage.battle-bg-normal-early {
     background-image:
-        linear-gradient(180deg, rgba(5,10,9,0.05), rgba(5,10,9,0.45)),
+        linear-gradient(180deg, rgba(2,5,7,0.08), rgba(2,5,7,0.58)),
         url('../img/backgrounds/battle_normal_early.png'),
-        radial-gradient(circle at 50% 30%, rgba(212,175,106,0.16), transparent 34%),
-        linear-gradient(180deg, #16271f 0%, #0b1412 100%);
+        radial-gradient(circle at 50% 30%, rgba(199,164,93,0.14), transparent 34%),
+        linear-gradient(180deg, #0a1519 0%, #05090b 100%);
 }
 .battle-stage.battle-bg-normal-late {
     background-image:
-        linear-gradient(180deg, rgba(5,10,9,0.10), rgba(5,10,9,0.55)),
+        linear-gradient(180deg, rgba(2,5,7,0.14), rgba(2,5,7,0.66)),
         url('../img/backgrounds/battle_normal_late.png'),
         radial-gradient(circle at 50% 30%, rgba(120,150,200,0.12), transparent 34%),
-        linear-gradient(180deg, #131c26 0%, #0a1016 100%);
+        linear-gradient(180deg, #0a141c 0%, #05080b 100%);
 }
 .battle-stage.battle-bg-midboss {
     background-image:
         linear-gradient(180deg, rgba(10,5,5,0.15), rgba(10,5,5,0.55)),
         url('../img/backgrounds/battle_midboss.png'),
         radial-gradient(circle at 50% 35%, rgba(224,120,60,0.16), transparent 32%),
-        linear-gradient(180deg, #241612 0%, #120a09 100%);
+        linear-gradient(180deg, #1a1009 0%, #0a0605 100%);
 }
 .battle-stage.battle-bg-finalboss {
     background-image:
         linear-gradient(180deg, rgba(15,5,5,0.20), rgba(15,5,5,0.60)),
         url('../img/backgrounds/battle_finalboss.png'),
         radial-gradient(circle at 50% 35%, rgba(200,40,40,0.18), transparent 32%),
-        linear-gradient(180deg, #2a1010 0%, #140707 100%);
+        linear-gradient(180deg, #1c0a0a 0%, #0a0404 100%);
 }
 
 /* ─────────────────────────────────────────────
@@ -164,12 +182,12 @@ body {
 .combatant::before {
     content: '';
     position: absolute;
-    width: 88px;
-    height: 16px;
-    bottom: 40px;
+    width: 140px;
+    height: 32px;
+    bottom: 34px;
     left: 50%;
     transform: translateX(-50%);
-    background: radial-gradient(ellipse, rgba(0, 0, 0, 0.45), transparent 70%);
+    background: radial-gradient(ellipse, rgba(0, 0, 0, 0.58), transparent 70%);
     z-index: 0;
     pointer-events: none;
 }
@@ -216,7 +234,7 @@ body {
     box-shadow: 0 0 12px var(--fantasy-glow);
 }
 .map-node.visited {
-    border-color: rgba(80, 220, 120, 0.4);
+    border-color: rgba(96, 180, 155, 0.35);
 }
 .map-node.locked {
     opacity: 0.45;
@@ -231,7 +249,7 @@ body {
    ───────────────────────────────────────────── */
 .action-btn {
     border: 1px solid var(--fantasy-line);
-    background: linear-gradient(180deg, rgba(26, 38, 32, 0.9), rgba(10, 16, 14, 0.92));
+    background: linear-gradient(180deg, rgba(13, 22, 24, 0.95), rgba(4, 8, 10, 0.95));
     transition: all 0.15s;
 }
 .action-btn:hover:not(:disabled) {
@@ -250,7 +268,7 @@ body {
    ───────────────────────────────────────────── */
 .log-area {
     background:
-        linear-gradient(180deg, rgba(18, 16, 10, 0.6), rgba(10, 9, 6, 0.7));
+        linear-gradient(180deg, rgba(7, 10, 11, 0.78), rgba(3, 5, 6, 0.86));
     border: 1px solid var(--fantasy-line);
 }
 /* .log-line.crit / .dmg / .heal / .skill / .system 색은 기존 그대로 둠 */
@@ -339,4 +357,35 @@ img[src=""], img:not([src]) { /* 빈 src img는 표시 안 함 */ }
 .status-icon .icon-fallback {
     font-size: 12px;
     line-height: 1;
+}
+
+
+/* ─────────────────────────────────────────────
+   15. 청흑 배경 보강 — 오버레이 패널/맵 스크롤 초록 제거
+   ───────────────────────────────────────────── */
+.map-scroll,
+.shop-panel,
+.rest-panel,
+.event-result-panel {
+    background-color: rgba(4, 8, 10, 0.72);
+}
+
+/* 제목/브랜드 금색 + 은은한 광 */
+.battle-title,
+.brand {
+    color: var(--fantasy-gold);
+    text-shadow: 0 0 8px rgba(199, 164, 93, 0.16);
+}
+
+/* 버튼 공통 — 어두운 바탕 + 금색 테두리 (레이아웃/크기 불변) */
+.btn,
+.topbar-btn {
+    background: linear-gradient(180deg, rgba(13, 22, 24, 0.95), rgba(4, 8, 10, 0.95));
+    border-color: rgba(199, 164, 93, 0.34);
+    color: var(--fantasy-text-main);
+}
+.btn:hover,
+.topbar-btn:hover {
+    border-color: rgba(214, 154, 58, 0.72);
+    box-shadow: 0 0 14px rgba(214, 154, 58, 0.18);
 }

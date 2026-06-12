@@ -7,6 +7,8 @@
 .player-art {
     width: 100%;
     aspect-ratio: 1.1 / 1;
+    flex: 0 0 auto;          /* 아이템 늘어나도 초상화 축소 방지 */
+    min-height: 220px;
     background: linear-gradient(135deg, #1a3140, #0f1d24);
     border: 1px solid var(--border);
     border-radius: 3px;
@@ -186,7 +188,7 @@
    ═══════════════════════════════════════════════════════════ */
 
 /* src가 비어있는 img 자동 숨김 */
-img.player-art-img[src=\"\"],
+img.player-art-img[src=""],
 img.player-art-img:not([src]) {
     display: none !important;
 }
@@ -202,7 +204,7 @@ img.player-art-img {
 /* ═══════════════════════════════════════════════════════════
    ▼▼▼ 배틀필드 이미지 안전망 ▼▼▼
    ═══════════════════════════════════════════════════════════ */
-img.combatant-art[src=\"\"],
+img.combatant-art[src=""],
 img.combatant-art:not([src]) {
     display: none !important;
 }
@@ -242,6 +244,8 @@ img.combatant-art {
     margin-top: 8px;
     border-top: 1px dashed var(--border, rgba(0,255,208,0.15));
     padding-top: 8px;
+    max-height: 180px;       /* 아이템이 많아도 패널 전체 높이 고정 */
+    overflow: hidden;
 }
 
 .pip-section {
@@ -264,6 +268,18 @@ img.combatant-art {
     display: flex;
     flex-direction: column;
     gap: 3px;
+    max-height: 72px;        /* 포션/특수 각각 내부 스크롤 */
+    overflow-y: auto;
+    padding-right: 3px;
+}
+
+.pip-item-list::-webkit-scrollbar { width: 4px; }
+.pip-item-list::-webkit-scrollbar-thumb {
+    background: rgba(221, 184, 111, 0.35);
+    border-radius: 4px;
+}
+.pip-item-list::-webkit-scrollbar-track {
+    background: rgba(0, 0, 0, 0.25);
 }
 
 .pip-item {

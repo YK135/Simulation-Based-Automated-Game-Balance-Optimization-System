@@ -6,6 +6,10 @@
 function renderPlayerCombatant(bs) {
     const p = state.player;
     document.getElementById('player-combatant-art').textContent = JOB_ICONS[p.job] || '?';
+    // 첫 렌더(메시지 없는 초기 상태)에만 idle 세팅 — 매 refresh 덮으면 attack/hurt 연출 끊김
+    if ((!bs.messages || bs.messages.length === 0) && typeof setCharState === 'function') {
+        setCharState('player_battle', 'idle');
+    }
     renderNameWithStatus(document.getElementById('player-combatant-name'), {
         name: p.name,
         element_aura: bs.player_element_aura || p.element_aura || '',

@@ -10,7 +10,7 @@ from __future__ import annotations
 from flask import Blueprint, jsonify, request
 
 from game.Inventory    import Inventory
-from ai.battle  import ITEM_META
+from ai.battle.Battle_Engine  import ITEM_META
 
 from .Shared import _get_session, _player_dict
 
@@ -33,24 +33,21 @@ def use_item():
     item_name = data.get("item", "")
     player    = gs["player"]
 
+    # ── 사망 상태 차단 (치명 버그 수정: 사망 후 포션 부활 방지) ──
+    #    프론트 차단만으로는 부족 — API 직접 호출도 막아야 함.
+    if getattr(player, "hp", 0) <= 0:
+        return jsonify({
+            "ok": False,
+            "error": "플레이어가 사망한 상태에서는 아이템을 사용할 수 없습니다.",
+            "reason": "player_dead",
+        }), 400
+
     if item_name not in gs["items"]:
         return jsonify({"ok": False, "error": "해당 아이템이 없습니다."})
 
     meta = ITEM_META.get(item_name)
     if not meta:
         return jsonify({"ok": False, "error": "알 수 없는 아이템입니다."})
-
-    # 특수 아이템(폭탄/원소병/버프물약)은 전투 중에만 사용 가능
-    if meta.get("slot") == "special" or meta.get("category"):
-        return jsonify({
-            "ok": False,
-            "error": "특수 아이템은 전투 중에만 사용할 수 있습니다.",
-            "reason": "battle_only",
-        })
-
-    # 포션만 회복 처리 (amount 필수)
-    if "amount" not in meta:
-        return jsonify({"ok": False, "error": "필드에서 사용할 수 없는 아이템입니다."})
 
     amount = meta["amount"](player) if callable(meta["amount"]) else meta["amount"]
 

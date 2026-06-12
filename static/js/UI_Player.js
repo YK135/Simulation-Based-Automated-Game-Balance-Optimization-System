@@ -75,8 +75,8 @@ function refreshInventoryPanel(p) {
         } else {
             potions.forEach(({ name, count }) => {
                 const row = document.createElement('div');
-                // 전투 중에는 클릭 비활성
-                const usable = !state.inBattle;
+                // 전투 중 + 사망 상태에는 클릭 비활성
+                const usable = !state.inBattle && !(state.player && state.player.hp <= 0);
                 row.className = `pip-item${usable ? ' usable' : ''}`;
                 // 아이콘(이미지 우선 + 이모지 폴백) + 이름 + 수량
                 if (typeof renderIconWithFallback === 'function') {
