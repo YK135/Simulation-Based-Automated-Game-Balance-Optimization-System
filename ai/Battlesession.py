@@ -98,8 +98,8 @@ class BattleSession(
             for e in self.enemies:
                 # HP 비율 유지 (현재 HP도 비례 감소)
                 hp_ratio = e.hp / e.maxhp if e.maxhp > 0 else 1.0
-                e.maxhp = e.maxhp * mult
-                e.hp = e.maxhp * hp_ratio
+                e.maxhp = int(e.maxhp * mult)
+                e.hp = int(e.maxhp * hp_ratio)
                 # 공격/방어 스탯 약화
                 e.stg = e.stg * mult
                 e.sp = e.sp * mult

@@ -81,7 +81,10 @@ def _apply_stat_scale(enemies: list, scale: float) -> None:
     if scale >= 1.0:
         return
     for e in enemies:
-        for attr in ("hp", "maxhp", "stg", "sp", "arm", "sparm"):
+        for attr in ("hp", "maxhp"):
+            if hasattr(e, attr):
+                setattr(e, attr, int(getattr(e, attr) * scale))
+        for attr in ("stg", "sp", "arm", "sparm"):
             if hasattr(e, attr):
                 setattr(e, attr, round(getattr(e, attr) * scale, 1))
 
