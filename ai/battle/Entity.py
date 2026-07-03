@@ -41,10 +41,11 @@ class Buff:
 @dataclass
 class StatusEffect:
     """
-    원소 기반 상태이상.
-    effect_type: "ignite" | "frostbite" | "paralyze"
+    상태이상 (원소 + 도적 출혈).
+    effect_type: "ignite" | "frostbite" | "paralyze" | "bleed"
     turns   : 남은 지속 행동 수
     dot_rate: 점화 데미지 비율 (기본 maxhp 4%)
+              bleed는 dot_rate 대신 매턴 uniform(0.04, 0.07) 랜덤 적용
     fail_prob: 마비 행동 실패 확률 (기본 40%)
     """
     effect_type: str
@@ -104,12 +105,15 @@ class EntitySnapshot:
 
     # ── 직업 식별자 (플레이어 전용) ──
     # 직업별 패시브 발동에 사용:
-    #   "전사":   공격 3회마다 maxhp 10% 회복 (Battlesession.step에서 처리)
-    #   "마법사": 스킬 MP 비용 30% 감소 (execute_skill에서 처리)
-    #   "탱커":   물공 받으면 maxmp 10%, 마공 받으면 maxhp 10% 회복
-    #             (DamageCalc 또는 _execute_action 에서 처리)
-    #   "도적":   크리 시 70% 확률로 방어력 50% 무시
-    #             (DamageCalc.physical 에서 처리)
+    #   "전사":   적 공격(일반공격/공격형 스킬) 3회마다 maxhp 10% 회복
+    #             (Player_Actions._count_warrior_attack에서 카운트)
+    #   "마법사": 융해/과부하 반응 피해 +5%p + 원소 반응 시 MP 8% 회복
+    #             (Elements.apply_element_and_react에서 처리, 파쇄 제외)
+    #   "탱커":   물리 피격 시 maxmp 10% 회복, 마법 피격 시 maxhp 10% 회복
+    #             (passive_on_hit_received — Enemy_Actions/Engine에서 호출)
+    #   "도적":   공격 시 주사위(1~6 배율/출혈/6=크리확정+ATB20),
+    #             회피 시 반격(일반 luc 크리 허용, 주사위 미적용)
+    #             (Player_Actions/Enemy_Actions/Damage._suppress_crit)
     job: str = ""
 
     # ── 원소 시스템 ──
@@ -158,14 +162,10 @@ class EntitySnapshot:
         return max(1.0, base)
 
     def mp_cost_multiplier(self) -> float:
-        # 기존 buff 기반 효율 (한정 시간 효과)
+        # buff 기반 효율 (효율성 스킬 등 한정 시간 효과)
+        # ※ 구 마법사 패시브(영구 MP 30% 감소)는 제거됨 —
+        #    새 마법사 패시브는 원소 반응 기반 (Elements.py 참고)
         reduction = sum(b.amount for b in self.buffs if b.stat == "mp_efficiency")
-
-        # ── 마법사 패시브: 영구 30% MP 비용 감소 ──
-        # 직업 정체성 — 마나 효율형. 시뮬레이터에서도 자동 검증됨.
-        if self.job == "마법사":
-            reduction += 0.30
-
         return max(0.3, 1.0 - reduction)
 
     # ═══════════════════════════════════════════════════════════
@@ -282,6 +282,12 @@ class EntitySnapshot:
                 dmg = max(1, int(self.maxhp * eff.dot_rate))
                 self.hp = max(0.0, self.hp - dmg)
                 msgs.append(f"🔥 [{self.name}] 점화 -{dmg} HP")
+            elif eff.effect_type == "bleed":
+                # 도적 주사위 출혈: 매턴 maxhp의 4~7% 랜덤 데미지 (크리 미적용)
+                rate = uniform(0.04, 0.07)
+                dmg = max(1, int(self.maxhp * rate))
+                self.hp = max(0.0, self.hp - dmg)
+                msgs.append(f"🩸 [{self.name}] 출혈 -{dmg} HP")
             elif eff.effect_type == "frostbite":
                 msgs.append(f"❄ [{self.name}] 동상 — SPD 50% ({eff.turns}T 남음)")
             elif eff.effect_type == "paralyze":

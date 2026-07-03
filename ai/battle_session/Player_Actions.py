@@ -16,6 +16,77 @@ from ai.battle import (
 class PlayerActionsMixin:
     """BattleSession에 플레이어 행동 기능을 제공하는 mixin."""
 
+    # ═══════════════════════════════════════════════════════
+    # 직업 패시브 helper (도적 주사위 / 전사 공격 카운트)
+    # ═══════════════════════════════════════════════════════
+
+    # 주사위 배율 테이블 (6은 배율 1.0 + 크리 확정 1.5x)
+    _ROGUE_DICE_MULT = {1: 0.75, 2: 0.90, 3: 1.00, 4: 1.15, 5: 1.25, 6: 1.00}
+
+    def _roll_rogue_dice(self, msgs: list):
+        """
+        도적 주사위 패시브 — 공격/공격형 스킬 입력 시 굴림 (이모션 전).
+        반환: dict {mult, force_crit, bleed} 또는 None(도적 아님).
+        굴리는 동안 자연 크리 억제(_suppress_crit) — 도적 크리는 주사위 6으로만.
+        """
+        if getattr(self.player, "job", "") != "도적":
+            return None
+        dice = randint(1, 6)
+        self.player._suppress_crit = True
+        info = {
+            "dice":       dice,
+            "mult":       self._ROGUE_DICE_MULT[dice],
+            "force_crit": dice == 6,
+            "bleed":      dice in (3, 6),
+        }
+        msgs.append(f"🎲 주사위: {dice}!")
+        return info
+
+    def _apply_rogue_dice(self, dmg: int, dice_info, target, msgs: list) -> int:
+        """
+        주사위 결과를 최종 데미지에 적용.
+        - 배율 곱 (0.75~1.25)
+        - 6: 크리티컬 확정(1.5x) + ATB 20 추가
+        - 3/6: 대상에게 출혈 (3턴, 매턴 maxhp 4~7%)
+        회피 등으로 dmg<=0이면 배율/출혈 미적용 (맞지 않았으므로).
+        """
+        if not dice_info or dmg <= 0:
+            return dmg
+        dmg = int(round(dmg * dice_info["mult"]))
+        if dice_info["force_crit"]:
+            dmg = int(dmg * 1.5)
+            msgs.append("💥 주사위 6 — 치명타 확정!")
+            # 크리 발생 시 ATB 추가 20
+            self.player_atb += 20.0
+            msgs.append("⚡ ATB +20!")
+        if dice_info["bleed"] and target is not None and hasattr(target, "apply_status_effect"):
+            from ai.battle.Entity import StatusEffect
+            target.apply_status_effect(StatusEffect(
+                effect_type="bleed", turns=3, name="출혈"))
+            msgs.append(f"🩸 {target.name}에게 출혈! (3턴, 매턴 최대체력 4~7%)")
+        return dmg
+
+    def _end_rogue_dice(self):
+        """주사위 공격 종료 — 자연 크리 억제 해제 (반격은 일반 크리 허용)."""
+        if getattr(self.player, "job", "") == "도적":
+            self.player._suppress_crit = False
+
+    _ATTACK_SKILL_TYPES = ("physical", "magical", "tank_attack", "counter", "multi_hit")
+
+    def _count_warrior_attack(self, msgs: list):
+        """
+        전사 패시브 — 적 공격(일반공격/공격형 스킬) 사용 3회마다 maxhp 10% 회복.
+        아이템/버프/힐/디버프는 카운트하지 않음. 전투 시작 시 0 (lazy init).
+        """
+        if getattr(self.player, "job", "") != "전사":
+            return
+        cnt = getattr(self, "_warrior_attack_count", 0) + 1
+        self._warrior_attack_count = cnt
+        if cnt % 3 == 0 and self.player.hp > 0:
+            m = self.player.passive_on_turn_start()
+            if m:
+                msgs.append(m)
+
     def _player_action(self, action: str, msgs: list) -> str:
         """처리 후 "ok" | "escaped" 반환. 모든 분기에서 TurnLog를 self.logs에 추가.
 
@@ -61,6 +132,8 @@ class PlayerActionsMixin:
         # 기본 공격
         # ═══════════════════════════════════════════════════════════
         if action == "attack":
+            # ── 도적 주사위 (공격 입력 직후, 이모션 전) ──
+            dice_info = self._roll_rogue_dice(msgs)
             dmg, dodge, crit = DamageCalc.physical(
                 self.player.effective_stg(), self.player.luc,
                 target.effective_arm(),       target.luc,
@@ -69,17 +142,24 @@ class PlayerActionsMixin:
                 attacker=self.player,
                 defender=target,
             )
+            self._end_rogue_dice()
             actual = 0 if dodge else int(dmg)
             if dodge:
                 msgs.append(f"{target.name}이(가) 공격을 회피했다!")
             else:
                 # ── 물리 원소 반응 (빙결+물리=깨짐 등) ──
                 actual = apply_element_and_react(self.player, target, "physical", actual, msgs)
+                # ── 주사위 배율/크리/출혈 (최종 피해 기준) ──
+                if dice_info:
+                    actual = self._apply_rogue_dice(actual, dice_info, target, msgs)
+                    crit = crit or dice_info["force_crit"]
                 target.hp -= actual
                 dmg = actual
                 tag = " (치명타!)" if crit else ""
                 msgs.append(f"{self.player.name} → 공격{tag} | {dmg} 데미지")
                 msgs.append(f"{target.name} HP: {max(0, int(target.hp))}")
+            # ── 전사: 공격 사용 카운트 (+3회마다 회복) ──
+            self._count_warrior_attack(msgs)
 
             self.logs.append(TurnLog(
                 turn=self.turn,
@@ -111,12 +191,16 @@ class PlayerActionsMixin:
                 if not alive_targets:
                     return "ok"
 
+                # ── 도적 주사위 (AoE 전체에 배율 적용, 출혈은 피격 대상 전부) ──
+                dice_info = self._roll_rogue_dice(msgs)
+
                 # 1) 첫 대상 — execute_skill로 MP 정상 차감
                 first = alive_targets[0]
                 dmg, mp_lack, _info = execute_skill(skill_name, self.player, first)
                 if self._next_skill_bonus > 1.0 and dmg > 0:
                     dmg = int(dmg * self._next_skill_bonus)
                 if mp_lack:
+                    self._end_rogue_dice()
                     msgs.append("MP가 부족합니다!")
                     self.logs.append(TurnLog(
                         turn=self.turn, actor="player",
@@ -127,6 +211,10 @@ class PlayerActionsMixin:
                         mp_after=self.player.mp,
                     ))
                     return "ok"
+
+                # ── 주사위 배율/크리/출혈 (첫 대상) ──
+                if dice_info:
+                    dmg = self._apply_rogue_dice(dmg, dice_info, first, msgs)
 
                 first.hp -= dmg
                 msgs.append(f"{skill_name} (전체 공격!) → {first.name}에게 {dmg} 데미지")
@@ -173,6 +261,15 @@ class PlayerActionsMixin:
                         # AoE 원소 반응
                         elem = meta.get("element", "")
                         raw = apply_element_and_react(self.player, tgt, elem, raw, msgs)
+                        # 주사위 배율/출혈 (ATB/크리 메시지는 첫 대상에서 1회만 출력됨)
+                        if dice_info:
+                            raw = int(round(raw * dice_info["mult"]))
+                            if dice_info["force_crit"]:
+                                raw = int(raw * 1.5)
+                            if dice_info["bleed"] and hasattr(tgt, "apply_status_effect"):
+                                from ai.battle.Entity import StatusEffect
+                                tgt.apply_status_effect(StatusEffect(
+                                    effect_type="bleed", turns=3, name="출혈"))
                         tgt.hp -= raw
                         msgs.append(f"  └ {tgt.name}에게 {raw} 데미지")
                         msgs.append(f"     {tgt.name} HP: {max(0, int(tgt.hp))}")
@@ -192,13 +289,20 @@ class PlayerActionsMixin:
                     msgs.append(f"✨ 집중 효과 적용됨!")
                     self._next_skill_bonus = 1.0
                 self.skills_used += 1   # ★ AoE 스킬 사용 성공 (Phase 3)
+                self._end_rogue_dice()
+                self._count_warrior_attack(msgs)   # AoE는 공격형 — 전사 카운트
                 return "ok"
 
             # ── 단일 타깃 스킬 (기존 로직 + buff/heal/shield 메시지 보강) ──
+            # 도적 주사위: 공격형 스킬(physical/magical/tank_attack/counter/multi_hit)에만
+            _stype_for_dice = meta.get("type", "")
+            dice_info = (self._roll_rogue_dice(msgs)
+                         if _stype_for_dice in self._ATTACK_SKILL_TYPES else None)
             mp_before = self.player.mp
             dmg, mp_lack, debuff_name = execute_skill(
                 skill_name, self.player, target
             )
+            self._end_rogue_dice()
             if mp_lack:
                 msgs.append("MP가 부족합니다!")
                 self.logs.append(TurnLog(
@@ -254,6 +358,9 @@ class PlayerActionsMixin:
                         dmg = int(dmg * self._next_skill_bonus)
                         msgs.append(f"✨ 집중 효과! 데미지 {int((self._next_skill_bonus-1)*100)}% 증가")
                         self._next_skill_bonus = 1.0
+                    # ── 주사위 배율/크리/출혈 (최종 피해 기준) ──
+                    if dice_info:
+                        dmg = self._apply_rogue_dice(dmg, dice_info, target, msgs)
                     target.hp -= dmg
                     msgs.append(f"{skill_name} 사용 → {dmg} 데미지")
                     msgs.append(f"{target.name} HP: {max(0, int(target.hp))}")
@@ -270,6 +377,9 @@ class PlayerActionsMixin:
                 # ★ 단일 스킬 사용 성공 (Phase 3) — else 블록 맨 끝
                 # debuff / buff / heal / shield / 일반 데미지 모두 카운트
                 self.skills_used += 1
+                # 전사: 공격형 스킬만 카운트 (버프/힐/실드/디버프 제외)
+                if _stype_for_dice in self._ATTACK_SKILL_TYPES:
+                    self._count_warrior_attack(msgs)
 
         # ═══════════════════════════════════════════════════════════
         # 아이템

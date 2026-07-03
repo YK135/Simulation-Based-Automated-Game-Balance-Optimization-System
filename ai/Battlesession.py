@@ -98,7 +98,7 @@ class BattleSession(
             for e in self.enemies:
                 # HP 비율 유지 (현재 HP도 비례 감소)
                 hp_ratio = e.hp / e.maxhp if e.maxhp > 0 else 1.0
-                e.maxhp = int(e.maxhp * mult)
+                e.maxhp = int(e.maxhp * mult)   # 정수화 — 몬스터 HP 소수점 버그 방지
                 e.hp = int(e.maxhp * hp_ratio)
                 # 공격/방어 스탯 약화
                 e.stg = e.stg * mult
@@ -169,9 +169,10 @@ class BattleSession(
             if getattr(e, "first_strike", False):
                 self.enemy_atbs[i] = 100.0
  
-        # 전사 패시브용 행동 카운터 — 공격 3회마다 발동
-        # (이전 v2 패치에서 추가된 필드 — 유지)
-        self._warrior_action_count = 0
+        # 전사 패시브용 '공격 행동' 카운터 — 적 공격(일반공격/공격형 스킬) 3회마다 발동
+        # 카운트는 Player_Actions._count_warrior_attack()에서만 증가 (아이템/버프/힐 제외)
+        # 새 전투(BattleSession 생성)마다 0으로 초기화
+        self._warrior_attack_count = 0
 
         # ★ 행동 큐 (SPD 내림차순 턴제) — 라운드 시작 시 채워짐
         # 큐 형식: [(actor_type, idx), ...]  actor_type: "player" | "enemy"
@@ -280,14 +281,8 @@ class BattleSession(
                 next_actor, next_idx = self._peek_next_actor()
                 return self._state(messages=msgs, next_actor=next_actor, acting_enemy_idx=next_idx)
 
-            # 전사 패시브: 행동 3회마다 maxhp 10% 회복
-            self._warrior_action_count += 1
-            if (self.player.job == "전사" and
-                self._warrior_action_count % 3 == 0 and
-                self.player.hp > 0):
-                warrior_msg = self.player.passive_on_turn_start()
-                if warrior_msg:
-                    msgs.append(warrior_msg)
+            # (전사 패시브 카운트는 Player_Actions._count_warrior_attack에서
+            #  '적 공격 행동'만 카운트 — 여기서 행동마다 세던 구규칙은 제거됨)
 
             # 플레이어 행동 처리
             p_result = self._player_action(action, msgs)

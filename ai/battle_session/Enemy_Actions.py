@@ -16,6 +16,49 @@ from ai.battle import (
 class EnemyActionsMixin:
     """BattleSession에 적 행동 기능을 제공하는 mixin."""
 
+    def _rogue_counter(self, enemy, msgs: list):
+        """
+        도적 패시브 — 적 공격 회피 시 반격.
+        · 공격한 몬스터의 턴 안에서 즉시 기본 공격 (내 턴 소비 X)
+        · 주사위 미적용 — 일반 luc 크리 가능 (_suppress_crit 미설정 상태)
+        · ATB 획득 (행동으로 취급)
+        """
+        if getattr(self.player, "job", "") != "도적":
+            return
+        if self.player.hp <= 0 or enemy.hp <= 0:
+            return
+        dmg, dodge, crit = DamageCalc.physical(
+            self.player.effective_stg(), self.player.luc,
+            enemy.effective_arm(),        enemy.luc,
+            skill_mult=1.0,
+            role="player",
+            attacker=self.player,
+            defender=enemy,
+        )
+        msgs.append(f"⚔ [도적 반격] {self.player.name}의 반격!")
+        actual = 0 if dodge else int(dmg)
+        if dodge:
+            msgs.append(f"  └ {enemy.name}이(가) 반격을 회피했다!")
+        else:
+            actual = apply_element_and_react(self.player, enemy, "physical", actual, msgs)
+            enemy.hp -= actual
+            tag = " (치명타!)" if crit else ""
+            msgs.append(f"  └ {enemy.name}에게{tag} {actual} 데미지")
+            msgs.append(f"     {enemy.name} HP: {max(0, int(enemy.hp))}")
+        # 반격도 행동 — ATB 획득
+        self.player_atb += float(self.player.effective_spd())
+        self.logs.append(TurnLog(
+            turn=self.turn,
+            actor="player",
+            action="counter",
+            action_detail="rogue_counter",
+            damage_dealt=actual,
+            hp_after=max(0, enemy.hp),
+            mp_after=self.player.mp,
+            is_dodge=dodge,
+            is_crit=crit,
+        ))
+
     def _enemy_action(self, msgs: list):
         """
         다대일: 살아있는 모든 적이 SPD 내림차순으로 한 번씩 행동.
@@ -56,6 +99,7 @@ class EnemyActionsMixin:
                 actual = 0 if dodge else int(dmg)
                 if dodge:
                     msgs.append(f"{self.player.name}이(가) {enemy.name}의 공격을 회피했다!")
+                    self._rogue_counter(enemy, msgs)   # 도적: 회피 시 반격
                 else:
                     # ── 물리 원소 반응 (적 기본공격) ──
                     atk_elem = getattr(enemy, "attack_element", "")
@@ -214,6 +258,7 @@ class EnemyActionsMixin:
             )
             if dodge:
                 msgs.append(f"{self.player.name}이(가) {priest.name}의 홀리볼트를 회피!")
+                self._rogue_counter(priest, msgs)   # 도적: 회피 시 반격
                 self.logs.append(TurnLog(
                     turn=self.turn, actor="enemy",
                     action="skill", action_detail="홀리볼트",
@@ -262,6 +307,7 @@ class EnemyActionsMixin:
         )
         if dodge:
             msgs.append(f"{self.player.name}이(가) {priest.name}의 공격을 회피!")
+            self._rogue_counter(priest, msgs)   # 도적: 회피 시 반격
             self.logs.append(TurnLog(
                 turn=self.turn, actor="enemy",
                 action="attack", action_detail="basic_attack",

@@ -106,6 +106,72 @@ def _start_battle_multi(gs: dict, enemies: list, is_boss: bool = False) -> dict:
     return gs["battle"]._state(messages=[msg])
 
 
+# ─────────────────────────────────────────────
+# 경험치 계산 — 몬스터 난이도/마릿수 기반
+# ─────────────────────────────────────────────
+
+# 다대일 경험치 배율 (스탯 90%/80% 감소와 별개로 exp도 감소)
+_MULTI_EXP_MULT = {1: 1.00, 2: 0.90, 3: 0.75}
+
+# 등급/난이도 → maxexp 비율 (Enemy_Class.exp_reward와 동일 기준)
+_EXP_RATIO_BY_GRADE = {"상": 0.80, "중": 0.55, "하": 0.45}
+_EXP_RATIO_BY_DIFF  = {"hard": 0.80, "normal": 0.55, "easy": 0.45}
+
+
+def _enemy_exp(e, player_maxexp: int) -> int:
+    """몬스터 1마리의 기본 경험치.
+
+    우선순위:
+      1) 보스 — 중간 보스 = maxexp×1.00 / 최종 보스 = 0
+      2) exp_reward() 보유 (game.Enemy_Class.Unit) — grade 기반 정확값
+      3) difficulty (hook 경유 _SnapUnit/EntitySnapshot — easy/normal/hard)
+      4) grade (명시값이 있는 경우)
+      5) 기본 '중' (0.55)
+    ※ 3을 4보다 먼저 보는 이유: _SnapUnit의 grade는 getattr 기본값 '중'으로
+      채워질 수 있어, 실측값인 difficulty가 있으면 그쪽이 신뢰도가 높음.
+    """
+    name = getattr(e, "name", "")
+    if name == "최종 보스":
+        return 0
+    if name == "중간 보스":
+        return int(player_maxexp * 1.00)
+
+    if hasattr(e, "exp_reward"):
+        try:
+            return int(e.exp_reward(player_maxexp))
+        except Exception:
+            pass
+
+    diff = getattr(e, "difficulty", "") or ""
+    if diff in _EXP_RATIO_BY_DIFF:
+        return int(player_maxexp * _EXP_RATIO_BY_DIFF[diff])
+
+    grade = getattr(e, "grade", "") or ""
+    if grade in _EXP_RATIO_BY_GRADE:
+        return int(player_maxexp * _EXP_RATIO_BY_GRADE[grade])
+
+    return int(player_maxexp * 0.55)   # 기본 '중'
+
+
+def _calc_victory_exp(player, battle) -> int:
+    """승리 경험치 = Σ(각 몬스터 기본 exp) × 다대일 배율.
+
+    처치 목록: battle.defeated_origins 우선 (원본 Unit — exp_reward 정확),
+    비어 있으면 battle.enemies로 폴백.
+    """
+    defeated = [o for o in getattr(battle, "defeated_origins", []) if o is not None]
+    if not defeated:
+        enemies = list(getattr(battle, "enemies", []) or [])
+        # 승리 시점이므로 전부 처치됐다고 간주 (hp 기준 필터는 안전용)
+        defeated = [e for e in enemies if getattr(e, "hp", 0) <= 0] or enemies
+    if not defeated:
+        return 0
+
+    total_base = sum(_enemy_exp(e, player.maxexp) for e in defeated)
+    mult = _MULTI_EXP_MULT.get(len(defeated), _MULTI_EXP_MULT[3])
+    return int(total_base * mult)
+
+
 def _finish_battle(gs: dict, battle, result: dict, winner: str) -> None:
     """
     전투 종료 공통 처리:
@@ -121,7 +187,7 @@ def _finish_battle(gs: dict, battle, result: dict, winner: str) -> None:
     if winner == "player":
         player.hp = result["player_hp"]
         player.mp = result["player_mp"]
-        exp = randint(45, 60)
+        exp = _calc_victory_exp(player, battle)
         LV_(player).Get_exp(player, reward_exp=exp)
         gs["hook"].check_level_up()
         result["exp_gained"] = exp

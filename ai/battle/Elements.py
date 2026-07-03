@@ -105,12 +105,27 @@ def apply_element_and_react(
             reaction_name = REACTIONS.get(key)
             if reaction_name:
                 eff = REACTION_EFFECTS[reaction_name]
-                bonus = int(base_damage * (eff["bonus_mult"] - 1.0))
+                bonus_mult = eff["bonus_mult"]
+                # ── 마법사 패시브: 원소 반응 피해 +5%p — 융해/과부하만 ──
+                #    파쇄(shatter)는 physical 분기에서 처리되므로 구조적으로도 제외되지만,
+                #    명세(파쇄 제외)를 명시적으로 보장하기 위해 reaction_name 체크.
+                is_mage = attacker is not None and getattr(attacker, "job", "") == "마법사"
+                if is_mage and reaction_name in ("melt", "overload"):
+                    bonus_mult += 0.05
+                bonus = int(base_damage * (bonus_mult - 1.0))
                 defender.element_queue.clear()
                 messages.append(f"{eff['label']} 반응 발동!")
                 messages.append(f"{defender.name}에게 추가 {bonus} 피해!")
                 messages.append(f"{defender.name}의 원소 큐가 초기화되었다.")
                 base_damage += bonus
+                # ── 마법사 패시브: 원소 반응 발생 시 MP 8% 회복 ──
+                if is_mage:
+                    mp_gain = int(attacker.maxmp * 0.08)
+                    before = attacker.mp
+                    attacker.mp = min(attacker.maxmp, attacker.mp + mp_gain)
+                    gained = int(attacker.mp - before)
+                    if gained > 0:
+                        messages.append(f"[마법사 패시브] 원소 반응 → MP +{gained}")
             else:
                 defender.element_queue = [attack_element]
                 messages.append(f"{defender.name}에게 {attack_element} 원소가 부착되었다.")

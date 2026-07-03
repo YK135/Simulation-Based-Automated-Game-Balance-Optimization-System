@@ -74,6 +74,18 @@ class BattleEngine:
         # 직업 패시브용 카운터
         self._player_action_count = 0   # 전사 패시브 (2번마다 회복)
 
+    _ATTACK_SKILL_TYPES = ("physical", "magical", "tank_attack", "counter", "multi_hit")
+    _ROGUE_DICE_MULT = {1: 0.75, 2: 0.90, 3: 1.00, 4: 1.15, 5: 1.25, 6: 1.00}
+
+    def _is_attack_action(self, action) -> bool:
+        """일반공격 또는 공격형 스킬인지 (전사 카운트/도적 주사위 대상)."""
+        if action.action_type == "attack":
+            return True
+        if action.action_type == "skill":
+            meta = SKILL_META.get(action.detail, {})
+            return meta.get("type", "") in self._ATTACK_SKILL_TYPES
+        return False
+
     def run(self, player_ai, enemy_ai) -> BattleResult:
         # ── first_strike 처리 (암살자) ──
         if getattr(self.enemy, "first_strike", False):
@@ -98,13 +110,15 @@ class BattleEngine:
                 self.action_count += 1
 
                 if actor == "player":
-                    # ── 전사 패시브: 공격 3회마다 maxhp 10% 회복 ──
-                    # 변경: 2회→3회로 발동 빈도 ~33% 감소 (과강 +76.5%p 시뮬결과 반영)
-                    self._player_action_count += 1
-                    if self.player.job == "전사" and self._player_action_count % 3 == 0:
-                        self.player.passive_on_turn_start()  # 메시지는 시뮬에선 무시
- 
                     action = player_ai(self.player, self.enemy)
+
+                    # ── 전사 패시브: '적 공격'(일반공격/공격형 스킬) 3회마다 maxhp 10% 회복 ──
+                    #    아이템/버프/힐/디버프/도망은 카운트하지 않음 (게임 규칙과 동일 — Digital Twin)
+                    if self.player.job == "전사" and self._is_attack_action(action):
+                        self._player_action_count += 1
+                        if self._player_action_count % 3 == 0:
+                            self.player.passive_on_turn_start()  # 메시지는 시뮬에선 무시
+
                     res = self._execute_action(action, self.player, self.enemy, "player")
                     if res == "escaped":
                         return self._make_result("escaped")
@@ -139,6 +153,11 @@ class BattleEngine:
         )
 
         if action.action_type == "attack":
+            # ── 도적 주사위 (플레이어 공격, 게임 규칙과 동일) ──
+            dice = None
+            if actor == "player" and attacker.job == "도적":
+                dice = randint(1, 6)
+                attacker._suppress_crit = True
             dmg, is_dodge, is_crit = DamageCalc.physical(
                 attacker.effective_stg(), attacker.luc,
                 defender.effective_arm(), defender.luc,
@@ -147,6 +166,18 @@ class BattleEngine:
                 attacker=attacker,
                 defender=defender,
             )
+            if dice is not None:
+                attacker._suppress_crit = False
+                if not is_dodge:
+                    dmg = int(round(dmg * self._ROGUE_DICE_MULT[dice]))
+                    if dice == 6:
+                        dmg = int(dmg * 1.5)
+                        is_crit = True
+                        self.atb.player_pt += 20.0
+                    if dice in (3, 6):
+                        from .Entity import StatusEffect
+                        defender.apply_status_effect(StatusEffect(
+                            effect_type="bleed", turns=3, name="출혈"))
             actual = 0 if is_dodge else _apply_damage_with_shield(defender, dmg)
             log.damage_dealt = actual
             log.hp_after = defender.hp
@@ -158,8 +189,45 @@ class BattleEngine:
             if not is_dodge and actual > 0:
                 defender.passive_on_hit_received("physical")
 
+            # ── 도적 패시브: 회피 시 반격 (몬스터 턴 내 즉시 기본공격, 일반 크리 허용) ──
+            if is_dodge and actor == "enemy" and defender.job == "도적" and defender.hp > 0:
+                c_dmg, c_dodge, c_crit = DamageCalc.physical(
+                    defender.effective_stg(), defender.luc,
+                    attacker.effective_arm(), attacker.luc,
+                    skill_mult=1.0, role="player",
+                    attacker=defender, defender=attacker,
+                )
+                if not c_dodge:
+                    _apply_damage_with_shield(attacker, c_dmg)
+                self.atb.player_pt += float(defender.effective_spd())
+                self.logs.append(TurnLog(
+                    turn=self.action_count, actor="player",
+                    action="counter", action_detail="rogue_counter",
+                    damage_dealt=0 if c_dodge else int(c_dmg),
+                    hp_after=attacker.hp, mp_after=defender.mp,
+                    is_dodge=c_dodge, is_crit=c_crit,
+                ))
+
         elif action.action_type == "skill":
+            # ── 도적 주사위 (공격형 스킬만) ──
+            dice = None
+            _meta = SKILL_META.get(action.detail, {})
+            if (actor == "player" and attacker.job == "도적"
+                    and _meta.get("type", "") in self._ATTACK_SKILL_TYPES):
+                dice = randint(1, 6)
+                attacker._suppress_crit = True
             dmg, mp_lack, info = execute_skill(action.detail, attacker, defender)
+            if dice is not None:
+                attacker._suppress_crit = False
+                if not mp_lack and dmg > 0:
+                    dmg = int(round(dmg * self._ROGUE_DICE_MULT[dice]))
+                    if dice == 6:
+                        dmg = int(dmg * 1.5)
+                        self.atb.player_pt += 20.0
+                    if dice in (3, 6):
+                        from .Entity import StatusEffect
+                        defender.apply_status_effect(StatusEffect(
+                            effect_type="bleed", turns=3, name="출혈"))
             log.mp_after = attacker.mp
 
             # 집중물약 보너스 (next_skill_bonus)

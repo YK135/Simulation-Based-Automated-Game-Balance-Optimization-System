@@ -89,21 +89,17 @@ class DamageCalc:
                 base *= defender.magical_resist
 
         # ── 크리티컬 ──
-        crit_chance = min(atk_luc * 0.5, 40)
-        is_crit = randint(1, 100) <= crit_chance
+        # 도적 주사위 패시브: 도적의 크리는 주사위(6)로만 발생.
+        #   호출부(Player_Actions/Engine)가 주사위 공격 전에 attacker._suppress_crit=True를
+        #   세팅하면 자연 크리를 억제한다. 반격은 플래그 미설정 → 일반 luc 크리 허용.
+        # (구 도적 패시브 '크리 시 70% 확률 방어력 50% 무시'는 삭제됨)
+        if attacker is not None and getattr(attacker, "_suppress_crit", False):
+            is_crit = False
+        else:
+            crit_chance = min(atk_luc * 0.5, 40)
+            is_crit = randint(1, 100) <= crit_chance
         if is_crit:
             base *= 1.5
-
-            # ── 도적 패시브: 크리 시 70% 확률로 방어력 50% 무시 ──
-            # 효과 = 원래 base를 def_stat 절반으로 다시 계산한 값으로 보정.
-            #   원래: atk * 200 / (100 + def)
-            #   무시: atk * 200 / (100 + def * 0.5)
-            #   비율: (100 + def) / (100 + def * 0.5)
-            # def가 높을수록 효과가 큼 → 일격 특화 정체성과 일치.
-            if attacker is not None and attacker.job == "도적":
-                if randint(1, 100) <= 70:
-                    pen_ratio = (100 + def_stat) / (100 + def_stat * 0.5)
-                    base *= pen_ratio
 
         # ── 최소 데미지 보장 (atk_stat × 0.20) ──
         # 상성으로 깎여도 공격력의 20% 이상은 보장 (Phase 1 디자인 원칙)
