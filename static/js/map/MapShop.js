@@ -15,6 +15,7 @@ function _showShopPanel(r) {
     const cardHtml = (item) => `
         <div class="shop-item ${gold < item.price ? "cant-afford" : ""}"
              data-item-id="${item.id}"
+             data-tooltip-item="${item.id}"
              data-price="${item.price}"
              title="${(typeof ITEM_DESCRIPTIONS !== "undefined" && ITEM_DESCRIPTIONS[item.id]) || item.effect || ""}">
             <span class="shop-item-icon" data-icon-for="${item.id}"></span>

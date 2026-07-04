@@ -37,6 +37,7 @@ function showRewardModal(result) {
                 const row = document.createElement('div');
                 const isPotion = String(id).endsWith('_potion');
                 row.className = 'reward-item' + (isPotion ? '' : ' reward-special');
+                row.dataset.tooltipItem = id;
                 if (typeof itemDesc === 'function' && itemDesc(id)) row.title = itemDesc(id);
 
                 if (typeof renderIconWithFallback === 'function') {

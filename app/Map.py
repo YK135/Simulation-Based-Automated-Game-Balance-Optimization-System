@@ -19,7 +19,7 @@ app/Map.py — 노드맵 Blueprint
 from __future__ import annotations
 
 import json
-from random import choices as rand_choices, random, randint
+from random import choices as rand_choices, random, randint, choice
 
 from flask import Blueprint, jsonify, request
 
@@ -93,12 +93,30 @@ def _apply_stat_scale(enemies: list, scale: float) -> None:
 _GRADE_TO_KEY = {"하": "easy", "중": "normal", "상": "hard"}
 
 
-def _make_enemies(hook, n: int, grade_pool: dict) -> list:
-    """n마리 적 생성 (각자 독립 grade 선택, BalanceHook 캐시에서 조회)."""
+# ─────────────────────────────────────────────
+# 챕터별 몬스터 출현 풀
+# ─────────────────────────────────────────────
+# 몬스터 출현은 플레이어 레벨(min_lv)이 아니라 "챕터" 기준으로 고정.
+#   챕터 1 (중간보스 전): 기본 몬스터 + 원소 슬라임 3종
+#   챕터 2 (최종보스 전): 챕터 1 전체 + 사제/암살자/골렘
+# elite 노드도 같은 풀에서 hard/상만 뽑는다 (grade_pool로 제어).
+CHAPTER_ENEMY_POOL = {
+    1: ["고블린", "박쥐", "슬라임", "화염 슬라임", "빙결 슬라임", "번개 슬라임"],
+    2: ["고블린", "박쥐", "슬라임", "화염 슬라임", "빙결 슬라임", "번개 슬라임",
+        "사제", "암살자", "골렘"],
+}
+
+
+def _make_enemies(hook, n: int, grade_pool: dict, chapter: int = 1) -> list:
+    """n마리 적 생성 (챕터 풀에서 선택, 각자 독립 grade, BalanceHook 캐시 조회).
+
+    ※ 구 방식(플레이어 레벨 min_lv 기반 hook.pick_random_enemy_type)은 폐기 —
+      챕터 기준 고정 풀(CHAPTER_ENEMY_POOL)에서만 출현."""
+    pool = CHAPTER_ENEMY_POOL.get(chapter, CHAPTER_ENEMY_POOL[2])
     enemies = []
     grades  = []
     for _ in range(n):
-        enemy_type = hook.pick_random_enemy_type()
+        enemy_type = choice(pool)
         grade      = _pick_grade(grade_pool)
         diff_key   = _GRADE_TO_KEY.get(grade, "normal")
         # difficulty 파라미터로 원하는 난이도 직접 지정
@@ -336,7 +354,7 @@ def map_choose():
             grade_pool = NORMAL_GRADE_3 if n_enemies == 3 else NORMAL_GRADE_POOL
             scale      = STAT_SCALE[n_enemies]
 
-        enemies, grades = _make_enemies(hook, n_enemies, grade_pool)
+        enemies, grades = _make_enemies(hook, n_enemies, grade_pool, chapter)
 
         # 다대일 스탯 보정 (BattleSession 내 보정과 중복 방지 — 외부에서만 처리)
         if n_enemies > 1:

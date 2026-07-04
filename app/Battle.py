@@ -79,7 +79,11 @@ def _start_battle(gs: dict, enemy, is_boss: bool = False) -> dict:
         enemy_origins  = [enemy],
         player_original= gs["player"],
     )
-    return gs["battle"]._state(messages=[f"{enemy.name}이(가) 나타났다!"])
+    # ★ 전투 시작 시 실제 큐 첫 행동자 반영 (적 선공이면 버튼 안 켜지게)
+    bs = gs["battle"]
+    na, aidx = bs._peek_next_actor()
+    return bs._state(messages=[f"{enemy.name}이(가) 나타났다!"],
+                     next_actor=na, acting_enemy_idx=aidx)
 
 
 def _start_battle_multi(gs: dict, enemies: list, is_boss: bool = False) -> dict:
@@ -101,7 +105,11 @@ def _start_battle_multi(gs: dict, enemies: list, is_boss: bool = False) -> dict:
         counts[e.name] = counts.get(e.name, 0) + 1
     parts = [f"{n}마리의 {name}" if n > 1 else name for name, n in counts.items()]
     msg = f"⚠ {', '.join(parts)}이(가) 나타났다!"
-    return gs["battle"]._state(messages=[msg])
+    # ★ 전투 시작 시 실제 큐 첫 행동자를 next_actor로 반영
+    #   (기본 "player"로 나가면 적 선공인데도 버튼이 켜져 첫 입력이 유실됨)
+    bs = gs["battle"]
+    na, aidx = bs._peek_next_actor()
+    return bs._state(messages=[msg], next_actor=na, acting_enemy_idx=aidx)
 
 
 # ─────────────────────────────────────────────

@@ -12,7 +12,10 @@ function openInvSwap(incoming, candidates) {
     ivCandidates   = candidates || [];
 
     const el = document.getElementById('iv-incoming');
-    if (el) el.textContent = (typeof itemLabel === 'function') ? itemLabel(incoming) : incoming;
+    if (el) {
+        el.textContent = (typeof itemLabel === 'function') ? itemLabel(incoming) : incoming;
+        el.dataset.tooltipItem = incoming;   // 획득 아이템에도 hover 설명
+    }
     renderInvCandidates();
 
     const modal = document.getElementById('modal-inv-swap');
@@ -28,6 +31,7 @@ function renderInvCandidates() {
         const row = document.createElement('div');
         row.className = 'iv-candidate' + (ivSelectedDrop === name ? ' selected' : '');
         const dispName = (typeof itemLabel === 'function') ? itemLabel(name) : name;
+        row.dataset.tooltipItem = name;
         if (typeof itemDesc === 'function' && itemDesc(name)) row.title = itemDesc(name);
         row.innerHTML = `
             <span class="iv-cand-name">${dispName}</span>

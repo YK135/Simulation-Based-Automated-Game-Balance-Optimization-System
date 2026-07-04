@@ -389,3 +389,32 @@ img[src=""], img:not([src]) { /* 빈 src img는 표시 안 함 */ }
     border-color: rgba(214, 154, 58, 0.72);
     box-shadow: 0 0 14px rgba(214, 154, 58, 0.18);
 }
+
+/* ─────────────────────────────────────────────
+   공용 아이템 툴팁 (#item-tooltip — ItemTooltip.js)
+   마우스 근처 말풍선. pointer-events:none 필수.
+   ───────────────────────────────────────────── */
+.item-tooltip {
+    position: fixed;
+    display: none;
+    max-width: 230px;
+    padding: 8px 11px;
+    background: rgba(10, 14, 22, 0.96);
+    border: 1px solid rgba(221, 184, 111, 0.55);
+    border-radius: 5px;
+    box-shadow: 0 4px 18px rgba(0, 0, 0, 0.65), 0 0 8px rgba(221, 184, 111, 0.12);
+    pointer-events: none;
+    z-index: 100000;
+    font-size: 11px;
+    line-height: 1.5;
+}
+.item-tooltip.active { display: block; }
+.item-tooltip-name {
+    color: var(--fantasy-gold, #ddb86f);
+    font-weight: 700;
+    margin-bottom: 2px;
+    letter-spacing: 0.5px;
+}
+.item-tooltip-desc {
+    color: var(--text-main, #d8d1bd);
+}

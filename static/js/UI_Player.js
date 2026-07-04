@@ -78,6 +78,7 @@ function refreshInventoryPanel(p) {
                 // 전투 중 + 사망 상태에는 클릭 비활성
                 const usable = !state.inBattle && !(state.player && state.player.hp <= 0);
                 row.className = `pip-item${usable ? ' usable' : ''}`;
+                row.dataset.tooltipItem = name;
                 // 아이콘(이미지 우선 + 이모지 폴백) + 이름 + 수량
                 if (typeof renderIconWithFallback === 'function') {
                     row.appendChild(renderIconWithFallback(
@@ -112,6 +113,7 @@ function refreshInventoryPanel(p) {
             special.forEach(name => {
                 const row = document.createElement('div');
                 row.className = 'pip-item pip-special';
+                row.dataset.tooltipItem = name;
                 row.title = ((typeof itemDesc === 'function' && itemDesc(name)) ? itemDesc(name) + ' — ' : '') + '필드에서 사용 불가 (전투 중 사용)';
                 if (typeof renderIconWithFallback === 'function') {
                     row.appendChild(renderIconWithFallback(

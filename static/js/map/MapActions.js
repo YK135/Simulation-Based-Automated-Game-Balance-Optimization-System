@@ -29,6 +29,20 @@ async function chooseNode(nodeId, nodeType) {
     }
 }
 
+// 전투 시작 직후 첫 턴 처리 — next_actor가 적이면 auto 루프 시작, 아니면 액션창.
+function _kickoffBattleTurn(bs) {
+    const na = (bs && bs.next_actor) || "player";
+    if (na === "enemy") {
+        if (typeof showEnemyTurn === "function") showEnemyTurn();
+        // 적 선공 — auto 루프 시작 (battleAction이 done/player까지 진행)
+        if (typeof battleAction === "function") {
+            setTimeout(() => battleAction("auto"), 500);
+        }
+    } else {
+        if (typeof showPlayerTurn === "function") showPlayerTurn();
+    }
+}
+
 function handleNodeResult(r) {
     const event = r.event;
 
@@ -40,6 +54,9 @@ function handleNodeResult(r) {
             hideMapMode();
             if (r.battle_state && typeof refreshBattle === "function") {
                 refreshBattle(r.battle_state);
+                // ★ 전투 시작 시 실제 첫 행동자에 맞춰 턴 처리
+                //   적 선공이면 버튼 잠그고 auto 루프 시작 (첫 입력 유실 방지)
+                _kickoffBattleTurn(r.battle_state);
             }
             break;
 
