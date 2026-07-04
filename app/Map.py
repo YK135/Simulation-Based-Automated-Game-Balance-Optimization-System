@@ -393,6 +393,7 @@ def map_choose():
     # ── 휴식 ──────────────────────────────────
     elif node_type == "rest":
         _log_node_choice(gs, node)
+        _save_map(gs, fmap)   # ★ choose()의 갈래 잠금(player_branch) 저장 — 새로고침 시 유지
         return jsonify({
             "ok": True, "event": "rest",
             "node_id": node_id,
@@ -406,6 +407,7 @@ def map_choose():
     # ── 상점 ──────────────────────────────────
     elif node_type == "shop":
         _log_node_choice(gs, node)
+        _save_map(gs, fmap)   # ★ choose()의 갈래 잠금(player_branch) 저장 — 새로고침 시 유지
         shop_items = _get_shop_items(player.lv)
         return jsonify({
             "ok": True, "event": "shop",

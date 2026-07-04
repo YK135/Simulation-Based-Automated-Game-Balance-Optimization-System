@@ -244,8 +244,20 @@ img.combatant-art {
     margin-top: 8px;
     border-top: 1px dashed var(--border, rgba(0,255,208,0.15));
     padding-top: 8px;
-    max-height: 180px;       /* 아이템이 많아도 패널 전체 높이 고정 */
-    overflow: hidden;
+    /* 패널 전체가 하나의 스크롤 영역 — 포션이 많아도 아래 특수 아이템까지
+       이어서 스크롤로 확인 가능 (개별 목록 스크롤 방식 폐기) */
+    max-height: 200px;
+    overflow-y: auto;
+    padding-right: 3px;
+}
+
+.player-inventory-panel::-webkit-scrollbar { width: 4px; }
+.player-inventory-panel::-webkit-scrollbar-thumb {
+    background: rgba(221, 184, 111, 0.35);
+    border-radius: 4px;
+}
+.player-inventory-panel::-webkit-scrollbar-track {
+    background: rgba(0, 0, 0, 0.25);
 }
 
 .pip-section {
@@ -268,18 +280,7 @@ img.combatant-art {
     display: flex;
     flex-direction: column;
     gap: 3px;
-    max-height: 72px;        /* 포션/특수 각각 내부 스크롤 */
-    overflow-y: auto;
-    padding-right: 3px;
-}
-
-.pip-item-list::-webkit-scrollbar { width: 4px; }
-.pip-item-list::-webkit-scrollbar-thumb {
-    background: rgba(221, 184, 111, 0.35);
-    border-radius: 4px;
-}
-.pip-item-list::-webkit-scrollbar-track {
-    background: rgba(0, 0, 0, 0.25);
+    /* 개별 스크롤 제거 — 패널 전체 스크롤(.player-inventory-panel)로 통합 */
 }
 
 .pip-item {

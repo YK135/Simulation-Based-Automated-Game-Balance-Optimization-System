@@ -321,9 +321,38 @@
     font-weight: 700;
 }
 
-.shop-items-grid {
+/* 상점 모달 — 크기 고정, 목록만 스크롤 */
+.shop-panel {
     display: flex;
     flex-direction: column;
+    width: min(560px, 92%);
+    max-height: 78vh;              /* 모달 크기 고정 — 목록이 길어도 안 커짐 */
+}
+
+.shop-scroll-area {
+    flex: 1 1 auto;
+    overflow-y: auto;              /* 상품 목록 영역만 스크롤 */
+    padding-right: 4px;
+    margin: 6px 0;
+}
+.shop-scroll-area::-webkit-scrollbar { width: 5px; }
+.shop-scroll-area::-webkit-scrollbar-thumb {
+    background: rgba(221, 184, 111, 0.35);
+    border-radius: 4px;
+}
+
+.shop-section-label {
+    font-size: 10px;
+    letter-spacing: 1px;
+    color: rgba(221, 184, 111, 0.75);
+    margin: 8px 0 4px;
+    border-bottom: 1px dashed rgba(221, 184, 111, 0.25);
+    padding-bottom: 2px;
+}
+
+.shop-items-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;    /* n행 2열 */
     gap: 6px;
 }
 

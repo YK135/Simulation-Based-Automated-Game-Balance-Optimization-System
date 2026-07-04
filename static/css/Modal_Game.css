@@ -390,3 +390,58 @@
     color: var(--accent-cyan);
     font-weight: 700;
 }
+
+
+/* ─────────────────────────────────────────────
+   전투 보상 팝업 (#modal-reward) — RewardModal.js
+   유물 선택 영역(#reward-relic-area)은 추후 확장용
+   ───────────────────────────────────────────── */
+#modal-reward .modal {
+    width: min(360px, 90%);
+    text-align: center;
+}
+.reward-title {
+    font-size: 14px;
+    letter-spacing: 2px;
+    color: var(--fantasy-gold, #ddb86f);
+    margin-bottom: 10px;
+}
+#reward-gold {
+    font-size: 16px;
+    font-weight: 700;
+    color: rgba(255, 210, 60, 0.9);
+    margin-bottom: 8px;
+}
+#reward-item-list {
+    display: flex;
+    flex-direction: column;
+    gap: 5px;
+    margin: 8px 0;
+    max-height: 180px;
+    overflow-y: auto;
+}
+.reward-item {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 6px 10px;
+    border: 1px solid rgba(221, 184, 111, 0.28);
+    border-radius: 4px;
+    background: rgba(221, 184, 111, 0.05);
+    font-size: 12px;
+    cursor: help;
+}
+.reward-item .reward-item-name { flex: 1; text-align: left; }
+.reward-item.reward-special {
+    border-color: rgba(160, 100, 255, 0.45);
+    background: rgba(160, 100, 255, 0.07);
+}
+.reward-item-badge { color: #ffd23c; font-size: 11px; }
+#reward-relic-area {
+    margin: 10px 0;
+    padding: 8px;
+    border: 1px dashed rgba(221, 184, 111, 0.3);
+    font-size: 11px;
+    color: var(--text-muted, #6b7a8d);
+}
+#reward-confirm-btn { margin-top: 8px; min-width: 120px; }

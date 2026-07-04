@@ -73,6 +73,9 @@ async function newGame(name, job) {
     }
 }
 
+// ── 예약 행동: 적 차례에 입력한 액션을 보관했다가 플레이어 차례에 자동 실행 ──
+let _pendingBattleAction = null;
+
 async function battleAction(action) {
     if (state.battleProcessing) {
         term('battle action in progress, ignored', 'warn');
@@ -92,6 +95,13 @@ async function battleAction(action) {
             return;
         }
 
+        // ★ 적 차례에 입력한 행동 → 백엔드가 무시(action_ignored) → 예약으로 보관
+        //    (타깃 인덱스가 action 문자열에 포함돼 그대로 유지됨. 예: "skill:파이어볼:1")
+        if (r.action_ignored && action !== 'auto') {
+            _pendingBattleAction = action;
+            logLine('⏳ 행동 예약됨 — 내 차례에 자동 실행', 'system');
+        }
+
         const messages = r.messages || [];
         const bsForRefresh = { ...r, messages: [] };
         refreshBattle(bsForRefresh);
@@ -107,6 +117,7 @@ async function battleAction(action) {
 
         // ── 종료 처리 ──
         if (r.done) {
+            _pendingBattleAction = null;   // 전투 종료 — 예약 초기화
             if (r.winner === 'player') {
                 logLine('★ VICTORY!', 'crit');
                 term('battle won', 'ok');
@@ -137,7 +148,10 @@ async function battleAction(action) {
 
             if (typeof checkPendingPoints === 'function') checkPendingPoints();
 
-            // ★ 승리 시만 노드맵 완료 처리, 패배/도망은 loadStatus
+            // ★ 승리 시 보상 팝업 (확인 클릭까지 대기) → 노드맵 완료 처리
+            if (r.winner === 'player' && typeof showRewardModal === 'function') {
+                await showRewardModal(r);
+            }
             if (r.winner === 'player' && typeof handleMapNodeDone === 'function') {
                 await handleMapNodeDone(r);
             } else {
@@ -154,6 +168,16 @@ async function battleAction(action) {
             await battleAction('auto');
             return;
         } else {
+            // ★ 예약 행동이 있으면 액션창을 열지 않고 자동 실행
+            if (_pendingBattleAction) {
+                const pending = _pendingBattleAction;
+                _pendingBattleAction = null;
+                state.battleProcessing = false;
+                logLine('▶ 예약 행동 실행!', 'skill');
+                await new Promise(resolve => setTimeout(resolve, 300));
+                await battleAction(pending);
+                return;
+            }
             showPlayerTurn();
         }
 

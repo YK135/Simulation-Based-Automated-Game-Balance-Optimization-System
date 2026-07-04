@@ -40,9 +40,11 @@
    우상단 X 닫기 버튼 (확대)
    ═══════════════════════════════════════════════════════════ */
 .ranking-close-btn {
-    position: absolute;
-    top: 16px;
-    right: 16px;
+    /* 모달 내부가 아닌 화면(viewport) 최우상단에 고정 */
+    position: fixed;
+    top: 12px;
+    right: 12px;
+    z-index: 10000;   /* 모달/오버레이보다 위 */
     width: 44px;
     height: 44px;
     background: transparent;
@@ -53,7 +55,6 @@
     cursor: pointer;
     border-radius: 4px;
     transition: all 0.15s;
-    z-index: 10;
     line-height: 1;
     display: flex;
     align-items: center;

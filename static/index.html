@@ -655,6 +655,18 @@
 </div>
 
 <!-- ★ 스탯 분배 모달 (레벨업 시) — 휴식 모달과 동일 시스템 -->
+<!-- ═══ 전투 보상 팝업 (RewardModal.js) ═══ -->
+<div id="modal-reward" class="modal-bg">
+  <div class="modal">
+    <div class="reward-title">⚔ VICTORY — 전투 보상</div>
+    <div id="reward-gold"></div>
+    <div id="reward-item-list"></div>
+    <!-- 유물 선택 영역 (추후 2택1 UI 확장용 — 현재 숨김) -->
+    <div id="reward-relic-area" style="display:none;"></div>
+    <button class="btn" id="reward-confirm-btn">확인</button>
+  </div>
+</div>
+
 <div id="modal-stat-allocate" class="modal-bg">
     <div class="modal modal-stat-allocate">
         <h2>⬆ LEVEL UP — STAT ALLOCATION</h2>
@@ -700,7 +712,8 @@
 <script src="js/battle/BattleMenus.js"></script>
 <script src="js/battle/BattleSidePanel.js"></script>
 <script src="js/UI_Battle.js"></script>         <!-- 배틀 모드 (오케스트레이터) -->
-<script src="js/Modals.js"></script>            <!-- 휴식/도망 + 시뮬 가시화 -->
+<script src="js/Modals.js"></script>
+<script src="js/RewardModal.js"></script>   <!-- 전투 보상 팝업 -->            <!-- 휴식/도망 + 시뮬 가시화 -->
 <script src="js/StatAllocate.js"></script>     <!-- 레벨업 스탯 분배 모달 -->
 <!-- 맵 UI 분리 모듈 (UI_Map.js 오케스트레이터보다 먼저 로드) -->
 <script src="js/map/MapRender.js"></script>

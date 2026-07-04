@@ -94,9 +94,9 @@ function refreshInventoryPanel(p) {
                 row.appendChild(countSp);
                 if (usable) {
                     row.onclick = () => usePotionFromPanel(name);
-                    row.title = '클릭하여 사용';
+                    row.title = ((typeof itemDesc === 'function' && itemDesc(name)) ? itemDesc(name) + ' — ' : '') + '클릭하여 사용';
                 } else {
-                    row.title = '전투 중에는 액션 메뉴에서 사용하세요';
+                    row.title = ((typeof itemDesc === 'function' && itemDesc(name)) ? itemDesc(name) + ' — ' : '') + '전투 중에는 액션 메뉴에서 사용하세요';
                 }
                 potionEl.appendChild(row);
             });
@@ -112,6 +112,7 @@ function refreshInventoryPanel(p) {
             special.forEach(name => {
                 const row = document.createElement('div');
                 row.className = 'pip-item pip-special';
+                row.title = ((typeof itemDesc === 'function' && itemDesc(name)) ? itemDesc(name) + ' — ' : '') + '필드에서 사용 불가 (전투 중 사용)';
                 if (typeof renderIconWithFallback === 'function') {
                     row.appendChild(renderIconWithFallback(
                         (typeof ITEM_ICONS !== 'undefined' ? ITEM_ICONS[name] : null) || { icon: '□' },
@@ -125,7 +126,6 @@ function refreshInventoryPanel(p) {
                 badgeSp.textContent = '★';
                 row.appendChild(nameSp2);
                 row.appendChild(badgeSp);
-                row.title = '필드에서 사용 불가';
                 specialEl.appendChild(row);
             });
         }

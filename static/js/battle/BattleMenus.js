@@ -45,6 +45,7 @@ if (battleItems.length === 0) {
     Object.entries(counts).forEach(([name, n]) => {
         const cell = document.createElement('div');
         cell.className = 'submenu-item';
+        if (typeof itemDesc === 'function' && itemDesc(name)) cell.title = itemDesc(name);
         // 아이콘(이미지 우선 + 이모지 폴백) + 이름 + 수량
         if (typeof renderIconWithFallback === 'function') {
             cell.appendChild(renderIconWithFallback(

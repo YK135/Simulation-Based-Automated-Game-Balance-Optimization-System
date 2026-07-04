@@ -1,0 +1,4 @@
+ai_rpg.db
+*.db
+data/
+.DS_Store

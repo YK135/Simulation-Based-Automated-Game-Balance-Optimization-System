@@ -28,6 +28,7 @@ function renderInvCandidates() {
         const row = document.createElement('div');
         row.className = 'iv-candidate' + (ivSelectedDrop === name ? ' selected' : '');
         const dispName = (typeof itemLabel === 'function') ? itemLabel(name) : name;
+        if (typeof itemDesc === 'function' && itemDesc(name)) row.title = itemDesc(name);
         row.innerHTML = `
             <span class="iv-cand-name">${dispName}</span>
             <span class="iv-cand-mark">✕ 버림</span>

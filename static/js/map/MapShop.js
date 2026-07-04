@@ -6,23 +6,36 @@ function _showShopPanel(r) {
     const gold  = r.gold || 0;
     const items = r.shop_items || [];
     overlay.style.display = "flex";
+    // 일반(포션) / 특수 섹션 분리 — type 필드 기준 (없으면 id로 판별)
+    const isSpecial = (it) => (it.type === "special") ||
+        (it.type !== "potion" && !String(it.id).endsWith("_potion"));
+    const normals  = items.filter(it => !isSpecial(it));
+    const specials = items.filter(isSpecial);
+
+    const cardHtml = (item) => `
+        <div class="shop-item ${gold < item.price ? "cant-afford" : ""}"
+             data-item-id="${item.id}"
+             data-price="${item.price}"
+             title="${(typeof ITEM_DESCRIPTIONS !== "undefined" && ITEM_DESCRIPTIONS[item.id]) || item.effect || ""}">
+            <span class="shop-item-icon" data-icon-for="${item.id}"></span>
+            <span class="shop-item-name">${item.name}</span>
+            <span class="shop-item-effect">${item.effect}</span>
+            <span class="shop-item-price">${item.price} G</span>
+        </div>`;
+
+    const sectionHtml = (label, list) => list.length ? `
+        <div class="shop-section-label">${label}</div>
+        <div class="shop-items-grid">${list.map(cardHtml).join("")}</div>` : "";
+
     overlay.innerHTML = `
         <div class="shop-panel">
             <div class="shop-header">
                 <span class="panel-title">🛒 SHOP</span>
                 <span class="shop-gold">💰 ${gold} G</span>
             </div>
-            <div class="shop-items-grid">
-                ${items.map(item => `
-                    <div class="shop-item ${gold < item.price ? "cant-afford" : ""}"
-                         data-item-id="${item.id}"
-                         data-price="${item.price}">
-                        <span class="shop-item-icon" data-icon-for="${item.id}"></span>
-                        <span class="shop-item-name">${item.name}</span>
-                        <span class="shop-item-effect">${item.effect}</span>
-                        <span class="shop-item-price">${item.price} G</span>
-                    </div>
-                `).join("")}
+            <div class="shop-scroll-area">
+                ${sectionHtml("일반 아이템", normals)}
+                ${sectionHtml("특수 아이템", specials)}
             </div>
             <button class="btn shop-leave-btn" id="shop-leave-btn">나가기</button>
         </div>

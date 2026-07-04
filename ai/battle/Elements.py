@@ -45,6 +45,28 @@ ELEMENT_IMMUNITY_BY_ENEMY_TYPE = {
 }
 
 
+# 원소 슬라임 고유(innate) 원소 — 면역 매핑과 동일 (화염=fire / 빙결=ice / 번개=lightning)
+INNATE_ELEMENT_BY_ENEMY_TYPE = ELEMENT_IMMUNITY_BY_ENEMY_TYPE
+
+
+def _innate_element(defender) -> str:
+    """원소 슬라임의 고유 원소. 일반 몬스터는 ''."""
+    et = getattr(defender, "enemy_type", "") or getattr(defender, "name", "")
+    innate = INNATE_ELEMENT_BY_ENEMY_TYPE.get(et)
+    if innate is None:
+        innate = INNATE_ELEMENT_BY_ENEMY_TYPE.get(getattr(defender, "name", ""), "")
+    return innate or ""
+
+
+def _restore_innate_element(defender, messages: list) -> None:
+    """원소 반응/파쇄로 큐가 초기화된 뒤, 원소 슬라임은 고유 원소를 다시 부착.
+    (일반 몬스터는 빈 큐 유지 — 기존 동작)"""
+    innate = _innate_element(defender)
+    if innate and innate not in getattr(defender, "element_queue", []):
+        defender.element_queue.append(innate)
+        messages.append(f"{defender.name}의 고유 원소가 다시 타오른다! ({innate})")
+
+
 def is_element_immune(defender, attack_element: str) -> bool:
     """defender가 attack_element에 면역인지. physical/무원소는 면역 없음."""
     if not attack_element or attack_element == "physical":
@@ -84,6 +106,7 @@ def apply_element_and_react(
             defender.element_queue.clear()
             messages.append(f"{eff['label']} 발동! +{bonus} 추가 데미지")
             messages.append(f"{defender.name}의 원소 큐가 초기화되었다.")
+            _restore_innate_element(defender, messages)   # 원소 슬라임 고유 원소 복구
             return base_damage + bonus
         return base_damage
 
@@ -126,6 +149,7 @@ def apply_element_and_react(
                     gained = int(attacker.mp - before)
                     if gained > 0:
                         messages.append(f"[마법사 패시브] 원소 반응 → MP +{gained}")
+                _restore_innate_element(defender, messages)   # 원소 슬라임 고유 원소 복구
             else:
                 defender.element_queue = [attack_element]
                 messages.append(f"{defender.name}에게 {attack_element} 원소가 부착되었다.")

@@ -69,6 +69,31 @@ function itemLabel(id) {
     return (typeof ITEM_LABELS !== 'undefined' && ITEM_LABELS[id]) || id;
 }
 
+// ─────────────────────────────────────────────────────────
+// 아이템 설명 (툴팁용 — 좌측 패널/전투 ITEMS 메뉴/상점/보상 팝업 공용)
+// ─────────────────────────────────────────────────────────
+const ITEM_DESCRIPTIONS = {
+    HP_S_potion: 'HP를 소량 회복한다',
+    HP_M_potion: 'HP를 중간량 회복한다',
+    HP_L_potion: 'HP를 대량 회복한다',
+    MP_S_potion: 'MP를 소량 회복한다',
+    MP_M_potion: 'MP를 중간량 회복한다',
+    MP_L_potion: 'MP를 대량 회복한다',
+    bomb:              '적 전체에게 피해',
+    web_bomb:          '적 전체 피해 + 속도 감소',
+    fire_vial:         '단일 적에게 화염 부착',
+    ice_vial:          '단일 적에게 빙결 부착',
+    lightning_crystal: '단일 적에게 번개 부착',
+    focus_drug:        '다음 스킬 피해 증가',
+    haste_drug:        '다음 행동 후 ATB 추가 획득',
+};
+
+// id → 설명 (없으면 빈 문자열). 툴팁 표시 전용.
+function itemDesc(id) {
+    return (typeof ITEM_DESCRIPTIONS !== 'undefined' && ITEM_DESCRIPTIONS[id]) || '';
+}
+
+
 
 // ─────────────────────────────────────────────────────────
 // 원소 아이콘 (현재는 매핑만 — 원소 부착은 이름 색상으로 표시, 아이콘 미사용)

@@ -353,9 +353,13 @@ class BattleSession(
             # auto가 아닌 액션이 왔는데 적 차례 — 사용자가 입력한 거니 무시
             # (UI가 적 차례엔 버튼 비활성화해야 정상)
             if action != "auto":
-                return self._state(messages=["적이 행동 중입니다."],
-                                   next_actor="enemy",
-                                   acting_enemy_idx=idx)
+                # ★ 플레이어가 적 차례에 미리 입력한 행동 — 프론트가 예약 처리할 수 있게
+                #   action_ignored 플래그를 내려준다 (Actions.js가 보관 후 플레이어 차례에 재전송).
+                st = self._state(messages=["적이 행동 중입니다."],
+                                 next_actor="enemy",
+                                 acting_enemy_idx=idx)
+                st["action_ignored"] = True
+                return st
 
             enemy = self.enemies[idx]
 
