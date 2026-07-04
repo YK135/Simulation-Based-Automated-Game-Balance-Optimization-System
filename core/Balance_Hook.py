@@ -495,5 +495,5 @@ class _SnapUnit:
         self.init_element_queue = list(getattr(snap, 'element_queue', []) or [])
 
     def exp_reward(self, player_maxexp: int) -> int:
-        ratio = {"상": 0.45, "중": 0.34, "하": 0.28}.get(self.grade, 0.34)
+        ratio = {"상": 0.80, "중": 0.55, "하": 0.45}.get(self.grade, 0.55)
         return int(player_maxexp * ratio)

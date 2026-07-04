@@ -422,12 +422,10 @@ def Make_MidBoss(player_lv: int, base_monster_snap=None) -> Unit:
     )
 
     # ── 중간 보스 전용 경험치 보상 ──
-    # 일반 상급 (0.45 × maxexp) 대신 1.5 × maxexp → 약 1.5레벨업.
-    # 메서드 동적 부여로 Unit 클래스 자체는 안 건드림.
-    unit.exp_reward = lambda player_maxexp: int(player_maxexp * 1.5)
+    # 중간 보스 전용 경험치 보상: maxexp × 1.00
+    unit.exp_reward = lambda player_maxexp: int(player_maxexp * 1.00)
 
     return unit
-
 
 def Make_FinalBoss(player_lv: int, base_monster_snap=None) -> Unit:
     """

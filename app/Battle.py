@@ -12,8 +12,6 @@ app/battle.py — 전투 Blueprint
 """
 from __future__ import annotations
 
-from random import randint
-
 from flask import Blueprint, jsonify, request
 
 from game.Lv        import LV_
@@ -153,20 +151,42 @@ def _enemy_exp(e, player_maxexp: int) -> int:
     return int(player_maxexp * 0.55)   # 기본 '중'
 
 
-def _calc_victory_exp(player, battle) -> int:
-    """승리 경험치 = Σ(각 몬스터 기본 exp) × 다대일 배율.
-
-    처치 목록: battle.defeated_origins 우선 (원본 Unit — exp_reward 정확),
-    비어 있으면 battle.enemies로 폴백.
-    """
+def _get_defeated_list(battle) -> list:
+    """처치 몬스터 목록: defeated_origins 우선 (원본 Unit — 정확값),
+    비어 있으면 battle.enemies로 폴백. (경험치/보상 공용)"""
     defeated = [o for o in getattr(battle, "defeated_origins", []) if o is not None]
     if not defeated:
         enemies = list(getattr(battle, "enemies", []) or [])
         # 승리 시점이므로 전부 처치됐다고 간주 (hp 기준 필터는 안전용)
         defeated = [e for e in enemies if getattr(e, "hp", 0) <= 0] or enemies
+    return defeated
+
+
+def _get_current_node_type(gs: dict):
+    """현재 전투의 node_type ("battle"/"elite"/...) 또는 None.
+
+    1순위: gs["battle_node_type"] — 전투 시작 시점에 노드 진입 라우트가
+           명시적으로 저장한 값 (엘리트 판정용, 없으면 무시)
+    2순위: pending_node_id + gs["map"] dict 직접 스캔 (폴백)
+    """
+    nt = gs.get("battle_node_type")
+    if nt:
+        return nt
+    node_id = gs.get("pending_node_id")
+    map_data = gs.get("map")
+    if not node_id or not map_data:
+        return None
+    for nd in map_data.get("nodes", []):
+        if nd.get("node_id") == node_id:
+            return nd.get("node_type")
+    return None
+
+
+def _calc_victory_exp(player, battle) -> int:
+    """승리 경험치 = Σ(각 몬스터 기본 exp) × 다대일 배율."""
+    defeated = _get_defeated_list(battle)
     if not defeated:
         return 0
-
     total_base = sum(_enemy_exp(e, player.maxexp) for e in defeated)
     mult = _MULTI_EXP_MULT.get(len(defeated), _MULTI_EXP_MULT[3])
     return int(total_base * mult)
@@ -175,12 +195,12 @@ def _calc_victory_exp(player, battle) -> int:
 def _finish_battle(gs: dict, battle, result: dict, winner: str) -> None:
     """
     전투 종료 공통 처리:
-      1. 플레이어 HP/MP 동기화
-      2. 경험치 지급 (승리 시)
-      3. 중간 보스 보상
-      4. DB 저장
-      5. BattleSession items → Inventory 재반영
-      6. gs["battle"] 초기화
+      1. 플레이어 HP/MP/경험치 처리 (승/패/도망)
+      2. BattleSession items → Inventory 재반영 (★보상보다 먼저)
+      3. 전투 보상 (골드+드랍, 승리+비보스만)
+      4. 중간 보스 보상
+      5. result["player"] 스냅샷 → DB 저장
+      6. gs["battle"] 정리
     """
     player = gs["player"]
 
@@ -202,17 +222,9 @@ def _finish_battle(gs: dict, battle, result: dict, winner: str) -> None:
         player.mp = result["player_mp"]
         result["exp_gained"] = 0
 
-    # 중간 보스 클리어 보상
-    if battle.enemy.name == "중간 보스" and winner == "player":
-        gs["mid_boss_cleared"] = True
-        gs["inventory"].add("HP_L_potion")
-        gs["items"] = gs["inventory"].to_flat_list()
-        result["messages"].append("보상: HP_L_potion 획득!")
-
-    # DB 저장
-    _save_battle_to_db(gs, battle, result, winner)
-
-    # BattleSession items → Inventory 재반영
+    # ── (순서 중요) BattleSession items → Inventory 재반영을 "먼저" 수행 ──
+    #    전투 중 소비/획득 반영. 이걸 보상 지급 뒤에 하면 new_inv가
+    #    보상 아이템을 덮어써 사라지는 버그가 있었음 → 재반영 → 보상 순서 고정.
     bs_items = getattr(battle, "items", None)
     if bs_items is not None:
         new_inv = Inventory.new()
@@ -221,8 +233,42 @@ def _finish_battle(gs: dict, battle, result: dict, winner: str) -> None:
         gs["inventory"] = new_inv
         gs["items"]     = new_inv.to_flat_list()
 
-    gs["battle"] = None
+    # ── 전투 보상: 골드 + 아이템 드랍 (승리 + 보스 전투 제외) ──
+    if winner == "player" and not getattr(battle, "is_boss", False):
+        from game.Rewards import calc_battle_rewards
+        node_type = _get_current_node_type(gs)
+        rw = calc_battle_rewards(_get_defeated_list(battle), node_type)
+        gs["gold"] = gs.get("gold", 0) + rw["gold"]
+        gained = []   # 실제 획득 성공한 아이템만
+        for it in rw["items"]:
+            add_res = gs["inventory"].add(it)
+            if add_res.get("ok"):
+                gained.append(it)
+            else:
+                rw["messages"].append(f"가방이 가득 차 {it}을(를) 놓쳤다...")
+        gs["items"] = gs["inventory"].to_flat_list()
+        result["gold_gained"]   = rw["gold"]
+        result["items_gained"]  = gained          # 성공분만 (실패는 메시지로만)
+        result["relics_gained"] = rw["relics"]    # 유물 자리 (현재 항상 [])
+        result["gold"]          = gs["gold"]
+        # 보상 로그는 messages로만 표시 (gold_gained/items_gained는 데이터용)
+        result["messages"].extend(rw["messages"])
+
+    # 중간 보스 클리어 보상 (재반영 이후 지급 — 덮어쓰기 방지)
+    if battle.enemy.name == "중간 보스" and winner == "player":
+        gs["mid_boss_cleared"] = True
+        gs["inventory"].add("HP_L_potion")
+        gs["items"] = gs["inventory"].to_flat_list()
+        result["messages"].append("보상: HP_L_potion 획득!")
+
+    # 모든 보상 지급 후 플레이어/인벤토리 스냅샷
     result["player"] = _player_dict(player, gs["inventory"])
+
+    # DB 저장 (보상 반영된 result 기준)
+    _save_battle_to_db(gs, battle, result, winner)
+
+    gs["battle"] = None
+    gs.pop("battle_node_type", None)   # 전투 종료 — 노드 타입 캐시 초기화
 
     # 노드맵 사용 중이면 승리 시에만 노드 완료 (패배/도망은 노드 유지)
     if winner == "player" and gs.get("pending_node_id") and gs.get("map"):
