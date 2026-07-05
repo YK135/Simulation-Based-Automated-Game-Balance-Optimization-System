@@ -92,11 +92,19 @@ def main():
     import inspect
     import app.Battle as AB
     src = inspect.getsource(AB._finish_battle)
-    win_block = src.split('winner == "player"')[1].split('elif')[0]
-    check("보상 호출은 승리 분기 안에만 (패배/도망 무보상)",
-          "calc_battle_rewards" in win_block
-          and src.count("calc_battle_rewards") == win_block.count("calc_battle_rewards"))
-    check("보스 전투 제외 (중간보스 중복 지급 방지)", "is_boss" in win_block)
+    # calc_battle_rewards가 감싸인 if 조건문을 직접 찾아 검사
+    #   (현재 구조: if winner == "player" and not getattr(battle, "is_boss", False):)
+    import re
+    m = re.search(r'if ([^\n:]*calc_battle_rewards[^\n]*|[^\n:]*):\n(?:[^\n]*\n)*?[^\n]*calc_battle_rewards', src)
+    # 보상 호출 직전의 가장 가까운 if 조건 줄 추출
+    idx = src.index("calc_battle_rewards(")
+    guard = src.rfind("if ", 0, idx)
+    guard_line = src[guard:src.index(":", guard)]
+    check("보상 호출 조건에 winner == \"player\" 포함",
+          'winner == "player"' in guard_line, f"guard={guard_line!r}")
+    check("보상 호출 조건에 not ...is_boss 포함 (보스 제외)",
+          "is_boss" in guard_line, f"guard={guard_line!r}")
+    check("보상 호출은 1회만 (승리 조건 안)", src.count("calc_battle_rewards(") == 1)
     check("relics_gained 필드", "relics_gained" in src)
     check("battle_node_type 초기화", 'pop("battle_node_type"' in src)
     check("gold_gained/items_gained는 데이터, 로그는 messages",

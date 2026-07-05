@@ -1,4 +1,29 @@
+# ── 데이터베이스 / 런타임 데이터 ──
 ai_rpg.db
 *.db
+*.sqlite
+*.sqlite3
 data/
+data/Player_LOG/
+
+# ── Python ──
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+*.egg-info/
+.venv/
+venv/
+env/
+
+# ── OS / 에디터 ──
 .DS_Store
+Thumbs.db
+.idea/
+.vscode/
+*.swp
+
+# ── 로그 / 임시 ──
+*.log
+cookies.txt

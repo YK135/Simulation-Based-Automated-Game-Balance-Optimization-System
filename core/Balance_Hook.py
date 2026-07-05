@@ -140,6 +140,9 @@ class BalanceHook:
         "사제":     Make_Priest,
     }
 
+    # ── [구 탐험/테스트용] 레벨대별 등장 가능 몬스터 풀 ──
+    #    ⚠ 메인 노드맵 전투에서는 app/Map.py의 CHAPTER_ENEMY_POOL(챕터 기준)을 사용.
+    #    이 레벨 기반 풀은 none_Explore(구 탐험)/콘솔 테스트 호환용으로만 유지한다.
     # 레벨대별 등장 가능 몬스터 풀
     # Phase 1 디자인: 단계적 컨텐츠 도입.
     # 등장 조건: player.lv >= min_lv 인 몬스터들 중 랜덤 선택.
@@ -157,12 +160,16 @@ class BalanceHook:
     ]
 
     def _available_enemy_types(self) -> list:
-        """현재 플레이어 레벨에서 등장 가능한 몬스터 종류 리스트"""
+        """현재 플레이어 레벨에서 등장 가능한 몬스터 종류 리스트.
+        ⚠ [구 탐험/테스트용] 메인 노드맵은 CHAPTER_ENEMY_POOL 사용."""
         return [e["type"] for e in self._ENEMY_POOL
                 if self.player.lv >= e["min_lv"]]
 
     def pick_random_enemy_type(self) -> str:
-        """레벨대별 풀에서 랜덤 선택 (App.py가 이걸로 spawn)"""
+        """레벨대별 풀에서 랜덤 선택.
+        ⚠ 메인 노드맵(app/Map.py)에서는 사용 금지 — 몬스터 출현의 단일 기준은
+          app/Map.py의 CHAPTER_ENEMY_POOL(챕터 기반)이다.
+          이 메서드는 구 탐험 모드(none_Explore)/콘솔 테스트 호환용으로만 유지."""
         from random import choice
         pool = self._available_enemy_types()
         return choice(pool) if pool else "고블린"
@@ -489,11 +496,13 @@ class _SnapUnit:
         self.first_attack_bonus = getattr(snap, 'first_attack_bonus', 1.0)
         self.has_attacked    = getattr(snap, 'has_attacked', False)
         self.enemy_type      = getattr(snap, 'enemy_type', snap.name)
-        # 원소 시스템 — 왕복 변환(EntitySnapshot→_SnapUnit→from_enemy) 시 유실 방지
-        #   (버그: 원소 슬라임 초기 큐가 make_battle_unit에서 사라지던 문제)
-        self.attack_element     = getattr(snap, 'attack_element', '')
-        self.init_element_queue = list(getattr(snap, 'element_queue', []) or [])
+        # 원소 슬라임 보존 — 왕복 변환(_SnapUnit → from_enemy) 시 큐/공격원소 유지.
+        #   이게 없으면 init_element_queue가 유실되어 from_enemy의 이름 fallback에만
+        #   의존하게 됨 (근본 보존은 여기서).
+        self.attack_element      = getattr(snap, 'attack_element', '')
+        self.init_element_queue  = list(getattr(snap, 'element_queue', None)
+                                        or getattr(snap, 'init_element_queue', []) or [])
 
     def exp_reward(self, player_maxexp: int) -> int:
-        ratio = {"상": 0.80, "중": 0.55, "하": 0.45}.get(self.grade, 0.55)
+        ratio = {"상": 0.45, "중": 0.34, "하": 0.28}.get(self.grade, 0.34)
         return int(player_maxexp * ratio)

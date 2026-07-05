@@ -69,14 +69,33 @@ def test_immunity():
     check("고블린 ← fire: 기존 동작 (100 데미지 + 부착)",
           dmg == 100 and g.element_queue == ["fire"])
 
-    # 5. 물리 공격 회귀 방지 (파쇄 포함)
+    # 5. 물리 파쇄 + 원소 슬라임 고유 원소(innate) 복구
+    #    새 설계: 원소 슬라임은 반응/파쇄로 큐가 비어도 고유 원소를 다시 부착.
+    #    화염 슬라임(ice) ← physical → 파쇄 → 큐 비움 → innate [fire] 복구
     f2 = make_snap("화염 슬라임")
     f2.element_queue = ["ice"]
     msgs = []
     dmg = apply_element_and_react(None, f2, "physical", 100, msgs)
-    # 파쇄 보너스는 int(100*(1.2-1.0)) 인데 부동소수점 때문에 119가 정상값
-    check("화염 슬라임(ice) ← physical: 파쇄 정상 (119~120)",
-          dmg in (119, 120) and f2.element_queue == [], f"dmg={dmg}")
+    check("화염 슬라임(ice) ← physical: 파쇄 데미지 119~120",
+          dmg in (119, 120), f"dmg={dmg}")
+    check("화염 슬라임: 파쇄 후 고유 원소 [fire] 복구",
+          f2.element_queue == ["fire"], f"q={f2.element_queue}")
+
+    # 빙결/번개 슬라임도 동일하게 고유 원소 복구
+    ic = make_snap("빙결 슬라임"); ic.element_queue = ["ice"]
+    apply_element_and_react(None, ic, "fire", 100, [])   # melt → clear → [ice]
+    check("빙결 슬라임: 반응 후 고유 원소 [ice] 복구",
+          ic.element_queue == ["ice"], f"q={ic.element_queue}")
+    lg = make_snap("번개 슬라임"); lg.element_queue = ["lightning"]
+    apply_element_and_react(None, lg, "fire", 100, [])   # overload → clear → [lightning]
+    check("번개 슬라임: 반응 후 고유 원소 [lightning] 복구",
+          lg.element_queue == ["lightning"], f"q={lg.element_queue}")
+
+    # 일반 고블린은 기존처럼 빈 큐 유지 (innate 없음)
+    gob = make_snap("고블린"); gob.element_queue = ["ice"]
+    apply_element_and_react(None, gob, "physical", 100, [])
+    check("고블린: 파쇄 후 큐 [] 유지 (innate 없음)",
+          gob.element_queue == [], f"q={gob.element_queue}")
 
     # 6. helper 직접 검증
     check("is_element_immune(화염, fire) = True", is_element_immune(make_snap("화염 슬라임"), "fire"))
