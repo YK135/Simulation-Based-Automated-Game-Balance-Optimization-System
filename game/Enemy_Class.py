@@ -374,7 +374,9 @@ def Make_Priest(player_lv: int, grade: str) -> Unit:
 
 def Make_Random_Monster(player_lv: int) -> Unit:
     """
-    랜덤 몬스터 + 랜덤 등급. 레벨대별 풀 적용 (Phase 1 통합).
+    [구 콘솔/테스트용] 랜덤 몬스터 + 랜덤 등급 — 레벨대별 풀.
+    ⚠ 메인 노드맵에서는 사용하지 않음. 실제 게임의 몬스터 출현은
+      app/Map.py의 CHAPTER_ENEMY_POOL(챕터 기준)이 단일 기준.
       Lv1+:  고블린, 박쥐
       Lv3+:  + 슬라임
       Lv5+:  + 골렘
@@ -422,10 +424,12 @@ def Make_MidBoss(player_lv: int, base_monster_snap=None) -> Unit:
     )
 
     # ── 중간 보스 전용 경험치 보상 ──
-    # 중간 보스 전용 경험치 보상: maxexp × 1.00
-    unit.exp_reward = lambda player_maxexp: int(player_maxexp * 1.00)
+    # 일반 상급 (0.45 × maxexp) 대신 1.5 × maxexp → 약 1.5레벨업.
+    # 메서드 동적 부여로 Unit 클래스 자체는 안 건드림.
+    unit.exp_reward = lambda player_maxexp: int(player_maxexp * 1.5)
 
     return unit
+
 
 def Make_FinalBoss(player_lv: int, base_monster_snap=None) -> Unit:
     """
