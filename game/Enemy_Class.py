@@ -402,6 +402,9 @@ def Make_Random_Monster(player_lv: int) -> Unit:
     return choice(pool)(player_lv, grade)
 
 def Make_MidBoss(player_lv: int, base_monster_snap=None) -> Unit:
+    # TODO(밸런스): MC 실측상 중간보스는 Lv15 근처 권장 (Lv10 승률: 마법사 62.8%,
+    #   전사 7.8%, 탱커 0%, 도적 1%). 추후 UI/로그에 "권장 레벨 Lv15" 안내 예정.
+    #   보스 수치 자체는 조정하지 않는다 (Lv15 이후 난이도 유지 목적).
     """
     중간 보스: 오래 버티는 적 (Lv14 전후) — 5차 조정.
     ...

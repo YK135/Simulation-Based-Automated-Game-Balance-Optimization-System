@@ -27,3 +27,8 @@ Thumbs.db
 # ── 로그 / 임시 ──
 *.log
 cookies.txt
+
+# ── 분석 산출물 (Monte Carlo 등) ──
+analysis_outputs/
+mc_results.json
+mc_*.json

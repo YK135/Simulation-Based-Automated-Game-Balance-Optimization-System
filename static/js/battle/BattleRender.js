@@ -3,13 +3,23 @@
 // 플레이어 슬롯 + 적 슬롯(1~3) + HP/MP/ATB 바 + 타겟 + 턴 시각화
 // (원본 단일 for 루프 구조 보존 — 슬롯/바/타겟이 한 패스에서 처리됨)
 // ── 플레이어 전투 슬롯 (이름/이미지/HP/MP/ATB) ──
+// 실드바 공통 갱신 — 실드 0이면 row 숨김, 게이지 기준은 shield/maxhp
+function updateShieldBar(rowId, fillId, textId, shield, maxhp) {
+    const row = document.getElementById(rowId);
+    const fill = document.getElementById(fillId);
+    const text = document.getElementById(textId);
+
+    const value = Math.max(0, Number(shield || 0));
+    const pct = maxhp > 0 ? Math.min(100, value / maxhp * 100) : 0;
+
+    if (row) row.style.display = value > 0 ? '' : 'none';
+    if (fill) fill.style.width = pct + '%';
+    if (text) text.textContent = Math.round(value);
+}
+
 function renderPlayerCombatant(bs) {
     const p = state.player;
     document.getElementById('player-combatant-art').textContent = JOB_ICONS[p.job] || '?';
-    // 첫 렌더(메시지 없는 초기 상태)에만 idle 세팅 — 매 refresh 덮으면 attack/hurt 연출 끊김
-    if ((!bs.messages || bs.messages.length === 0) && typeof setCharState === 'function') {
-        setCharState('player_battle', 'idle');
-    }
     renderNameWithStatus(document.getElementById('player-combatant-name'), {
         name: p.name,
         element_aura: bs.player_element_aura || p.element_aura || '',
@@ -20,6 +30,8 @@ function renderPlayerCombatant(bs) {
     document.getElementById('player-combatant-meta').textContent = `LV ${p.lv} ${p.job}`;
     document.getElementById('player-cb-hp').style.width = (bs.player_hp/bs.player_maxhp*100) + '%';
     document.getElementById('player-cb-hp-text').textContent = `${Math.round(bs.player_hp)}/${bs.player_maxhp}`;
+    updateShieldBar('player-shield-row', 'player-cb-shield', 'player-cb-shield-text',
+                    bs.player_shield, bs.player_maxhp);
     document.getElementById('player-cb-mp').style.width = (bs.player_mp/bs.player_maxmp*100) + '%';
     document.getElementById('player-cb-mp-text').textContent = `${Math.round(bs.player_mp)}/${bs.player_maxmp}`;
 
@@ -87,6 +99,10 @@ function renderEnemySlots(bs) {
         const hpEl     = document.getElementById(`enemy-cb-hp${enemyIdSuffix(i)}`);
         const hpTextEl = document.getElementById(`enemy-cb-hp-text${enemyIdSuffix(i)}`);
         if (hpEl)     hpEl.style.width = (en.hp / en.maxhp * 100) + '%';
+        updateShieldBar(`enemy-shield-row${enemyIdSuffix(i)}`,
+                        `enemy-cb-shield${enemyIdSuffix(i)}`,
+                        `enemy-cb-shield-text${enemyIdSuffix(i)}`,
+                        en.shield, en.maxhp);
         if (hpTextEl) hpTextEl.textContent = `${Math.round(en.hp)}/${en.maxhp}`;
 
         // ATB 바

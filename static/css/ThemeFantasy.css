@@ -418,3 +418,96 @@ img[src=""], img:not([src]) { /* 빈 src img는 표시 안 함 */ }
 .item-tooltip-desc {
     color: var(--text-main, #d8d1bd);
 }
+
+/* ═══════════════════════════════════════════════════════════
+   다크 판타지 색 톤 통일 — OVERRIDE ONLY
+   ───────────────────────────────────────────────────────────
+   기존 사이버/AI 대시보드 톤(밝은 cyan/green)을 gold/bronze로 통일.
+   · 원본 CSS는 건드리지 않음 — ThemeFantasy.css가 마지막 로드라 여기서 덮음
+   · Base.css의 --accent-cyan 변수 자체는 유지 (AI Monitor 차트가 사용)
+   · AI Monitor 레이더 IDEAL cyan은 의도적으로 미변경
+   ═══════════════════════════════════════════════════════════ */
+:root {
+    --fantasy-gold:   #ddb86f;
+    --fantasy-amber:  #f0c768;
+    --fantasy-bronze: #8a6a3d;
+    --fantasy-panel:  rgba(6, 14, 17, 0.86);
+    --fantasy-hover:  rgba(221, 184, 111, 0.14);
+    --fantasy-active: rgba(240, 199, 104, 0.22);
+}
+
+/* ── 1. 랭킹 (Ranking_BIG) ── */
+.ranking-modal-big {
+    border-color: var(--fantasy-bronze);
+    background: var(--fantasy-panel);
+    box-shadow: 0 0 40px rgba(221, 184, 111, 0.12);
+}
+.ranking-arrow { color: var(--fantasy-gold); border-color: var(--fantasy-bronze); }
+.ranking-arrow:hover { color: var(--fantasy-amber); border-color: var(--fantasy-gold); background: var(--fantasy-hover); }
+.ranking-row:hover { background: var(--fantasy-hover); }
+.ranking-header-row { color: var(--fantasy-gold); border-bottom-color: var(--fantasy-bronze); }
+.ranking-my-rank { color: var(--fantasy-amber); border-color: var(--fantasy-gold); background: var(--fantasy-active); }
+.ranking-close-btn { color: var(--fantasy-gold); border-color: var(--fantasy-bronze); }
+.ranking-title-big { color: var(--fantasy-gold); }
+
+/* ── 2. 전투 액션/서브메뉴 (BattleActions) ── */
+.submenu { border-color: var(--fantasy-bronze); background: var(--fantasy-panel); }
+.submenu-title { color: var(--fantasy-gold); border-bottom-color: var(--fantasy-bronze); }
+.submenu-item { border-color: rgba(138, 106, 61, 0.5); }
+.submenu-item:hover {
+    border-color: var(--fantasy-gold);
+    color: var(--fantasy-amber);
+    background: var(--fantasy-hover);
+    box-shadow: 0 0 10px rgba(221, 184, 111, 0.18);
+}
+.action-btn.skill { border-color: var(--fantasy-bronze); }
+.action-btn.skill:hover { border-color: var(--fantasy-gold); color: var(--fantasy-amber); box-shadow: 0 0 12px rgba(221, 184, 111, 0.25); }
+.action-btn.item { border-color: var(--fantasy-bronze); }
+.action-btn.item:hover { border-color: var(--fantasy-gold); color: var(--fantasy-amber); box-shadow: 0 0 12px rgba(221, 184, 111, 0.25); }
+.turn-indicator.player-turn {
+    background: var(--fantasy-gold);
+    color: #14100a;
+    box-shadow: 0 0 16px rgba(221, 184, 111, 0.5);
+}
+
+/* ── 3. 맵/상점/휴식/이벤트 (Map) ── */
+.shop-item { border-color: rgba(138, 106, 61, 0.5); background: rgba(221, 184, 111, 0.04); }
+.shop-item:hover { border-color: var(--fantasy-gold); background: var(--fantasy-hover); box-shadow: 0 0 10px rgba(221, 184, 111, 0.18); }
+.shop-item-price { color: var(--fantasy-amber); }
+.shop-gold { color: var(--fantasy-amber); }
+.rest-option-btn { border-color: var(--fantasy-bronze); }
+.rest-option-btn:hover { border-color: var(--fantasy-gold); color: var(--fantasy-amber); background: var(--fantasy-hover); }
+.event-continue-btn { border-color: var(--fantasy-bronze); color: var(--fantasy-gold); }
+.event-continue-btn:hover { border-color: var(--fantasy-gold); background: var(--fantasy-hover); }
+.map-node.available { border-color: var(--fantasy-gold); box-shadow: 0 0 12px rgba(221, 184, 111, 0.35); }
+.map-node.available:hover { box-shadow: 0 0 18px rgba(240, 199, 104, 0.55); }
+
+/* ── 4. 모달 공통/시작/게임 (Modal_*) ── */
+.modal { border-color: var(--fantasy-bronze); background: var(--fantasy-panel); box-shadow: 0 0 30px rgba(0,0,0,0.7), 0 0 14px rgba(221, 184, 111, 0.10); }
+.modal .btn.primary,
+.btn.primary {
+    background: var(--fantasy-gold);
+    border-color: var(--fantasy-gold);
+    color: #14100a;
+}
+.modal .btn.primary:hover,
+.btn.primary:hover { background: var(--fantasy-amber); border-color: var(--fantasy-amber); }
+.modal-title { color: var(--fantasy-gold); }
+.entry-option.instant-play { border-color: var(--fantasy-bronze); }
+.entry-option.instant-play:hover { border-color: var(--fantasy-gold); background: var(--fantasy-hover); }
+.entry-option.instant-play .entry-icon,
+.entry-option.instant-play .entry-label { color: var(--fantasy-gold); }
+.job-btn.active { border-color: var(--fantasy-gold); color: var(--fantasy-amber); background: var(--fantasy-active); }
+.sa-btn-pm { border-color: var(--fantasy-bronze); color: var(--fantasy-gold); }
+.sa-btn-pm:hover { border-color: var(--fantasy-gold); background: var(--fantasy-hover); }
+.sa-btn-confirm:not(:disabled) { background: var(--fantasy-gold); border-color: var(--fantasy-gold); color: #14100a; }
+.sa-btn-confirm:not(:disabled):hover { background: var(--fantasy-amber); }
+.iv-btn-confirm:not(:disabled) { background: var(--fantasy-gold); border-color: var(--fantasy-gold); color: #14100a; }
+.iv-btn-confirm:not(:disabled):hover { background: var(--fantasy-amber); }
+
+/* ── 5. 플레이어 패널 아이템 (Player_Panel) ── */
+.pip-section-title { color: var(--fantasy-gold); }
+.pip-item { border-color: rgba(138, 106, 61, 0.45); }
+.pip-item:hover,
+.pip-item.usable:hover { border-color: var(--fantasy-gold); background: var(--fantasy-hover); color: var(--fantasy-amber); }
+.pip-item.pip-special { border-color: rgba(160, 100, 255, 0.4); } /* 특수는 보라 유지 (식별용) */

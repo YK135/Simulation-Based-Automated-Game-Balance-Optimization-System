@@ -74,10 +74,14 @@ SKILL_META = {
         "mp": 16, "mult": 1.80, "type": "physical", "hits": 1
     },
     "슬래시1": {
-        "mp": 12, "mult": 0.65, "type": "physical", "hits": 1, "aoe": True
+        # 전사 광역 생존기 — AoE 딜 + 명중한 적 수만큼 실드 (maxhp 5%/명중, 최대 15%)
+        "mp": 12, "mult": 0.65, "type": "physical", "hits": 1, "aoe": True,
+        "shield_per_hit": 0.05, "shield_cap": 0.15
     },
     "슬래시2": {
-        "mp": 18, "mult": 0.80, "type": "physical", "hits": 1, "aoe": True
+        # maxhp 7%/명중, 최대 21%
+        "mp": 18, "mult": 0.80, "type": "physical", "hits": 1, "aoe": True,
+        "shield_per_hit": 0.07, "shield_cap": 0.21
     },
     "강화1": {
         "mp": 14, "type": "buff",
@@ -134,13 +138,14 @@ SKILL_META = {
     },
 
     "몸통박치기1": {
+        # 밸런스 패치: 1.4/0.03 → 1.45/0.032 (탱커 Lv10 장기전 완화 — MC: 1v1 10.7턴)
         "mp": 8, "type": "tank_attack",
-        "arm_mult": 1.4, "hp_mult": 0.03
+        "arm_mult": 1.45, "hp_mult": 0.032
     },
     "몸통박치기2": {
-        # 스펙: arm_mult 1.5, hp_mult 0.035
+        # 밸런스 패치: 1.5/0.035 → 1.55/0.038
         "mp": 13, "type": "tank_attack",
-        "arm_mult": 1.5, "hp_mult": 0.035
+        "arm_mult": 1.55, "hp_mult": 0.038
     },
     "되갚기1": {
         "mp": 10, "type": "counter",

@@ -236,6 +236,12 @@ class BattleEngine:
                 attacker._next_skill_bonus = 1.0
 
             if not mp_lack:
+                # ── 전사 광역 생존기 실드 (시뮬은 1v1 → 명중 1명 기준) ──
+                _sph = SKILL_META.get(action.detail, {}).get("shield_per_hit", 0.0)
+                if _sph > 0 and attacker.job == "전사" and actor == "player" and dmg > 0:
+                    _cap = SKILL_META[action.detail].get("shield_cap", 0.0)
+                    _r = min(_sph, _cap)
+                    attacker.shield = max(attacker.shield, attacker.maxhp * _r)
                 if dmg > 0:
                     actual = _apply_damage_with_shield(defender, dmg)
                     log.damage_dealt = actual

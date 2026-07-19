@@ -207,9 +207,29 @@ img.combatant-art {
     opacity: 0.95;
 }
 
+/* ─────────────────────────────────────────────
+   실드바 (SHD) — 슬래시/실드 스킬 (BattleRender.updateShieldBar)
+   은회색/철색 톤 — 다크 판타지 유지, 실드 0이면 row 숨김(JS)
+   ───────────────────────────────────────────── */
+.cb-row.shield-row {
+    margin-top: -1px;
+}
 
-/* ── 빈/깨진 이미지 안전망 (첫 전투 src="" 박스 방지) ── */
-img.combatant-art[src=""],
-img.combatant-art:not([src]) {
-    display: none !important;
+.cb-row.shield-row .cb-label,
+.cb-row.shield-row .cb-text {
+    color: rgba(200, 210, 220, 0.9);
+}
+
+.cb-track.shield-track {
+    height: 6px;
+    border-color: rgba(190, 200, 210, 0.28);
+    background: rgba(8, 10, 12, 0.72);
+}
+
+.cb-fill.shield {
+    background: linear-gradient(90deg, #8b95a1, #d7dde5);
+    box-shadow:
+        inset 0 0 4px rgba(255, 255, 255, 0.25),
+        0 0 8px rgba(190, 200, 210, 0.25);
+    transition: width 0.35s ease;
 }

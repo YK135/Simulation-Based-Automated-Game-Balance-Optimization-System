@@ -220,6 +220,7 @@ class PlayerActionsMixin:
                 msgs.append(f"{skill_name} (전체 공격!) → {first.name}에게 {dmg} 데미지")
                 msgs.append(f"{first.name} HP: {max(0, int(first.hp))}")
                 total_dmg = dmg
+                hit_targets = 1 if dmg > 0 else 0   # 명중(비회피) 카운트 — 실드용
 
                 # 2) 나머지 대상 — DamageCalc 직접 호출 (MP 차감 X)
                 stype = meta.get("type", "physical")
@@ -274,6 +275,7 @@ class PlayerActionsMixin:
                         msgs.append(f"  └ {tgt.name}에게 {raw} 데미지")
                         msgs.append(f"     {tgt.name} HP: {max(0, int(tgt.hp))}")
                         total_dmg += raw
+                        hit_targets += 1
                     else:
                         msgs.append(f"  └ {tgt.name}이(가) 회피!")
 
@@ -288,6 +290,15 @@ class PlayerActionsMixin:
                 if self._next_skill_bonus > 1.0:
                     msgs.append(f"✨ 집중 효과 적용됨!")
                     self._next_skill_bonus = 1.0
+                # ── 전사 광역 생존기: 명중한 적 수만큼 실드 (슬래시 전용) ──
+                sph = meta.get("shield_per_hit", 0.0)
+                if sph > 0 and self.player.job == "전사" and hit_targets > 0:
+                    cap = meta.get("shield_cap", 0.0)
+                    ratio = min(sph * hit_targets, cap)
+                    gained = self.player.maxhp * ratio
+                    self.player.shield = max(self.player.shield, gained)
+                    msgs.append(f"🛡 {skill_name} — {hit_targets}명 명중! 실드 +{int(gained)} "
+                                f"(maxhp {int(ratio*100)}%)")
                 self.skills_used += 1   # ★ AoE 스킬 사용 성공 (Phase 3)
                 self._end_rogue_dice()
                 self._count_warrior_attack(msgs)   # AoE는 공격형 — 전사 카운트

@@ -32,7 +32,8 @@ def _best_mp_potion(entity: EntitySnapshot) -> str | None:
     return None
 
 
-def _skill_efficiency(skill_name: str, attacker: EntitySnapshot, defender: EntitySnapshot | None = None) -> float:
+def _skill_efficiency(skill_name: str, attacker: EntitySnapshot, defender: EntitySnapshot | None = None,
+                      enemy_count: int = 1) -> float:
     meta = SKILL_META.get(skill_name)
     if not meta:
         return -1.0
@@ -75,21 +76,29 @@ def _skill_efficiency(skill_name: str, attacker: EntitySnapshot, defender: Entit
         return (base * expected_hits) / real_mp_cost
 
     if stype == "physical":
-        return (attacker.effective_stg() * meta.get("mult", 1.0) * meta.get("hits", 1)) / real_mp_cost
+        dmg = attacker.effective_stg() * meta.get("mult", 1.0) * meta.get("hits", 1)
+        # AoE(슬래시 등)는 살아있는 적 수만큼 총피해 — 다대일에서 정당하게 평가
+        if meta.get("aoe"):
+            dmg *= max(1, enemy_count)
+        return dmg / real_mp_cost
 
     if stype == "magical":
-        return (attacker.sp * meta.get("mult", 1.0) * meta.get("hits", 1)) / real_mp_cost
+        dmg = attacker.sp * meta.get("mult", 1.0) * meta.get("hits", 1)
+        if meta.get("aoe"):
+            dmg *= max(1, enemy_count)
+        return dmg / real_mp_cost
 
     return -1.0
 
 
-def _best_attack_skill(attacker: EntitySnapshot, defender: EntitySnapshot) -> str | None:
+def _best_attack_skill(attacker: EntitySnapshot, defender: EntitySnapshot,
+                       enemy_count: int = 1) -> str | None:
     best, best_score = None, -1.0
     for skill in attacker.learned_skills:
         meta = SKILL_META.get(skill)
         if not meta or meta.get("type") not in ATTACK_TYPES:
             continue
-        score = _skill_efficiency(skill, attacker, defender)
+        score = _skill_efficiency(skill, attacker, defender, enemy_count=enemy_count)
         if score > best_score:
             best_score, best = score, skill
     return best if best_score > 0 else None
@@ -192,7 +201,8 @@ class PlayerAI:
     def __init__(self, aggression: str = "balanced"):
         self.aggression = aggression
 
-    def decide(self, attacker: EntitySnapshot, defender: EntitySnapshot) -> Action:
+    def decide(self, attacker: EntitySnapshot, defender: EntitySnapshot,
+               enemy_count: int = 1) -> Action:
         hp_ratio = attacker.hp / attacker.maxhp if attacker.maxhp > 0 else 1.0
         mp_ratio = attacker.mp / attacker.maxmp if attacker.maxmp > 0 else 0.0
 
@@ -259,7 +269,32 @@ class PlayerAI:
         }.get(self.aggression, self.SKILL_MP_RESERVE)
 
         if mp_ratio >= mp_threshold or self.aggression == "aggressive":
-            skill = _best_attack_skill(attacker, defender)
+            # ── 탱커: 피격 직후 되갚기 고려 (밸런스 패치) ──
+            #    MP당 효율로는 몸통박치기에 항상 밀리므로(MC 실측: 되갚기 선택 0회),
+            #    '절대 피해'가 몸통박치기의 90% 이상이면 되갚기를 우선 선택한다.
+            #    되갚기 계수는 무변경 — AI 선택 로직만 개선.
+            if attacker.job == "탱커" and getattr(attacker, "last_damage_taken", 0) > 0:
+                best_counter, counter_dmg, tank_dmg = None, 0.0, 0.0
+                for sk in attacker.learned_skills:
+                    meta = SKILL_META.get(sk, {})
+                    cost = meta.get("mp", 0) * attacker.mp_cost_multiplier()
+                    if attacker.mp < cost:
+                        continue
+                    stype = meta.get("type", "")
+                    if stype == "counter":
+                        d = attacker.last_damage_taken * meta.get("counter_mult", 0.0) \
+                            + attacker.effective_arm() * meta.get("arm_mult", 0.0)
+                        d = min(d, attacker.maxhp * meta.get("cap", 1.0))
+                        if d > counter_dmg:
+                            counter_dmg, best_counter = d, sk
+                    elif stype == "tank_attack":
+                        d = attacker.effective_arm() * meta.get("arm_mult", 0.0) \
+                            + attacker.maxhp * meta.get("hp_mult", 0.0)
+                        tank_dmg = max(tank_dmg, d)
+                if best_counter and counter_dmg >= tank_dmg * 0.9:
+                    return Action("skill", best_counter)
+
+            skill = _best_attack_skill(attacker, defender, enemy_count=enemy_count)
             if skill:
                 return Action("skill", skill)
 
@@ -302,7 +337,8 @@ class EnemyAI:
         threshold = self.DEFAULT_ATTACK_PROB_SP if has_sp_kit else self.DEFAULT_ATTACK_PROB_NO_SP
         return "attack" if rr() < threshold else "magic"
 
-    def decide(self, attacker: EntitySnapshot, defender: EntitySnapshot) -> Action:
+    def decide(self, attacker: EntitySnapshot, defender: EntitySnapshot,
+               enemy_count: int = 1) -> Action:
         action_type = self._decide_action_type(attacker, defender)
 
         if action_type == "watch":
