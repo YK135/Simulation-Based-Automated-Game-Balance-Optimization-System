@@ -41,7 +41,7 @@ class EnemyActionsMixin:
             msgs.append(f"  └ {enemy.name}이(가) 반격을 회피했다!")
         else:
             actual = apply_element_and_react(self.player, enemy, "physical", actual, msgs)
-            enemy.hp -= actual
+            actual = self._apply_dmg_shielded(enemy, actual, msgs)
             tag = " (치명타!)" if crit else ""
             msgs.append(f"  └ {enemy.name}에게{tag} {actual} 데미지")
             msgs.append(f"     {enemy.name} HP: {max(0, int(enemy.hp))}")
@@ -104,8 +104,7 @@ class EnemyActionsMixin:
                     # ── 물리 원소 반응 (적 기본공격) ──
                     atk_elem = getattr(enemy, "attack_element", "")
                     actual = apply_element_and_react(enemy, self.player, atk_elem or "physical", actual, msgs)
-                    self.player.hp -= actual
-                    dmg = actual
+                    dmg = self._apply_dmg_shielded(self.player, actual, msgs)
                     tag = " (치명타!)" if crit else ""
                     msgs.append(f"{enemy.name} → 공격{tag} | {dmg} 데미지")
                     msgs.append(f"{self.player.name} HP: {max(0, int(self.player.hp))}")
@@ -142,7 +141,7 @@ class EnemyActionsMixin:
                     ))
                 else:
                     if dmg > 0:
-                        self.player.hp -= dmg
+                        dmg = self._apply_dmg_shielded(self.player, dmg, msgs)
                         msgs.append(f"{enemy.name} → {action.detail} | {dmg} 데미지")
                         msgs.append(f"{self.player.name} HP: {max(0, int(self.player.hp))}")
 
@@ -269,14 +268,7 @@ class EnemyActionsMixin:
                 ))
                 return
 
-            actual = int(dmg)
-            if self.player.shield > 0:
-                absorbed = min(self.player.shield, actual)
-                self.player.shield -= absorbed
-                actual -= absorbed
-                msgs.append(f"실드가 {absorbed} 흡수!")
-            self.player.hp -= actual
-            self.player.last_damage_taken = actual
+            actual = self._apply_dmg_shielded(self.player, int(dmg), msgs)
             tag = " (치명타!)" if crit else ""
             msgs.append(f"{priest.name} → 홀리볼트{tag} | {actual} 데미지")
             msgs.append(f"{self.player.name} HP: {max(0, int(self.player.hp))}")
@@ -318,14 +310,7 @@ class EnemyActionsMixin:
             ))
             return
 
-        actual = int(dmg)
-        if self.player.shield > 0:
-            absorbed = min(self.player.shield, actual)
-            self.player.shield -= absorbed
-            actual -= absorbed
-            msgs.append(f"실드가 {absorbed} 흡수!")
-        self.player.hp -= actual
-        self.player.last_damage_taken = actual
+        actual = self._apply_dmg_shielded(self.player, int(dmg), msgs)
         tag = " (치명타!)" if crit else ""
         msgs.append(f"{priest.name} → 공격{tag} | {actual} 데미지")
         msgs.append(f"{self.player.name} HP: {max(0, int(self.player.hp))}")

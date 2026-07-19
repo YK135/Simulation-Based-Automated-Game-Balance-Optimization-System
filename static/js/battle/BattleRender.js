@@ -4,15 +4,31 @@
 // (원본 단일 for 루프 구조 보존 — 슬롯/바/타겟이 한 패스에서 처리됨)
 // ── 플레이어 전투 슬롯 (이름/이미지/HP/MP/ATB) ──
 // 실드바 공통 갱신 — 실드 0이면 row 숨김, 게이지 기준은 shield/maxhp
+// 실드가 있다가 0이 되면 'shield-break' 파괴 모션을 잠깐 재생 후 숨긴다.
 function updateShieldBar(rowId, fillId, textId, shield, maxhp) {
     const row = document.getElementById(rowId);
     const fill = document.getElementById(fillId);
     const text = document.getElementById(textId);
+    if (!row) return;
 
     const value = Math.max(0, Number(shield || 0));
     const pct = maxhp > 0 ? Math.min(100, value / maxhp * 100) : 0;
+    const prev = Number(row.dataset.prevShield || 0);
+    row.dataset.prevShield = value;
 
-    if (row) row.style.display = value > 0 ? '' : 'none';
+    // 실드 파괴: 이전 > 0 → 현재 0 — 깨지는 모션 후 숨김
+    if (prev > 0 && value <= 0) {
+        row.classList.add('shield-break');
+        if (fill) fill.style.width = '0%';
+        if (text) text.textContent = '0';
+        setTimeout(() => {
+            row.classList.remove('shield-break');
+            row.style.display = 'none';
+        }, 450);   // CSS 애니메이션 길이와 일치
+        return;
+    }
+
+    row.style.display = value > 0 ? '' : 'none';
     if (fill) fill.style.width = pct + '%';
     if (text) text.textContent = Math.round(value);
 }

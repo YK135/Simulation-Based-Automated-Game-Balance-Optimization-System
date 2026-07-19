@@ -73,6 +73,24 @@ class PlayerActionsMixin:
 
     _ATTACK_SKILL_TYPES = ("physical", "magical", "tank_attack", "counter", "multi_hit")
 
+    # ─────────────────────────────────────────
+    # 공통: 실드 경유 피해 적용 (Player/Enemy_Actions 공용 — mixin이라 self 공유)
+    #   실드 정의: HP 대신 먼저 피해를 받는 추가 체력.
+    #   예) shield 50, dmg 40 → shield 10, hp 그대로
+    #       shield 20, dmg 30 → shield 0,  hp -10
+    #   반환: HP에 실제로 들어간 피해 (BattleEngine과 동일 기준 — 로그/메시지용)
+    # ─────────────────────────────────────────
+    def _apply_dmg_shielded(self, target, dmg, msgs):
+        from ai.battle import _apply_damage_with_shield
+        before_shield = getattr(target, "shield", 0.0)
+        hp_damage = _apply_damage_with_shield(target, int(dmg))
+        absorbed = max(0.0, before_shield - getattr(target, "shield", 0.0))
+        if absorbed > 0:
+            msgs.append(f"🛡 실드가 {int(absorbed)} 피해를 흡수!")
+            if getattr(target, "shield", 0.0) <= 0:
+                msgs.append("🛡 실드가 깨졌다!")
+        return hp_damage
+
     def _count_warrior_attack(self, msgs: list):
         """
         전사 패시브 — 적 공격(일반공격/공격형 스킬) 사용 3회마다 maxhp 10% 회복.
@@ -153,8 +171,7 @@ class PlayerActionsMixin:
                 if dice_info:
                     actual = self._apply_rogue_dice(actual, dice_info, target, msgs)
                     crit = crit or dice_info["force_crit"]
-                target.hp -= actual
-                dmg = actual
+                dmg = self._apply_dmg_shielded(target, actual, msgs)
                 tag = " (치명타!)" if crit else ""
                 msgs.append(f"{self.player.name} → 공격{tag} | {dmg} 데미지")
                 msgs.append(f"{target.name} HP: {max(0, int(target.hp))}")
@@ -216,11 +233,11 @@ class PlayerActionsMixin:
                 if dice_info:
                     dmg = self._apply_rogue_dice(dmg, dice_info, first, msgs)
 
-                first.hp -= dmg
+                hit_targets = 1 if dmg > 0 else 0   # 명중(비회피) 카운트 — 실드용 (흡수와 무관)
+                dmg = self._apply_dmg_shielded(first, dmg, msgs)
                 msgs.append(f"{skill_name} (전체 공격!) → {first.name}에게 {dmg} 데미지")
                 msgs.append(f"{first.name} HP: {max(0, int(first.hp))}")
                 total_dmg = dmg
-                hit_targets = 1 if dmg > 0 else 0   # 명중(비회피) 카운트 — 실드용
 
                 # 2) 나머지 대상 — DamageCalc 직접 호출 (MP 차감 X)
                 stype = meta.get("type", "physical")
@@ -271,11 +288,11 @@ class PlayerActionsMixin:
                                 from ai.battle.Entity import StatusEffect
                                 tgt.apply_status_effect(StatusEffect(
                                     effect_type="bleed", turns=3, name="출혈"))
-                        tgt.hp -= raw
+                        hit_targets += 1   # 명중 기준 (흡수와 무관)
+                        raw = self._apply_dmg_shielded(tgt, raw, msgs)
                         msgs.append(f"  └ {tgt.name}에게 {raw} 데미지")
                         msgs.append(f"     {tgt.name} HP: {max(0, int(tgt.hp))}")
                         total_dmg += raw
-                        hit_targets += 1
                     else:
                         msgs.append(f"  └ {tgt.name}이(가) 회피!")
 
@@ -372,7 +389,7 @@ class PlayerActionsMixin:
                     # ── 주사위 배율/크리/출혈 (최종 피해 기준) ──
                     if dice_info:
                         dmg = self._apply_rogue_dice(dmg, dice_info, target, msgs)
-                    target.hp -= dmg
+                    dmg = self._apply_dmg_shielded(target, dmg, msgs)
                     msgs.append(f"{skill_name} 사용 → {dmg} 데미지")
                     msgs.append(f"{target.name} HP: {max(0, int(target.hp))}")
                     self.logs.append(TurnLog(

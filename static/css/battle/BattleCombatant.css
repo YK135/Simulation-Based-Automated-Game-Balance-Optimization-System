@@ -233,3 +233,27 @@ img.combatant-art {
         0 0 8px rgba(190, 200, 210, 0.25);
     transition: width 0.35s ease;
 }
+
+/* 실드 파괴 모션 — 은색 섬광 + 흔들림 (updateShieldBar가 450ms 후 row 숨김) */
+.cb-row.shield-row.shield-break {
+    animation: shieldBreakShake 0.45s ease-out;
+}
+
+.cb-row.shield-row.shield-break .cb-track.shield-track {
+    animation: shieldBreakFlash 0.45s ease-out;
+}
+
+@keyframes shieldBreakShake {
+    0%   { transform: translateX(0)    scaleX(1);    }
+    20%  { transform: translateX(-3px) scaleX(1.04); }
+    40%  { transform: translateX(3px)  scaleX(0.97); }
+    60%  { transform: translateX(-2px) scaleX(1.02); }
+    80%  { transform: translateX(1px)  scaleX(0.99); }
+    100% { transform: translateX(0)    scaleX(1);    opacity: 0; }
+}
+
+@keyframes shieldBreakFlash {
+    0%   { box-shadow: 0 0 4px  rgba(215, 221, 229, 0.4);  border-color: rgba(190, 200, 210, 0.28); }
+    30%  { box-shadow: 0 0 18px rgba(255, 255, 255, 0.85); border-color: rgba(255, 255, 255, 0.9);  }
+    100% { box-shadow: 0 0 2px  rgba(215, 221, 229, 0.0);  border-color: rgba(190, 200, 210, 0.1);  }
+}

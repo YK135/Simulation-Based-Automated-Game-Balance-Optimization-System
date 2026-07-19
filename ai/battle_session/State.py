@@ -71,6 +71,7 @@ class StateMixin:
                 "maxhp":            round(en.maxhp, 1),
                 "mp":               round(en.mp, 1),
                 "maxmp":            round(en.maxmp, 1),
+                "shield":           round(getattr(en, "shield", 0.0), 1),
                 # 원본 스탯 (참고용)
                 "stg":              round(en.stg, 1),
                 "arm":              round(en.arm, 1),
@@ -97,6 +98,7 @@ class StateMixin:
             "is_boss":    self.is_boss,   # UI: 보스전이면 도망 버튼 숨김
             "player_hp":  round(self.player.hp, 1),
             "player_mp":  round(self.player.mp, 1),
+            "player_shield": round(getattr(self.player, "shield", 0.0), 1),
             "player_maxhp": self.player.maxhp,
             "player_maxmp": self.player.maxmp,
             "player_atb": round(self.player_atb, 1),
@@ -116,6 +118,7 @@ class StateMixin:
             "enemy_hp":   max(0.0, round(e.hp, 1)),
             "enemy_maxhp": e.maxhp,
             "enemy_name": e.name,
+            "enemy_shield": round(getattr(e, "shield", 0.0), 1),
             "enemy_info": {
                 "name":             e.name,
                 "lv":               e.lv,
@@ -123,6 +126,7 @@ class StateMixin:
                 "difficulty_label": self._DIFF_LABEL.get(diff_raw, diff_raw),
                 "hp":               max(0.0, round(e.hp, 1)),
                 "maxhp":            round(e.maxhp, 1),
+                "shield":           round(getattr(e, "shield", 0.0), 1),
                 "mp":               round(e.mp, 1),
                 "maxmp":            round(e.maxmp, 1),
                 "stg":              round(e.stg, 1),
