@@ -12,6 +12,8 @@ Battle_Engine.py 공통 로직을 검증한다.
 모든 테스트가 통과해야 전투 시스템을 "잠금"으로 간주하고
 다음 기능 개발로 넘어간다.
 """
+import sys, os
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 import sys
 import os
 

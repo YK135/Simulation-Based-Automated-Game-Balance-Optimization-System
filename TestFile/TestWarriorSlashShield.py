@@ -11,6 +11,8 @@ test_warrior_slash_shield.py — 전사 슬래시1/2 광역 실드 회귀 테스
 
 실행: python3 test_warrior_slash_shield.py
 """
+import sys, os
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 import sys
 
 from ai.Battlesession import BattleSession

@@ -10,6 +10,7 @@ from ai.battle import (
     ITEM_META, Debuff, Buff, _current_element,
     EntitySnapshot, DamageCalc, execute_skill,
     SKILL_META, BattleEngine, Action, BattleResult, TurnLog,
+    execute_single_hit, consume_skill_mp,
 )
 
 
@@ -90,6 +91,143 @@ class PlayerActionsMixin:
             if getattr(target, "shield", 0.0) <= 0:
                 msgs.append("🛡 실드가 깨졌다!")
         return hp_damage
+
+    def _exec_multi_hit_skill(self, skill_name: str, meta: dict, target, msgs: list,
+                              dice_info) -> str:
+        """
+        연속공격류(hits>1, physical/magical) — 타격 횟수만큼 개별 공격 판정.
+          · MP는 스킬당 1회만 소모
+          · 각 타격: 대상 확인(사망 시 살아있는 적 중 랜덤 재타겟) → 회피/크리 →
+                    원소 부착/반응 → 실드 흡수 → HP 적용 → 사망 확인 → 로그
+          · 도적 주사위: 스킬 전체 1회 굴림, 배율/강제크리는 각 타에, 출혈은 1회
+          · 전사 공격 카운트: 시도된 타격 수만큼 (+살아있는 적 없어 중단된 타는 제외)
+          · multi_shield(다대일 보정): 스킬 1회당 1번만
+          · skills_used +1 (타격 수 아님)
+        """
+        from random import choice as _choice
+
+        if consume_skill_mp(skill_name, self.player):
+            self._end_rogue_dice()
+            msgs.append("MP가 부족합니다!")
+            self.logs.append(TurnLog(
+                turn=self.turn, actor="player", action="skill_failed",
+                action_detail=f"{skill_name}(mp_lack)",
+                damage_dealt=0, hp_after=target.hp, mp_after=self.player.mp,
+            ))
+            return "ok"
+
+        hits = meta.get("hits", 1)
+        msgs.append(f"{skill_name}!")
+
+        total_hp_dmg = 0
+        total_shield_dmg = 0
+        attempted = 0
+        retargeted = False
+        bleed_done = False
+        hits_detail = []
+        cur = target
+
+        for hi in range(1, hits + 1):
+            # ── 대상 확인: 죽었으면 살아있는 적 중 랜덤 재타겟 ──
+            if cur is None or cur.hp <= 0:
+                alive = self._alive_enemies()
+                if not alive:
+                    break                      # 남은 타격 중단 (카운트 제외)
+                cur = _choice(alive)
+                retargeted = True
+
+            attempted += 1
+            raw, dodge, crit = execute_single_hit(skill_name, self.player, cur)
+
+            if dodge:
+                msgs.append(f"{hi}타: {cur.name}이(가) 회피했다!")
+                hits_detail.append({"hit": hi, "target_name": cur.name,
+                                    "dodge": True, "crit": False, "damage": 0,
+                                    "reaction": None, "killed": False})
+                continue
+
+            dmg = int(raw)
+            # 집중 물약 — 각 타에 동일 배율
+            if self._next_skill_bonus > 1.0 and dmg > 0:
+                dmg = int(dmg * self._next_skill_bonus)
+            # 도적 주사위 — 배율/강제크리 각 타 적용, 출혈은 스킬 전체 1회
+            if dice_info:
+                dmg = int(round(dmg * dice_info["mult"]))
+                if dice_info["force_crit"] and not crit:
+                    dmg = int(dmg * 1.5)
+                    crit = True
+                if dice_info["bleed"] and not bleed_done and hasattr(cur, "apply_status_effect"):
+                    from ai.battle.Entity import StatusEffect
+                    cur.apply_status_effect(StatusEffect(
+                        effect_type="bleed", turns=3, name="출혈"))
+                    msgs.append(f"🩸 {cur.name} 출혈!")
+                    bleed_done = True
+
+            # ── 원소 부착/반응 (타격마다 — 재타겟 시 새 대상 큐 기준) ──
+            reaction_msgs: list = []
+            dmg = apply_element_and_react(
+                self.player, cur, meta.get("element", "") or "physical",
+                dmg, reaction_msgs)
+            reacted = bool(reaction_msgs)
+            msgs.extend(reaction_msgs)
+
+            # ── 실드 흡수 → HP 적용 ──
+            sh_before = getattr(cur, "shield", 0.0)
+            hp_dmg = self._apply_dmg_shielded(cur, dmg, msgs)
+            sh_absorbed = max(0.0, sh_before - getattr(cur, "shield", 0.0))
+            total_hp_dmg += hp_dmg
+            total_shield_dmg += sh_absorbed
+
+            killed = cur.hp <= 0
+            tag = " (치명타!)" if crit else ""
+            kill_tag = " 처치!" if killed else ""
+            msgs.append(f"{hi}타: {cur.name}에게{tag} {hp_dmg} 피해!{kill_tag}")
+            hits_detail.append({"hit": hi, "target_name": cur.name,
+                                "dodge": False, "crit": bool(crit),
+                                "damage": int(hp_dmg),
+                                "shield_damage": int(sh_absorbed),
+                                "reaction": reaction_msgs[0] if reaction_msgs else None,
+                                "killed": killed})
+
+        # 총합
+        if total_shield_dmg > 0:
+            msgs.append(f"총 {int(total_hp_dmg)} HP 피해 / {int(total_shield_dmg)} 실드 피해")
+        else:
+            msgs.append(f"총 {int(total_hp_dmg)} 피해!")
+
+        if self._next_skill_bonus > 1.0:
+            msgs.append("✨ 집중 효과 적용됨!")
+            self._next_skill_bonus = 1.0
+        self._end_rogue_dice()
+
+        self.logs.append(TurnLog(
+            turn=self.turn, actor="player", action="skill",
+            action_detail=skill_name,
+            damage_dealt=int(total_hp_dmg),
+            hp_after=max(0, (cur.hp if cur is not None else 0)),
+            mp_after=self.player.mp,
+        ))
+        # RL 로그용 타격 상세 (Battle_Log가 소비)
+        self._rl_hits_detail = {"skill": skill_name, "hits": hits_detail,
+                                "retargeted": retargeted,
+                                "total_damage": int(total_hp_dmg + total_shield_dmg)}
+
+        # ── 다대일 보정 실드 (스킬 1회당 1번) ──
+        msh = meta.get("multi_shield", 0.0)
+        if msh > 0 and self.player.job == "전사":
+            alive_cnt = sum(1 for e in self.enemies if e.hp > 0)
+            if alive_cnt >= 2:
+                cap = self.player.maxhp * meta.get("multi_shield_cap", 0.0)
+                gained = self.player.maxhp * msh
+                self.player.shield = min(cap, self.player.shield + gained)
+                msgs.append(f"🛡 다대일 대응! 실드 +{int(gained)} "
+                            f"(현재 {int(self.player.shield)})")
+
+        self.skills_used += 1
+        # 전사 공격 카운트 — 시도된 타격 수만큼
+        for _ in range(attempted):
+            self._count_warrior_attack(msgs)
+        return "ok"
 
     def _count_warrior_attack(self, msgs: list):
         """
@@ -326,6 +464,11 @@ class PlayerActionsMixin:
             _stype_for_dice = meta.get("type", "")
             dice_info = (self._roll_rogue_dice(msgs)
                          if _stype_for_dice in self._ATTACK_SKILL_TYPES else None)
+
+            # ── 연속공격류: hits>1 physical/magical은 개별 타격 판정 경로 ──
+            if meta.get("hits", 1) > 1 and _stype_for_dice in ("physical", "magical"):
+                return self._exec_multi_hit_skill(skill_name, meta, target, msgs, dice_info)
+
             mp_before = self.player.mp
             dmg, mp_lack, debuff_name = execute_skill(
                 skill_name, self.player, target
@@ -401,6 +544,19 @@ class PlayerActionsMixin:
                         hp_after=max(0, target.hp),
                         mp_after=self.player.mp,
                     ))
+
+                # ── 다대일 보정 실드 (연속공격1 등) ──
+                #    조건: 살아있는 적 2마리 이상 + 전사 + 스킬 사용 성공
+                #    명중 여부와 무관하게 1회 부여 (cap까지 누적 아닌 상한 유지)
+                msh = meta.get("multi_shield", 0.0)
+                if msh > 0 and self.player.job == "전사":
+                    alive_cnt = sum(1 for e in self.enemies if e.hp > 0)
+                    if alive_cnt >= 2:
+                        cap = self.player.maxhp * meta.get("multi_shield_cap", 0.0)
+                        gained = self.player.maxhp * msh
+                        self.player.shield = min(cap, self.player.shield + gained)
+                        msgs.append(f"🛡 다대일 대응! 실드 +{int(gained)} "
+                                    f"(현재 {int(self.player.shield)})")
 
                 # ★ 단일 스킬 사용 성공 (Phase 3) — else 블록 맨 끝
                 # debuff / buff / heal / shield / 일반 데미지 모두 카운트

@@ -35,6 +35,7 @@ from ai.battle_session.Rewards        import RewardsMixin
 from ai.battle_session.Player_Actions import PlayerActionsMixin
 from ai.battle_session.Enemy_Actions  import EnemyActionsMixin
 from ai.battle_session.State          import StateMixin
+from ai.battle_session.Battle_Log     import BattleLogMixin
 
 
 class BattleSession(
@@ -44,6 +45,7 @@ class BattleSession(
     PlayerActionsMixin,
     EnemyActionsMixin,
     StateMixin,
+    BattleLogMixin,
 ):
     """
     Flask용 1:1/다대일 전투 세션.
@@ -137,6 +139,9 @@ class BattleSession(
         # DB 저장용 액션 카운터 (Phase 3)
         self.skills_used = 0
         self.items_used  = 0
+        # ── (state, action, result) 행동 로그 (Battle_Log.BattleLogMixin) ──
+        self.rl_log = []
+        self.battle_meta = {}   # 앱 레이어가 node_type/chapter/source 주입
         # 특수 아이템 버프 상태
         self._next_skill_bonus  = 1.0   # 집중물약: 다음 스킬 데미지 배율
         self._pending_atb_bonus = 0     # 신속물약: 다음 행동 후 ATB 추가
@@ -196,6 +201,13 @@ class BattleSession(
         return self.enemies[-1] if self.enemies else None
 
     def step(self, action: str) -> dict:
+        """공개 진입점 — 행동 전후를 (state, action, result)로 자동 기록."""
+        pre = self._rl_pre(action)
+        out = self._step_core(action)
+        self._rl_post(pre, out)
+        return out
+
+    def _step_core(self, action: str) -> dict:
         """
         ATB 기반 step (★ 큐 기반 턴제 + 추가 행동권).
 

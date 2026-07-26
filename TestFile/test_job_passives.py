@@ -11,6 +11,8 @@ test_job_passives.py — 직업 패시브 개편 검증 (전사/마법사/탱커
   탱커  : 물리→MP, 마법→HP 회복 / 데미지 0이면 미발동
   도적  : 주사위 배율 테이블 / 자연 크리 억제 / 반격 크리 허용 / 출혈 / 방무 삭제
 """
+import sys, os
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 import sys
 import inspect
 from random import seed

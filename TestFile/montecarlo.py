@@ -92,6 +92,7 @@ def run_one(job, level, btype, stats):
     esnaps, origins, is_boss = build_battle(btype, level)
     bs = BattleSession(player_snap(p, start_items(level)),
                        enemies=esnaps, enemy_origins=origins, is_boss=is_boss)
+    bs.battle_meta = {"source": "ai", "battle_type": btype}
     ai = PlayerAI()
     msgs_all = []
     guard = 0
@@ -111,6 +112,14 @@ def run_one(job, level, btype, stats):
         msgs_all.extend(r.get("messages", []))
         guard += 1
 
+    # 멀티히트 재타겟 발생률 (RL 로그 기준)
+    for rec in getattr(bs, "rl_log", []):
+        mh = rec.get("result", {}).get("multi_hit")
+        if mh:
+            stats["mh_uses"] += 1
+            if mh.get("retargeted"):
+                stats["mh_retargeted"] += 1
+
     win = bs.winner == "player"
     stats["n"] += 1
     stats["win"] += win
@@ -121,6 +130,8 @@ def run_one(job, level, btype, stats):
     stats["actions"] += bs.skills_used + bs.items_used  # 근사
 
     for m in msgs_all:
+        if "🛡 다대일 대응!" in m:
+            stats["multi_shield_procs"] += 1
         if "🎲 주사위:" in m:
             d = int(m.split("주사위:")[1].strip().rstrip("!"))
             stats[f"dice_{d}"] += 1

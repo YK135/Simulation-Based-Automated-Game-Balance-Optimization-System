@@ -12,6 +12,7 @@ app/battle.py — 전투 Blueprint
 """
 from __future__ import annotations
 
+
 from flask import Blueprint, jsonify, request
 
 from game.Lv        import LV_
@@ -81,6 +82,12 @@ def _start_battle(gs: dict, enemy, is_boss: bool = False) -> dict:
     )
     # ★ 전투 시작 시 실제 큐 첫 행동자 반영 (적 선공이면 버튼 안 켜지게)
     bs = gs["battle"]
+    bs.battle_meta = {
+        "node_type":   gs.get("battle_node_type") or _get_current_node_type(gs) or "battle",
+        "chapter":     gs.get("chapter", 1),
+        "battle_type": "1v1",
+        "source":      "human",
+    }
     na, aidx = bs._peek_next_actor()
     return bs._state(messages=[f"{enemy.name}이(가) 나타났다!"],
                      next_actor=na, acting_enemy_idx=aidx)
@@ -108,6 +115,13 @@ def _start_battle_multi(gs: dict, enemies: list, is_boss: bool = False) -> dict:
     # ★ 전투 시작 시 실제 큐 첫 행동자를 next_actor로 반영
     #   (기본 "player"로 나가면 적 선공인데도 버튼이 켜져 첫 입력이 유실됨)
     bs = gs["battle"]
+    # 행동 로그(state_t)용 메타 — 노드/챕터/전투타입 주입
+    bs.battle_meta = {
+        "node_type":   gs.get("battle_node_type") or _get_current_node_type(gs) or "battle",
+        "chapter":     gs.get("chapter", 1),
+        "battle_type": f"1v{len(bs.enemies)}",
+        "source":      "human",
+    }
     na, aidx = bs._peek_next_actor()
     return bs._state(messages=[msg], next_actor=na, acting_enemy_idx=aidx)
 
@@ -271,6 +285,15 @@ def _finish_battle(gs: dict, battle, result: dict, winner: str) -> None:
 
     # 모든 보상 지급 후 플레이어/인벤토리 스냅샷
     result["player"] = _player_dict(player, gs["inventory"])
+
+    # 행동 로그 마지막 레코드에 최종 보상 병합 (state-action-result 완결)
+    if hasattr(battle, "rl_finalize"):
+        battle.rl_finalize({
+            "winner":       winner,
+            "exp_gained":   result.get("exp_gained", 0),
+            "gold_gained":  result.get("gold_gained", 0),
+            "items_gained": result.get("items_gained", []),
+        })
 
     # DB 저장 (보상 반영된 result 기준)
     _save_battle_to_db(gs, battle, result, winner)

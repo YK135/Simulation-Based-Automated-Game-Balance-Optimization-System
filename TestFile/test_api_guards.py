@@ -16,6 +16,8 @@ test_api_guards.py — /api/use_item 가드 회귀 테스트
   GAME_SESSIONS에 가짜 게임 상태를 주입하고 session 쿠키로 연결 →
   가드의 '차단 순서'까지 실제 코드 경로로 검증한다.
 """
+import sys, os
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 import sys
 
 PASS = 0

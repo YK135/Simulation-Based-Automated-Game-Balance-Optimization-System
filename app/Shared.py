@@ -120,12 +120,47 @@ def _player_dict(player, inv) -> dict:
 # DB 저장 헬퍼
 # ─────────────────────────────────────────────
 
+def _save_rl_log(gs: dict, battle) -> None:
+    """(state, action, result) 행동 로그를 JSON 파일로 저장.
+    경로: data/RL_LOG/user_{id}/battle_{timestamp}.json — 실패해도 게임 계속."""
+    import json, os
+    from datetime import datetime
+    rl_log = getattr(battle, "rl_log", None)
+    if not rl_log:
+        return
+    try:
+        uid = gs.get("db_user_id") or "guest"
+        base = os.path.join("data", "RL_LOG", f"user_{uid}")
+        os.makedirs(base, exist_ok=True)
+        fname = datetime.now().strftime("battle_%Y%m%d_%H%M%S_%f.json")
+        player = gs.get("player")
+        meta = dict(getattr(battle, "battle_meta", {}) or {})
+        meta.update({
+            # 최소 메타 필드 (개인정보 없음 — email/nickname 저장 금지, uid는 익명 숫자)
+            "job":         getattr(player, "job", "") if player else "",
+            "level":       getattr(player, "lv", 0) if player else 0,
+            "enemy_count": len(getattr(battle, "enemies", [])),
+            "enemies":     [e.name for e in getattr(battle, "enemies", [])],
+        })
+        payload = {
+            "meta": meta,
+            "records": rl_log,
+        }
+        with open(os.path.join(base, fname), "w", encoding="utf-8") as f:
+            json.dump(payload, f, ensure_ascii=False)
+    except Exception as ex:
+        print(f"[RL_LOG] save skipped: {ex}")
+
+
 def _save_battle_to_db(gs: dict, battle, result: dict, winner: str) -> None:
     """
     전투 결과를 DB에 저장. 실패해도 게임은 계속 진행.
     """
     from DB import get_session as db_session
     from DB.Models import Battle
+
+    # ── RL 행동 로그는 DB 유저가 없어도(게스트) 항상 저장 ──
+    _save_rl_log(gs, battle)
 
     db_user_id = gs.get("db_user_id")
     if not db_user_id:

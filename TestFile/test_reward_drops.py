@@ -5,6 +5,8 @@ test_reward_drops.py — 전투 보상(골드+드랍) 검증
 프로젝트 루트에서 실행:
     python3 test_reward_drops.py
 """
+import sys, os
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 import sys
 
 PASS = 0

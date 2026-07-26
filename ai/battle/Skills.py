@@ -60,7 +60,10 @@ SKILL_META = {
     },
 
     "연속공격1": {
-        "mp": 8, "mult": 0.80, "type": "physical", "hits": 2  # 0.70 → 0.80: 초반 연타 체감 개선
+        # 다대일 보정: 적 2마리 이상일 때만 전사에게 maxhp 6% 실드 (cap 12%)
+        # — 초반 1대2를 "해볼 만하게", 1대3은 여전히 위험하게. 계수는 무변경.
+        "mp": 8, "mult": 0.80, "type": "physical", "hits": 2,  # 0.70 → 0.80: 초반 연타 체감 개선
+        "multi_shield": 0.06, "multi_shield_cap": 0.12
     },
     "연속공격2": {
         # 스펙: mult 0.70, hits 3 (약간 하향)
@@ -224,6 +227,74 @@ SKILL_META = {
 # ────────────────────────────────────────────
 
 # 반응 테이블: (큐[0], 큐[1]) → 반응명
+
+def consume_skill_mp(skill_name: str, attacker: EntitySnapshot) -> bool:
+    """
+    스킬 MP를 1회만 소모한다.
+    반환값: True면 MP 부족, False면 정상 소모 완료.
+    """
+    meta = SKILL_META.get(skill_name)
+    if not meta:
+        return False
+
+    base_mp_cost = meta.get("mp", 0)
+    real_mp_cost = int(round(base_mp_cost * attacker.mp_cost_multiplier()))
+    real_mp_cost = max(0, real_mp_cost)
+
+    if attacker.mp < real_mp_cost:
+        return True
+
+    attacker.mp -= real_mp_cost
+    return False
+
+
+def execute_single_hit(
+    skill_name: str,
+    attacker: EntitySnapshot,
+    defender: EntitySnapshot,
+) -> tuple[int, bool, bool]:
+    """
+    hits 기반 연속공격용 단일 타격 판정.
+    MP/원소/상태이상/실드 적용은 호출부가 처리하고, 여기서는 1타의
+    기본 데미지/회피/크리티컬만 계산한다.
+    """
+    meta = SKILL_META.get(skill_name)
+    if not meta:
+        return 0, False, False
+
+    stype = meta.get("type", "")
+
+    if stype == "physical":
+        raw, dodge, crit = DamageCalc.physical(
+            attacker.effective_stg(),
+            attacker.luc,
+            defender.effective_arm(),
+            defender.luc,
+            skill_mult=meta.get("mult", 1.0),
+            attacker=attacker,
+            defender=defender,
+            hit_count=1,
+        )
+        bonus = meta.get("luc_bonus", 0.0)
+        if bonus and not dodge:
+            raw += int(attacker.luc * bonus)
+        return int(raw), dodge, crit
+
+    if stype == "magical":
+        raw, dodge, crit = DamageCalc.magical(
+            attacker.sp,
+            attacker.luc,
+            defender.effective_sparm(),
+            defender.luc,
+            skill_mult=meta.get("mult", 1.0),
+            attacker=attacker,
+            defender=defender,
+            hit_count=1,
+        )
+        return int(raw), dodge, crit
+
+    return 0, False, False
+
 
 def execute_skill(
     skill_name: str,

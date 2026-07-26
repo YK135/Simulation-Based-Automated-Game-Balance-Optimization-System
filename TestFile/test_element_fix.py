@@ -13,6 +13,8 @@ test_element_fix.py — 버그 3, 4 수정 검증 스크립트
     - 같은 원소 공격: 0 데미지, 큐 변화 없음, 상태이상 없음, 반응 없음
     - 다른 원소/물리/일반 몬스터: 기존 동작 유지 (회귀 방지)
 """
+import sys, os
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 import sys
 
 PASS = 0

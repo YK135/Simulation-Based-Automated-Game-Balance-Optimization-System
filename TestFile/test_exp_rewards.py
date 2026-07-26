@@ -14,6 +14,8 @@ test_exp_rewards.py — 경험치 보상 시스템 검증
   defeated_origins 우선 / battle.enemies 폴백
   실제 Enemy_Class.Unit.exp_reward와의 일치
 """
+import sys, os
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 import sys
 
 PASS = 0

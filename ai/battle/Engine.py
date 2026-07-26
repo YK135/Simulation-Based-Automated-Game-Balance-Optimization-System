@@ -216,7 +216,54 @@ class BattleEngine:
                     and _meta.get("type", "") in self._ATTACK_SKILL_TYPES):
                 dice = randint(1, 6)
                 attacker._suppress_crit = True
-            dmg, mp_lack, info = execute_skill(action.detail, attacker, defender)
+            # ── 연속공격류(hits>1 physical/magical): 개별 타격 판정 (Digital Twin) ──
+            #    각 타격마다 회피/크리/원소반응/실드흡수/HP적용을 독립 수행.
+            #    1v1 구조라 재타겟 없음 — defender 사망 시 남은 타격 중단.
+            #    MP는 1회만 소모. 주사위 배율/강제크리는 각 타, 출혈/ATB는 1회.
+            if (_meta.get("hits", 1) > 1
+                    and _meta.get("type") in ("physical", "magical")):
+                from .Skills import execute_single_hit, consume_skill_mp
+                if consume_skill_mp(action.detail, attacker):
+                    dmg, mp_lack, info = 0, True, ""
+                else:
+                    mp_lack, info = False, ""
+                    _total_hp = 0
+                    for _hi in range(_meta.get("hits", 1)):
+                        if defender.hp <= 0:
+                            break
+                        _raw, _dodge, _crit = execute_single_hit(
+                            action.detail, attacker, defender)
+                        if _dodge:
+                            continue
+                        _d = int(_raw)
+                        if dice is not None:
+                            _d = int(round(_d * self._ROGUE_DICE_MULT[dice]))
+                            if dice == 6 and not _crit:
+                                _d = int(_d * 1.5)
+                        if getattr(attacker, "_next_skill_bonus", 1.0) > 1.0:
+                            _d = int(_d * attacker._next_skill_bonus)
+                        _rm: list = []
+                        _d = apply_element_and_react(
+                            attacker, defender,
+                            _meta.get("element", "") or "physical", _d, _rm)
+                        _total_hp += _apply_damage_with_shield(defender, _d)
+                    # 스킬 전체 1회 효과 (주사위 6 ATB / 출혈, 집중물약 소진)
+                    if dice is not None:
+                        if dice == 6:
+                            self.atb.player_pt += 20.0
+                        if dice in (3, 6) and defender.hp > 0:
+                            from .Entity import StatusEffect
+                            defender.apply_status_effect(StatusEffect(
+                                effect_type="bleed", turns=3, name="출혈"))
+                        attacker._suppress_crit = False
+                        dice = None            # 기존 dice 후처리 블록 스킵
+                    if getattr(attacker, "_next_skill_bonus", 1.0) > 1.0:
+                        attacker._next_skill_bonus = 1.0
+                    log.damage_dealt = _total_hp
+                    log.hp_after = defender.hp
+                    dmg = 0                    # 기존 공통 적용 경로 스킵 (이미 적용됨)
+            else:
+                dmg, mp_lack, info = execute_skill(action.detail, attacker, defender)
             if dice is not None:
                 attacker._suppress_crit = False
                 if not mp_lack and dmg > 0:
@@ -236,12 +283,26 @@ class BattleEngine:
                 attacker._next_skill_bonus = 1.0
 
             if not mp_lack:
-                # ── 전사 광역 생존기 실드 (시뮬은 1v1 → 명중 1명 기준) ──
-                _sph = SKILL_META.get(action.detail, {}).get("shield_per_hit", 0.0)
+                _meta = SKILL_META.get(action.detail, {})
+                # ── 전사 광역 생존기 실드 (슬래시 계열) — 시뮬은 1v1이라 명중 1명 기준 ──
+                _sph = _meta.get("shield_per_hit", 0.0)
                 if _sph > 0 and attacker.job == "전사" and actor == "player" and dmg > 0:
-                    _cap = SKILL_META[action.detail].get("shield_cap", 0.0)
+                    _cap = _meta.get("shield_cap", 0.0)
                     _r = min(_sph, _cap)
                     attacker.shield = max(attacker.shield, attacker.maxhp * _r)
+
+                # ── 전사 다대일 보정 실드 (연속공격1 계열) — BattleSession과 동일 조건 ──
+                #    살아있는 적 2마리 이상일 때만 발동. 데미지/ATB는 변경하지 않는다.
+                #    ※ BattleEngine은 현재 1v1(player vs enemy) 구조라 실전에서는
+                #      alive_cnt가 1이므로 발동하지 않는다. 다중 적을 지원하게 되면
+                #      (self.enemies 도입) 아래 조건이 그대로 동작한다 — Digital Twin 유지.
+                _msh = _meta.get("multi_shield", 0.0)
+                if _msh > 0 and attacker.job == "전사" and actor == "player":
+                    _alive = [e for e in getattr(self, "enemies", [defender]) if e.hp > 0]
+                    if len(_alive) >= 2:
+                        _cap2 = attacker.maxhp * _meta.get("multi_shield_cap", 0.0)
+                        _gained = attacker.maxhp * _msh
+                        attacker.shield = min(_cap2, attacker.shield + _gained)
                 if dmg > 0:
                     actual = _apply_damage_with_shield(defender, dmg)
                     log.damage_dealt = actual

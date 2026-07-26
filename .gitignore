@@ -32,3 +32,9 @@ cookies.txt
 analysis_outputs/
 mc_results.json
 mc_*.json
+
+# ── 행동 로그 (state-action-result) ──
+data/RL_LOG/
+
+# ── git 잔재 파일 ──
+FETCH_HEAD
