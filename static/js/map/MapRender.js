@@ -11,10 +11,11 @@ function renderMap(mapState) {
       Chapter 1: static/img/map/chapter_1_bg.png
       Chapter 2: static/img/map/chapter_2_bg.png
       권장 크기: 1280x720px, 16:9, 어두운 배경 권장
-      적용 방법: 아래 주석 해제 후 이미지 파일 배치
     */
-    // const mapEl = document.getElementById("map-mode");
-    // if (mapEl) mapEl.style.backgroundImage = `url('${mapState.bg_image}')`;
+    const mapEl = document.getElementById("map-mode");
+    if (mapEl) {
+        mapEl.style.backgroundImage = `url('${_mapBackgroundForState(mapState)}')`;
+    }
 
     // ── 노드 데이터 정리 ──
     const nodes       = mapState.nodes || [];
@@ -250,3 +251,16 @@ function _drawConnections(container, nodes, availSet) {
         });
         });
     }
+
+function _mapBackgroundForState(mapState) {
+    const chapter = mapState.chapter || 1;
+    const layer = mapState.current_layer || 0;
+
+    if (chapter === 1) {
+        if (layer >= 11) return "/img/map/chapter_1_night.png";
+        if (layer >= 6) return "/img/map/chapter_1_sunset.png";
+        return "/img/map/chapter_1_sun.png";
+    }
+
+    return `/${mapState.bg_image || `img/map/chapter_${chapter}_bg.png`}`;
+}

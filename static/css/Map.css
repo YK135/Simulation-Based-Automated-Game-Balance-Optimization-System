@@ -10,6 +10,25 @@
     min-height: 320px;
     overflow: hidden;
     position: relative;
+    background-size: cover;
+    background-position: center;
+    background-repeat: no-repeat;
+}
+
+#map-mode::before {
+    content: "";
+    position: absolute;
+    inset: 0;
+    background:
+        linear-gradient(180deg, rgba(3, 7, 9, 0.06), rgba(3, 7, 9, 0.22)),
+        radial-gradient(circle at 50% 48%, rgba(0, 0, 0, 0.00), rgba(0, 0, 0, 0.18));
+    pointer-events: none;
+    z-index: 0;
+}
+
+#map-mode > * {
+    position: relative;
+    z-index: 1;
 }
 
 /* ─── 맵 헤더 ─── */

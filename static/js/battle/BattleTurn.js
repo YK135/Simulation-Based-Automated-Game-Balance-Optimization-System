@@ -104,25 +104,29 @@ function refreshBattleTargetTags(targetIdx) {
 // 배틀 단계별 배경 클래스 토글
 //   battle-bg-midboss     →  bs.is_boss && state.exploreTurn ~25 (중간 보스)
 //   battle-bg-finalboss   →  bs.is_boss && state.exploreTurn ~50 (최종 보스)
-//   battle-bg-normal-early →  일반전 + turn < 25
-//   battle-bg-normal-late  →  일반전 + turn >= 25
+//   battle-bg-normal-early →  일반전 + 챕터 초반부 (아침)
+//   battle-bg-normal-mid   →  일반전 + 챕터 중반부 (노을)
+//   battle-bg-normal-late  →  일반전 + 챕터 후반부 (저녁)
 
 function refreshBattleBackground(bs) {
     const stage = document.querySelector('.battle-stage');
     if (!stage) return;
     stage.classList.remove('battle-bg-normal-early',
+                            'battle-bg-normal-mid',
                             'battle-bg-midboss',
                             'battle-bg-normal-late',
                             'battle-bg-finalboss');
     const turn = state.exploreTurn || 0;
     if (bs.is_boss) {
-        // 보스전: turn 위치로 중간 vs 최종 판단
-        // 중간 보스는 turn==25 시점에 발생, 최종 보스는 turn>=50
-        if (turn >= 50) stage.classList.add('battle-bg-finalboss');
-        else            stage.classList.add('battle-bg-midboss');
+        // 보스전: 챕터 응답을 우선 사용하고, 없으면 기존 turn 값으로 보정
+        const chapter = bs.chapter || (turn >= 30 ? 2 : 1);
+        if (chapter >= 2) stage.classList.add('battle-bg-finalboss');
+        else              stage.classList.add('battle-bg-midboss');
     } else {
-        if (turn >= 25) stage.classList.add('battle-bg-normal-late');
-        else            stage.classList.add('battle-bg-normal-early');
+        const chapterTurn = ((turn - 1) % 15) + 1;
+        if (chapterTurn >= 11)      stage.classList.add('battle-bg-normal-late');
+        else if (chapterTurn >= 6)  stage.classList.add('battle-bg-normal-mid');
+        else                        stage.classList.add('battle-bg-normal-early');
     }
 }
 
