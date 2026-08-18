@@ -33,6 +33,16 @@ battle_bp = Blueprint("battle", __name__)
 # 전투 시작 헬퍼
 # ─────────────────────────────────────────────
 
+def _get_current_map_layer(gs: dict) -> int:
+    """현재 노드맵 층. 배틀 배경/로그 메타용."""
+    try:
+        if gs.get("battle_map_layer") is not None:
+            return int(gs.get("battle_map_layer") or 0)
+        return int((gs.get("map") or {}).get("current_layer") or 0)
+    except Exception:
+        return 0
+
+
 def _unit_to_snap(unit) -> "EntitySnapshot":
     """
     _SnapUnit 또는 Unit → EntitySnapshot 변환.
@@ -85,6 +95,7 @@ def _start_battle(gs: dict, enemy, is_boss: bool = False) -> dict:
     bs.battle_meta = {
         "node_type":   gs.get("battle_node_type") or _get_current_node_type(gs) or "battle",
         "chapter":     gs.get("chapter", 1),
+        "current_layer": _get_current_map_layer(gs),
         "battle_type": "1v1",
         "source":      "human",
     }
@@ -119,6 +130,7 @@ def _start_battle_multi(gs: dict, enemies: list, is_boss: bool = False) -> dict:
     bs.battle_meta = {
         "node_type":   gs.get("battle_node_type") or _get_current_node_type(gs) or "battle",
         "chapter":     gs.get("chapter", 1),
+        "current_layer": _get_current_map_layer(gs),
         "battle_type": f"1v{len(bs.enemies)}",
         "source":      "human",
     }
@@ -300,6 +312,7 @@ def _finish_battle(gs: dict, battle, result: dict, winner: str) -> None:
 
     gs["battle"] = None
     gs.pop("battle_node_type", None)   # 전투 종료 — 노드 타입 캐시 초기화
+    gs.pop("battle_map_layer", None)   # 전투 종료 — 배틀 배경 층 캐시 초기화
 
     # 노드맵 사용 중이면 승리 시에만 노드 완료 (패배/도망은 노드 유지)
     if winner == "player" and gs.get("pending_node_id") and gs.get("map"):

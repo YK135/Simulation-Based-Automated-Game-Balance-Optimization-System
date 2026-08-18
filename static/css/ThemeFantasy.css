@@ -176,9 +176,30 @@ body {
 .battle-stage.battle-bg-finalboss {
     background-image:
         linear-gradient(180deg, rgba(15,5,5,0.20), rgba(15,5,5,0.60)),
-        url('../img/backgrounds/battle_finalboss.png'),
-        radial-gradient(circle at 50% 35%, rgba(200,40,40,0.18), transparent 32%),
-        linear-gradient(180deg, #1c0a0a 0%, #0a0404 100%);
+        url('../img/backgrounds/battle_ch2_finalboss.png'),
+        radial-gradient(circle at 50% 35%, rgba(120,80,224,0.20), transparent 32%),
+        linear-gradient(180deg, #080616 0%, #03030a 100%);
+}
+.battle-stage.battle-bg-ch2-entrance {
+    background-image:
+        linear-gradient(180deg, rgba(2,5,7,0.04), rgba(2,5,7,0.42)),
+        url('../img/backgrounds/battle_ch2_entrance.png'),
+        radial-gradient(circle at 50% 30%, rgba(180,150,110,0.10), transparent 34%),
+        linear-gradient(180deg, #0b0d0e 0%, #050607 100%);
+}
+.battle-stage.battle-bg-ch2-inner {
+    background-image:
+        linear-gradient(180deg, rgba(2,5,7,0.05), rgba(2,5,7,0.46)),
+        url('../img/backgrounds/battle_ch2_inner.png'),
+        radial-gradient(circle at 50% 30%, rgba(90,130,180,0.12), transparent 34%),
+        linear-gradient(180deg, #080d12 0%, #040608 100%);
+}
+.battle-stage.battle-bg-ch2-depths {
+    background-image:
+        linear-gradient(180deg, rgba(4,4,14,0.06), rgba(4,4,14,0.48)),
+        url('../img/backgrounds/battle_ch2_depths.png'),
+        radial-gradient(circle at 50% 35%, rgba(120,80,224,0.16), transparent 32%),
+        linear-gradient(180deg, #090818 0%, #03030a 100%);
 }
 
 /* ─────────────────────────────────────────────
@@ -376,10 +397,8 @@ img[src=""], img:not([src]) { /* 빈 src img는 표시 안 함 */ }
     background-color: rgba(4, 8, 10, 0.72);
 }
 
-.map-scroll {
-    background: transparent !important;
-    background-color: transparent !important;
-}
+/* .map-scroll 배경은 MapRender.js가 챕터 이미지로 주입하므로 여기서 덮지 않는다.
+   (기존 transparent !important가 배경을 무효화하던 문제 — 제거) */
 
 /* 제목/브랜드 금색 + 은은한 광 */
 .battle-title,

@@ -12,9 +12,16 @@ function renderMap(mapState) {
       Chapter 2: static/img/map/chapter_2_bg.png
       권장 크기: 1280x720px, 16:9, 어두운 배경 권장
     */
+    // 배경은 실제 노드맵 뷰포트인 #map-scroll에만 적용 (map-mode는 clipping만).
+    // map-mode에 넣으면 header/overlay/footer까지 감싸 이미지가 아래로 새 보임.
     const mapEl = document.getElementById("map-mode");
-    if (mapEl) {
-        mapEl.style.backgroundImage = `url('${_mapBackgroundForState(mapState)}')`;
+    const bg = _mapBackgroundForState(mapState);
+    if (mapEl) mapEl.style.backgroundImage = "";
+    if (scroll) {
+        scroll.style.backgroundImage = `url('${bg}')`;
+        scroll.style.backgroundSize = "cover";
+        scroll.style.backgroundPosition = "center";
+        scroll.style.backgroundRepeat = "no-repeat";
     }
 
     // ── 노드 데이터 정리 ──
@@ -234,18 +241,22 @@ function _drawConnections(container, nodes, availSet) {
 
                 // 3단계 선 스타일
                 if (srcNode.on_path && dstNode.on_path) {
-                    line.setAttribute("stroke", "rgba(0,255,208,0.8)");
-                    line.setAttribute("stroke-width", "2.5");
+                    //이미 지나온 경로
+                    line.setAttribute("stroke", "rgb(0, 0, 0)");
+                    line.setAttribute("stroke-width", "4");
                     line.setAttribute("stroke-dasharray", "none");
                 } else if (srcNode.available || srcNode.on_path) {
-                    line.setAttribute("stroke", "rgba(0,255,208,0.45)");
-                    line.setAttribute("stroke-width", "2");
-                    line.setAttribute("stroke-dasharray", "5 3");
+                    // 현재 선택 가능하거나 현재 경로에서 이어진 선
+                    line.setAttribute("stroke", "rgb(255, 247, 98)");
+                    line.setAttribute("stroke-width", "3");
+                    line.setAttribute("stroke-dasharray", "6 5");
                 } else {
-                    line.setAttribute("stroke", "rgba(120,140,160,0.22)");
-                    line.setAttribute("stroke-width", "1");
-                    line.setAttribute("stroke-dasharray", "3 4");
+                    // 잠긴/기본 연결 선
+                    line.setAttribute("stroke", "rgb(255, 247, 98)");
+                    line.setAttribute("stroke-width", "2");
+                    line.setAttribute("stroke-dasharray", "4 6");
                 }
+                line.style.filter = "drop-shadow(0 0 3px rgba(0,0,0,0.9))";
                 svg.appendChild(line);
             });
         });

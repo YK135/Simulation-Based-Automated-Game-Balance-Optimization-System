@@ -1,40 +1,31 @@
-# ── 데이터베이스 / 런타임 데이터 ──
+# ── Python ──
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+
+# ── 데이터베이스 (런타임 생성) ──
 ai_rpg.db
 *.db
 *.sqlite
 *.sqlite3
+
+# ── 런타임 데이터 / 로그 ──
 data/
-data/Player_LOG/
+data/RL_LOG/
 
-# ── Python ──
-__pycache__/
-*.pyc
-*.pyo
-*.pyd
-.Python
-*.egg-info/
-.venv/
-venv/
-env/
-
-# ── OS / 에디터 ──
-.DS_Store
-Thumbs.db
-.idea/
-.vscode/
-*.swp
-
-# ── 로그 / 임시 ──
-*.log
-cookies.txt
-
-# ── 분석 산출물 (Monte Carlo 등) ──
+# ── 분석 산출물 (Monte Carlo) ──
 analysis_outputs/
 mc_results.json
 mc_*.json
 
-# ── 행동 로그 (state-action-result) ──
-data/RL_LOG/
-
-# ── git 잔재 파일 ──
+# ── OS / 기타 ──
+.DS_Store
+**/.DS_Store
+cookies.txt
 FETCH_HEAD
+
+# ── 에디터 ──
+.vscode/
+.idea/

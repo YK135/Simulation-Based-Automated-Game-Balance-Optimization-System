@@ -325,6 +325,7 @@ def map_choose():
     # ── 전투 / 엘리트 / 보스 ──────────────────
     if node_type in ("battle", "elite", "boss"):
         gs["battle_node_type"] = node_type
+        gs["battle_map_layer"] = node.layer
         is_boss = (node_type == "boss")
         chapter = gs.get("chapter", 1)
 

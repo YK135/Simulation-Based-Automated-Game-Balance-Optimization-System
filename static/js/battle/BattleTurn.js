@@ -115,18 +115,28 @@ function refreshBattleBackground(bs) {
                             'battle-bg-normal-mid',
                             'battle-bg-midboss',
                             'battle-bg-normal-late',
-                            'battle-bg-finalboss');
-    const turn = state.exploreTurn || 0;
+                            'battle-bg-finalboss',
+                            'battle-bg-ch2-entrance',
+                            'battle-bg-ch2-inner',
+                            'battle-bg-ch2-depths');
+    const layer = bs.current_layer || bs.map_layer || 0;
+    const turn = state.exploreTurn || layer || 0;
+    const chapter = bs.chapter || (turn >= 30 ? 2 : 1);
     if (bs.is_boss) {
         // 보스전: 챕터 응답을 우선 사용하고, 없으면 기존 turn 값으로 보정
-        const chapter = bs.chapter || (turn >= 30 ? 2 : 1);
         if (chapter >= 2) stage.classList.add('battle-bg-finalboss');
         else              stage.classList.add('battle-bg-midboss');
     } else {
-        const chapterTurn = ((turn - 1) % 15) + 1;
-        if (chapterTurn >= 11)      stage.classList.add('battle-bg-normal-late');
-        else if (chapterTurn >= 6)  stage.classList.add('battle-bg-normal-mid');
-        else                        stage.classList.add('battle-bg-normal-early');
+        const chapterTurn = layer || (((turn - 1) % 15) + 1);
+        if (chapter >= 2) {
+            if (chapterTurn >= 11)      stage.classList.add('battle-bg-ch2-depths');
+            else if (chapterTurn >= 6)  stage.classList.add('battle-bg-ch2-inner');
+            else                        stage.classList.add('battle-bg-ch2-entrance');
+        } else {
+            if (chapterTurn >= 11)      stage.classList.add('battle-bg-normal-late');
+            else if (chapterTurn >= 6)  stage.classList.add('battle-bg-normal-mid');
+            else                        stage.classList.add('battle-bg-normal-early');
+        }
     }
 }
 

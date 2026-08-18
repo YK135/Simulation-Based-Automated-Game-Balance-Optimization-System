@@ -54,6 +54,7 @@ class StateMixin:
         player_status_effects = p_status.get("status_effects", [])
         enemy_element_aura    = e_status.get("element_aura", "")
         enemy_status_effects  = e_status.get("status_effects", [])
+        battle_meta = getattr(self, "battle_meta", {}) or {}
 
         # 모든 적의 정보 — 다대일용 (UI는 이 배열을 받아서 슬롯 3·4·5에 매핑)
         # 각 적도 본인의 effective_* + buffs/debuffs 포함
@@ -96,6 +97,9 @@ class StateMixin:
         return {
             "turn":       self.turn,
             "is_boss":    self.is_boss,   # UI: 보스전이면 도망 버튼 숨김
+            "chapter":    battle_meta.get("chapter", 1),
+            "current_layer": battle_meta.get("current_layer", 0),
+            "node_type":  battle_meta.get("node_type", "battle"),
             "player_hp":  round(self.player.hp, 1),
             "player_mp":  round(self.player.mp, 1),
             "player_shield": round(getattr(self.player, "shield", 0.0), 1),
