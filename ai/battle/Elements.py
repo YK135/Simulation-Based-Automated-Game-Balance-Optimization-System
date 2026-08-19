@@ -8,8 +8,7 @@ from random import randint, random, uniform
 from .Entity import EntitySnapshot, StatusEffect
 
 REACTIONS = {
-    ("ice",       "fire"):      "melt",
-    ("fire",      "ice"):       "melt",
+    ("ice",       "fire"):      "melt",       # 단방향: ice→fire만 융해 발동 (fire→ice는 무반응)
     ("fire",      "lightning"): "overload",
     ("lightning", "fire"):      "overload",
 }

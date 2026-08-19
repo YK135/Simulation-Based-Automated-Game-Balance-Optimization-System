@@ -23,7 +23,7 @@ from random import choices as rand_choices, random, randint, choice
 
 from flask import Blueprint, jsonify, request
 
-from game.Map      import FloorMap, TOTAL_LAYERS, BOSS_LAYER
+from game.Map      import FloorMap, TOTAL_LAYERS, BOSS_LAYER, NORMAL_LAYERS
 from game.Enemy_Class import (
     Make_MidBoss, Make_FinalBoss,
 )
@@ -94,29 +94,54 @@ _GRADE_TO_KEY = {"하": "easy", "중": "normal", "상": "hard"}
 
 
 # ─────────────────────────────────────────────
-# 챕터별 몬스터 출현 풀
+# 챕터/노드 구간별 몬스터 출현 풀
 # ─────────────────────────────────────────────
-# 몬스터 출현은 플레이어 레벨(min_lv)이 아니라 "챕터" 기준으로 고정.
-#   챕터 1 (중간보스 전): 기본 몬스터 + 원소 슬라임 3종
-#   챕터 2 (최종보스 전): 챕터 1 전체 + 사제/암살자/골렘
-# elite 노드도 같은 풀에서 hard/상만 뽑는다 (grade_pool로 제어).
-CHAPTER_ENEMY_POOL = {
-    1: ["고블린", "박쥐", "슬라임", "화염 슬라임", "빙결 슬라임", "번개 슬라임"],
-    2: ["고블린", "박쥐", "슬라임", "화염 슬라임", "빙결 슬라임", "번개 슬라임",
-        "사제", "암살자", "골렘"],
+# 몬스터 출현은 플레이어 레벨(min_lv)이 아니라 "챕터 + 노드 구간" 기준으로 고정.
+#   구간: 챕터 내 일반 층(1~NORMAL_LAYERS)을 초반/중반/후반 3등분.
+#   elite 노드는 구간 무관 — 별도의 ELITE_ENEMY_POOL에서만 뽑는다.
+CHAPTER_TIER_POOL = {
+    (1, "early"): ["고블린", "박쥐", "슬라임"],
+    (1, "mid"):   ["고블린", "박쥐", "슬라임", "빙결 슬라임", "번개 슬라임"],
+    (1, "late"):  ["고블린", "박쥐", "슬라임", "빙결 슬라임", "번개 슬라임", "화염 슬라임"],
+    (2, "early"): ["박쥐", "화염 슬라임", "빙결 슬라임", "번개 슬라임", "사제", "암살자"],
+    (2, "mid"):   ["박쥐", "화염 슬라임", "빙결 슬라임", "번개 슬라임", "사제", "암살자", "골렘"],
+    (2, "late"):  ["박쥐", "화염 슬라임", "빙결 슬라임", "번개 슬라임", "사제", "암살자", "골렘", "유령"],
 }
 
+ELITE_ENEMY_POOL = ["고블린", "박쥐", "화염 슬라임", "빙결 슬라임", "번개 슬라임",
+                     "골렘", "암살자", "사제"]
 
-def _make_enemies(hook, n: int, grade_pool: dict, chapter: int = 1) -> list:
-    """n마리 적 생성 (챕터 풀에서 선택, 각자 독립 grade, BalanceHook 캐시 조회).
+
+def _node_tier(layer: int) -> str:
+    """일반 층(1~NORMAL_LAYERS)을 초반/중반/후반 3등분."""
+    early_end = round(NORMAL_LAYERS / 3)
+    mid_end   = round(NORMAL_LAYERS * 2 / 3)
+    if layer <= early_end:
+        return "early"
+    if layer <= mid_end:
+        return "mid"
+    return "late"
+
+
+def _make_enemies(hook, n: int, grade_pool: dict, chapter: int = 1,
+                   layer: int = 1, is_elite: bool = False) -> list:
+    """n마리 적 생성 (챕터+노드 구간 풀에서 선택, 각자 독립 grade, BalanceHook 캐시 조회).
 
     ※ 구 방식(플레이어 레벨 min_lv 기반 hook.pick_random_enemy_type)은 폐기 —
-      챕터 기준 고정 풀(CHAPTER_ENEMY_POOL)에서만 출현."""
-    pool = CHAPTER_ENEMY_POOL.get(chapter, CHAPTER_ENEMY_POOL[2])
+      챕터+노드 구간 기준 고정 풀(CHAPTER_TIER_POOL/ELITE_ENEMY_POOL)에서만 출현."""
+    if is_elite:
+        pool = ELITE_ENEMY_POOL
+    else:
+        tier = _node_tier(layer)
+        pool = CHAPTER_TIER_POOL.get((chapter, tier)) or CHAPTER_TIER_POOL[(2, "late")]
+
+    # 사제는 단독 등장 불가 — 항상 다른 몬스터와 함께 나와야 함.
+    solo_pool = [t for t in pool if t != "사제"] or pool
+
     enemies = []
     grades  = []
     for _ in range(n):
-        enemy_type = choice(pool)
+        enemy_type = choice(pool if n > 1 else solo_pool)
         grade      = _pick_grade(grade_pool)
         diff_key   = _GRADE_TO_KEY.get(grade, "normal")
         # difficulty 파라미터로 원하는 난이도 직접 지정
@@ -355,7 +380,8 @@ def map_choose():
             grade_pool = NORMAL_GRADE_3 if n_enemies == 3 else NORMAL_GRADE_POOL
             scale      = STAT_SCALE[n_enemies]
 
-        enemies, grades = _make_enemies(hook, n_enemies, grade_pool, chapter)
+        enemies, grades = _make_enemies(hook, n_enemies, grade_pool, chapter,
+                                         layer=node.layer, is_elite=(node_type == "elite"))
 
         # 다대일 스탯 보정 (BattleSession 내 보정과 중복 방지 — 외부에서만 처리)
         if n_enemies > 1:

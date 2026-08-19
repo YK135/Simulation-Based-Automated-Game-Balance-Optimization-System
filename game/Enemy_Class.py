@@ -154,7 +154,7 @@ def Make_Slime(player_lv: int, grade: str) -> Unit:
     슬라임: 물리 저항형 초반 특수몹 (Lv3+ 등장)
     스펙: hp 80+18, stg 4+1.5, arm 4+0.9, sparm 5+1.0,
           sp 6+1.2, spd 6+0.4, luc 4+0.4
-    특수: 물리 -35% / 마법 +10%
+    특수: 물리 -20% / 마법 +10%
     """
     lv = max(1, player_lv)
     unit = Unit(
@@ -168,7 +168,7 @@ def Make_Slime(player_lv: int, grade: str) -> Unit:
         sp    = round(6   + 1.2 * (lv - 1), 1),
         spd   = round(6   + 0.4 * (lv - 1), 1),
         luc   = round(4   + 0.4 * (lv - 1), 1),
-        physical_resist = 0.65,
+        physical_resist = 0.80,
         magical_resist  = 1.10,
         enemy_type = "슬라임",
     )
@@ -195,7 +195,7 @@ def Make_FireSlime(player_lv: int, grade: str) -> Unit:
         sp    = round(8   + 1.5 * (lv - 1), 1),
         spd   = round(7   + 0.5 * (lv - 1), 1),
         luc   = round(4   + 0.4 * (lv - 1), 1),
-        physical_resist     = 0.65,
+        physical_resist     = 0.80,
         magical_resist      = 1.10,
         enemy_type          = "화염 슬라임",
         attack_element      = "fire",
@@ -223,7 +223,7 @@ def Make_IceSlime(player_lv: int, grade: str) -> Unit:
         sp    = round(6   + 1.1 * (lv - 1), 1),
         spd   = round(5   + 0.3 * (lv - 1), 1),
         luc   = round(3   + 0.3 * (lv - 1), 1),
-        physical_resist     = 0.65,
+        physical_resist     = 0.80,
         magical_resist      = 1.10,
         enemy_type          = "빙결 슬라임",
         attack_element      = "ice",
@@ -251,7 +251,7 @@ def Make_LightningSlime(player_lv: int, grade: str) -> Unit:
         sp    = round(7   + 1.3 * (lv - 1), 1),
         spd   = round(9   + 0.6 * (lv - 1), 1),
         luc   = round(5   + 0.5 * (lv - 1), 1),
-        physical_resist     = 0.65,
+        physical_resist     = 0.80,
         magical_resist      = 1.10,
         enemy_type          = "번개 슬라임",
         attack_element      = "lightning",
@@ -376,7 +376,7 @@ def Make_Random_Monster(player_lv: int) -> Unit:
     """
     [구 콘솔/테스트용] 랜덤 몬스터 + 랜덤 등급 — 레벨대별 풀.
     ⚠ 메인 노드맵에서는 사용하지 않음. 실제 게임의 몬스터 출현은
-      app/Map.py의 CHAPTER_ENEMY_POOL(챕터 기준)이 단일 기준.
+      app/Map.py의 CHAPTER_TIER_POOL(챕터+노드 구간 기준)이 단일 기준.
       Lv1+:  고블린, 박쥐
       Lv3+:  + 슬라임
       Lv5+:  + 골렘

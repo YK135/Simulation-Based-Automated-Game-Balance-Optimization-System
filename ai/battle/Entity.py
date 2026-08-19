@@ -100,6 +100,10 @@ class EntitySnapshot:
     first_attack_bonus: float = 1.0
     has_attacked: bool = False  # 이번 전투에서 첫 공격을 했는지
 
+    # 골렘 그로기: 기본 공격을 연속으로 몇 번 맞았는지(스킬/회피가 끼면 리셋).
+    # 2 도달 시 arm/sparm 50% 감소 디버프 적용 (Enemy_Actions/Player_Actions에서 갱신).
+    physical_hit_streak: int = 0
+
     # 종족 식별자 (UI 표시 등에 활용)
     enemy_type: str = ""
 

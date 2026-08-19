@@ -85,7 +85,8 @@ class EnemyActionsMixin:
             self._priest_action(enemy, msgs)
         else:
             # ── 일반 몬스터 행동 (기존 로직) ──
-            action = self._enemy_ai(enemy, self.player)
+            chapter = (getattr(self, "battle_meta", {}) or {}).get("chapter", 1)
+            action = self._enemy_ai(enemy, self.player, chapter=chapter)
 
             if action.action_type == "attack":
                 dmg, dodge, crit = DamageCalc.physical(

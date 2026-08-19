@@ -81,7 +81,7 @@ class PlayerActionsMixin:
     #       shield 20, dmg 30 → shield 0,  hp -10
     #   반환: HP에 실제로 들어간 피해 (BattleEngine과 동일 기준 — 로그/메시지용)
     # ─────────────────────────────────────────
-    def _apply_dmg_shielded(self, target, dmg, msgs):
+    def _apply_dmg_shielded(self, target, dmg, msgs, is_basic_attack: bool = False):
         from ai.battle import _apply_damage_with_shield
         before_shield = getattr(target, "shield", 0.0)
         hp_damage = _apply_damage_with_shield(target, int(dmg))
@@ -90,7 +90,26 @@ class PlayerActionsMixin:
             msgs.append(f"🛡 실드가 {int(absorbed)} 피해를 흡수!")
             if getattr(target, "shield", 0.0) <= 0:
                 msgs.append("🛡 실드가 깨졌다!")
+        self._update_golem_groggy(target, is_basic_attack, msgs)
         return hp_damage
+
+    def _update_golem_groggy(self, target, is_basic_attack: bool, msgs: list) -> None:
+        """
+        골렘 전용 공략 요소: 받은 공격 스택 기준 "기본 공격"을 2회 연속으로
+        맞으면 그로기 — arm/sparm 50% 감소(2턴). 스킬 피해가 끼면 스트릭이 끊긴다
+        (회피는 호출부의 dodge 분기에서 별도로 리셋).
+        """
+        if getattr(target, "enemy_type", "") != "골렘":
+            return
+        if not is_basic_attack:
+            target.physical_hit_streak = 0
+            return
+        target.physical_hit_streak = getattr(target, "physical_hit_streak", 0) + 1
+        if target.physical_hit_streak >= 2:
+            target.physical_hit_streak = 0
+            target.apply_debuff(Debuff(stat="arm", amount=0.5, turns=2, name="그로기"))
+            target.apply_debuff(Debuff(stat="sparm", amount=0.5, turns=2, name="그로기"))
+            msgs.append(f"🔨 {target.name} 그로기! 방어력이 50% 감소했다!")
 
     def _exec_multi_hit_skill(self, skill_name: str, meta: dict, target, msgs: list,
                               dice_info) -> str:
@@ -302,6 +321,7 @@ class PlayerActionsMixin:
             actual = 0 if dodge else int(dmg)
             if dodge:
                 msgs.append(f"{target.name}이(가) 공격을 회피했다!")
+                self._update_golem_groggy(target, is_basic_attack=False, msgs=msgs)
             else:
                 # ── 물리 원소 반응 (빙결+물리=깨짐 등) ──
                 actual = apply_element_and_react(self.player, target, "physical", actual, msgs)
@@ -309,7 +329,7 @@ class PlayerActionsMixin:
                 if dice_info:
                     actual = self._apply_rogue_dice(actual, dice_info, target, msgs)
                     crit = crit or dice_info["force_crit"]
-                dmg = self._apply_dmg_shielded(target, actual, msgs)
+                dmg = self._apply_dmg_shielded(target, actual, msgs, is_basic_attack=True)
                 tag = " (치명타!)" if crit else ""
                 msgs.append(f"{self.player.name} → 공격{tag} | {dmg} 데미지")
                 msgs.append(f"{target.name} HP: {max(0, int(target.hp))}")

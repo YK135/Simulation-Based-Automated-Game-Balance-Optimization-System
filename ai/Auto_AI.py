@@ -4,7 +4,7 @@ Auto_AI.py
 규칙 기반 자동 전투 AI.
 """
 from __future__ import annotations
-from ai.battle import Action, EntitySnapshot, SKILL_META, ITEM_META
+from ai.battle import Action, EntitySnapshot, SKILL_META, ITEM_META, MONSTER_SKILL_META, get_monster_kit
 
 ATTACK_TYPES = {"physical", "magical", "multi_hit", "tank_attack", "counter"}
 SUPPORT_TYPES = {"buff", "heal", "shield", "debuff"}
@@ -310,42 +310,74 @@ class PlayerAI:
 
 
 class EnemyAI:
-    ENEMY_DEBUFF_SKILLS = ["약화1", "마약화1", "저주1", "둔화1"]
+    """
+    몬스터 행동 결정.
+    attacker.enemy_type에 대응하는 몬스터 킷(MonsterKit.MONSTER_KITS)이 있으면
+    그 확률/스킬 세트를 그대로 따른다(챕터별 명세 반영).
+    킷이 없는 타입(보스 등)은 기존 SP/MP 기반 휴리스틱으로 폴백한다 —
+    보스 패턴은 이번 작업 범위 밖이라 그대로 유지.
+    """
+
+    # 폴백 전용(MONSTER_KITS에 없는 타입 — 보스 등) — 기존 전역 스킬 목록.
+    ENEMY_DEBUFF_SKILLS = ["약화1", "미약화1", "저주1", "둔화1"]
     ENEMY_MAGIC_SKILLS = ["파이어볼1", "아이스볼릿1"]
 
-    # unit이 None일 때 사용할 기본 행동 확률.
-    # watch는 게임 진행을 늦추므로 제거, SP가 있는 몬스터는 magic 확률 증가.
+    # unit도 킷도 없을 때 사용할 기본 행동 확률.
     DEFAULT_ATTACK_PROB_NO_SP = 1.00  # SP=0 몬스터: 100% 공격
     DEFAULT_ATTACK_PROB_SP    = 0.55  # SP>0 몬스터: 55% 공격, 45% 마법
 
     def __init__(self, unit=None):
         self.unit = unit
 
-    def _decide_action_type(self, attacker: EntitySnapshot, defender: EntitySnapshot) -> str:
+    def _pick_kit_skill(self, attacker: EntitySnapshot, skills: list) -> str | None:
+        """킷의 스킬 후보 중 MP가 감당되는 것만 걸러 균등 랜덤 선택."""
+        from random import choice as rc
+        affordable = []
+        for name in skills:
+            meta = MONSTER_SKILL_META.get(name) or SKILL_META.get(name)
+            if not meta:
+                continue
+            cost = meta.get("mp", 0) * attacker.mp_cost_multiplier()
+            if attacker.mp >= cost:
+                affordable.append(name)
+        return rc(affordable) if affordable else None
+
+    def _decide_with_kit(self, attacker: EntitySnapshot, kit: dict) -> Action:
+        from random import random as rr
+        roll = rr()
+        attack_p = kit.get("attack_prob", 1.0)
+        skill_p  = kit.get("skill_prob", 0.0)
+
+        if roll < attack_p:
+            return Action("attack", "attack")
+
+        if roll < attack_p + skill_p:
+            skill = self._pick_kit_skill(attacker, kit.get("skills", []))
+            if skill:
+                return Action("skill", skill)
+            return Action("attack", "attack")
+
+        return Action("watch", "watching")
+
+    def _decide_fallback(self, attacker: EntitySnapshot, defender: EntitySnapshot) -> Action:
         """
+        킷이 정의되지 않은 타입(보스 등)의 기존 동작.
         unit이 있으면 unit.decide_action 사용 (게임 경로).
         없으면 attacker의 SP/MP 상황 기반 기본 확률 (시뮬 경로).
-        Digital Twin 원칙을 완벽히 지키진 못하지만, 시뮬 전투가
-        기본 공격만 하는 상태보다는 실제 게임에 가깝게 동작.
         """
-        if self.unit:
-            return self.unit.decide_action(defender)
-
-        # unit 없는 경우: attacker 스펙으로 판단
         from random import random as rr
-        has_sp_kit = attacker.sp > 0 and attacker.maxmp > 0
-        threshold = self.DEFAULT_ATTACK_PROB_SP if has_sp_kit else self.DEFAULT_ATTACK_PROB_NO_SP
-        return "attack" if rr() < threshold else "magic"
 
-    def decide(self, attacker: EntitySnapshot, defender: EntitySnapshot,
-               enemy_count: int = 1) -> Action:
-        action_type = self._decide_action_type(attacker, defender)
+        if self.unit:
+            action_type = self.unit.decide_action(defender)
+        else:
+            has_sp_kit = attacker.sp > 0 and attacker.maxmp > 0
+            threshold = self.DEFAULT_ATTACK_PROB_SP if has_sp_kit else self.DEFAULT_ATTACK_PROB_NO_SP
+            action_type = "attack" if rr() < threshold else "magic"
 
         if action_type == "watch":
             return Action("watch", "watching")
 
         if action_type == "magic" and attacker.mp > 0:
-            from random import random as rr
             if rr() < 0.3:
                 for skill in self.ENEMY_DEBUFF_SKILLS:
                     meta = SKILL_META.get(skill)
@@ -358,5 +390,13 @@ class EnemyAI:
 
         return Action("attack", "attack")
 
-    def __call__(self, attacker: EntitySnapshot, defender: EntitySnapshot) -> Action:
-        return self.decide(attacker, defender)
+    def decide(self, attacker: EntitySnapshot, defender: EntitySnapshot,
+               enemy_count: int = 1, chapter: int = 1) -> Action:
+        kit = get_monster_kit(getattr(attacker, "enemy_type", ""), chapter)
+        if kit is not None:
+            return self._decide_with_kit(attacker, kit)
+        return self._decide_fallback(attacker, defender)
+
+    def __call__(self, attacker: EntitySnapshot, defender: EntitySnapshot,
+                 chapter: int = 1) -> Action:
+        return self.decide(attacker, defender, chapter=chapter)

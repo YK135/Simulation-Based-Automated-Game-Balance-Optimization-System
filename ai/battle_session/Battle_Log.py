@@ -10,7 +10,10 @@ Battle_Log.py — 전투 (state, action, result) 로그 믹스인
             인벤토리/스킬 목록, 현재 타깃, 턴 번호
             (노드/챕터/전투타입은 앱 레이어가 battle_meta로 주입)
   action_t: 행동자/타입/상세/타깃, 선택 가능했던 행동 목록, AI·사람 여부
-  result_t: 준 피해/실드 흡수/받은 피해/처치/상태이상·원소반응/승패
+            (적 턴은 _rl_post에서 TurnLog로 실제 스킬명 보강)
+  result_t: 준 피해/실드 흡수/받은 피해/처치/상태이상·원소반응(이름 포함)/
+            damage_type·element_type/치명타·회피/부여된 버프·디버프/승패
+            — "받은 공격 스택" 명세의 필드를 이 레코드가 대신한다.
 
 사용:
   BattleSession이 이 믹스인을 상속. step()이 자동 기록.
@@ -152,6 +155,41 @@ class BattleLogMixin:
         }
         return {"state": state_t, "action": action_t, "prev": prev}
 
+    # 원소 반응 라벨 → 반응명 (Elements.REACTION_EFFECTS의 label과 짝맞춤)
+    _REACTION_LABEL_TO_NAME = {"융해": "melt", "파쇄": "shatter", "과부하": "overload"}
+
+    def _rl_derive_action_meta(self, action_t: dict) -> dict:
+        """행동의 damage_type/element_type/buff·debuff_applied를 스킬 메타로 유도.
+        몬스터가 플레이어 전용기를 쓴 경우 MONSTER_SKILL_META를 우선 조회
+        (execute_skill의 몬스터 계수 분기와 동일한 우선순위)."""
+        from ai.battle import SKILL_META, MONSTER_SKILL_META
+        atype  = action_t.get("type", "")
+        detail = action_t.get("detail", "")
+        is_enemy = action_t.get("actor") == "enemy"
+
+        if atype == "attack":
+            elem = "physical"
+            if is_enemy:
+                aidx = action_t.get("actor_idx", -1)
+                if 0 <= aidx < len(self.enemies):
+                    elem = getattr(self.enemies[aidx], "attack_element", "") or "physical"
+            return {"damage_type": "physical", "element_type": elem,
+                    "buffs_applied": [], "debuffs_applied": []}
+
+        if atype == "skill":
+            meta = (MONSTER_SKILL_META.get(detail) if is_enemy else None) or SKILL_META.get(detail) or {}
+            stype = meta.get("type", "")
+            dmg_type = "magical" if stype == "magical" else (
+                "physical" if stype in ("physical", "tank_attack", "counter", "multi_hit") else "")
+            return {
+                "damage_type": dmg_type,
+                "element_type": meta.get("element", ""),
+                "buffs_applied": [detail] if stype == "buff" else [],
+                "debuffs_applied": [detail] if stype == "debuff" else [],
+            }
+
+        return {"damage_type": "", "element_type": "", "buffs_applied": [], "debuffs_applied": []}
+
     def _rl_post(self, pre: Optional[dict], out: dict) -> None:
         if pre is None:
             return
@@ -167,6 +205,25 @@ class BattleLogMixin:
         kills = sum(1 for i, e in enumerate(self.enemies)
                     if i < len(prev["e_alive"]) and prev["e_alive"][i] and e.hp <= 0)
 
+        # ── 적 턴이면 실제 사용한 행동(공격/스킬명)을 TurnLog에서 보강 ──
+        #    (_rl_pre 시점엔 적이 아직 행동을 결정하지 않아 "auto"/"" 로만 채워짐)
+        action_t = pre["action"]
+        last_log = self.logs[-1] if self.logs else None
+        if action_t.get("actor") == "enemy" and last_log is not None:
+            action_t["type"] = "skill" if last_log.action == "skill" else (
+                "attack" if last_log.action == "attack" else last_log.action)
+            action_t["detail"] = last_log.action_detail
+
+        reaction_name = None
+        for label, name in self._REACTION_LABEL_TO_NAME.items():
+            if any(label in m for m in msgs):
+                reaction_name = name
+                break
+
+        act_meta = self._rl_derive_action_meta(action_t)
+        if last_log is not None and last_log.debuff_applied and not act_meta["debuffs_applied"]:
+            act_meta["debuffs_applied"] = [last_log.debuff_applied]
+
         result_t = {
             # 스키마 잠금: damage(총) = hp_damage + shield_damage (행동자가 준 피해)
             "damage":        round(dmg_dealt + e_absorbed, 1),
@@ -176,7 +233,14 @@ class BattleLogMixin:
             "hp_damage_taken":     round(dmg_taken, 1),
             "shield_damage_taken": round(p_absorbed, 1),
             "killed": kills,
-            "reaction": any(k in m for m in msgs for k in ("융해", "과부하", "파쇄")),
+            "reaction": reaction_name is not None,
+            "reaction_name": reaction_name,
+            "damage_type": act_meta["damage_type"],
+            "element_type": act_meta["element_type"],
+            "crit": bool(getattr(last_log, "is_crit", False)) if last_log is not None else False,
+            "evade": bool(getattr(last_log, "is_dodge", False)) if last_log is not None else False,
+            "buffs_applied": act_meta["buffs_applied"],
+            "debuffs_applied": act_meta["debuffs_applied"],
             "status_applied": any(k in m for m in msgs for k in ("🩸", "빙결", "감전", "화상", "🌀")),
             "battle_done": bool(getattr(self, "done", False)),
             "winner": getattr(self, "winner", None) if getattr(self, "done", False) else None,

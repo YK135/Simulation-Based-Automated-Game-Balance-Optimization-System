@@ -22,13 +22,13 @@ SKILL_META = {
         "debuff_amount": (0.15, 0.25),
         "debuff_turns": (4, 5)
     },
-    "마약화1": {
+    "미약화1": {
         "mp": 8, "type": "debuff",
         "debuff_stat": "sparm",
         "debuff_amount": (0.10, 0.15),
         "debuff_turns": (3, 4)
     },
-    "마약화2": {
+    "미약화2": {
         "mp": 14, "type": "debuff",
         "debuff_stat": "sparm",
         "debuff_amount": (0.15, 0.25),
@@ -221,6 +221,65 @@ SKILL_META = {
 }
 
 
+# ────────────────────────────────────────────
+# MONSTER_SKILL_META — 플레이어 전용기를 몬스터가 사용할 때의 별도 계수.
+#   같은 스킬명을 SKILL_META와 공유하지만(표시 텍스트 동일), 몬스터가 시전하면
+#   이 표의 수치가 우선 적용된다 (execute_skill의 _resolve_meta 참고).
+#   플레이어는 MP 자원 제약이 있어 재사용에 비용이 크지만, 몬스터는 매턴 무제한
+#   재시전이 가능하므로 1회당 위력을 플레이어판보다 낮게 잡는다.
+# ────────────────────────────────────────────
+MONSTER_SKILL_META = {
+    # 유령 전용
+    "강화1": {
+        "mp": 10, "type": "buff",
+        "buff_stat": "stg", "buff_amount": 0.12, "buff_turns": 2
+    },
+    "연속공격1": {
+        "mp": 10, "mult": 0.55, "type": "physical", "hits": 2
+    },
+    "저주1": {
+        "mp": 10, "type": "debuff",
+        "debuff_stat": "stg",
+        "debuff_amount": (0.08, 0.15),
+        "debuff_turns": (2, 3)
+    },
+    # 암살자 전용
+    "난사2": {
+        "mp": 12, "mult": 0.55, "type": "physical", "hits": 1, "aoe": True
+    },
+    "급소찌르기1": {
+        "mp": 8, "mult": 1.05, "type": "physical", "hits": 1,
+        "luc_bonus": 0.5
+    },
+    "추진력": {
+        "mp": 10, "type": "buff",
+        "buff_stat": "spd", "buff_amount": 0.10, "buff_turns": 2
+    },
+    # 골렘 전용
+    "몸통박치기2": {
+        "mp": 10, "type": "tank_attack",
+        "arm_mult": 1.30, "hp_mult": 0.028
+    },
+    "수비태세2": {
+        "mp": 10, "type": "buff",
+        "buff_stat": "arm", "buff_amount": 0.18, "buff_turns": 2
+    },
+    "실드": {
+        "mp": 12, "type": "shield",
+        "shield_mult": 0.15
+    },
+}
+
+
+def _resolve_meta(skill_name: str, attacker: EntitySnapshot) -> dict | None:
+    """몬스터가 플레이어 전용기를 쓰면 MONSTER_SKILL_META를 우선 조회한다.
+    attacker.enemy_type은 플레이어는 항상 "", 몬스터는 항상 값이 있다."""
+    if getattr(attacker, "enemy_type", ""):
+        meta = MONSTER_SKILL_META.get(skill_name)
+        if meta:
+            return meta
+    return SKILL_META.get(skill_name)
+
 
 # ────────────────────────────────────────────
 # 원소 시스템 — element_queue 기반
@@ -233,7 +292,7 @@ def consume_skill_mp(skill_name: str, attacker: EntitySnapshot) -> bool:
     스킬 MP를 1회만 소모한다.
     반환값: True면 MP 부족, False면 정상 소모 완료.
     """
-    meta = SKILL_META.get(skill_name)
+    meta = _resolve_meta(skill_name, attacker)
     if not meta:
         return False
 
@@ -258,7 +317,7 @@ def execute_single_hit(
     MP/원소/상태이상/실드 적용은 호출부가 처리하고, 여기서는 1타의
     기본 데미지/회피/크리티컬만 계산한다.
     """
-    meta = SKILL_META.get(skill_name)
+    meta = _resolve_meta(skill_name, attacker)
     if not meta:
         return 0, False, False
 
@@ -301,7 +360,7 @@ def execute_skill(
     attacker: EntitySnapshot,
     defender: EntitySnapshot,
 ) -> tuple[int, bool, str]:
-    meta = SKILL_META.get(skill_name)
+    meta = _resolve_meta(skill_name, attacker)
     if not meta:
         return 0, False, ""
 

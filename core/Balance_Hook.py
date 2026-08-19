@@ -141,7 +141,7 @@ class BalanceHook:
     }
 
     # ── [구 탐험/테스트용] 레벨대별 등장 가능 몬스터 풀 ──
-    #    ⚠ 메인 노드맵 전투에서는 app/Map.py의 CHAPTER_ENEMY_POOL(챕터 기준)을 사용.
+    #    ⚠ 메인 노드맵 전투에서는 app/Map.py의 CHAPTER_TIER_POOL(챕터+노드 구간 기준)을 사용.
     #    이 레벨 기반 풀은 none_Explore(구 탐험)/콘솔 테스트 호환용으로만 유지한다.
     # 레벨대별 등장 가능 몬스터 풀
     # Phase 1 디자인: 단계적 컨텐츠 도입.
@@ -161,14 +161,14 @@ class BalanceHook:
 
     def _available_enemy_types(self) -> list:
         """현재 플레이어 레벨에서 등장 가능한 몬스터 종류 리스트.
-        ⚠ [구 탐험/테스트용] 메인 노드맵은 CHAPTER_ENEMY_POOL 사용."""
+        ⚠ [구 탐험/테스트용] 메인 노드맵은 CHAPTER_TIER_POOL 사용."""
         return [e["type"] for e in self._ENEMY_POOL
                 if self.player.lv >= e["min_lv"]]
 
     def pick_random_enemy_type(self) -> str:
         """레벨대별 풀에서 랜덤 선택.
         ⚠ 메인 노드맵(app/Map.py)에서는 사용 금지 — 몬스터 출현의 단일 기준은
-          app/Map.py의 CHAPTER_ENEMY_POOL(챕터 기반)이다.
+          app/Map.py의 CHAPTER_TIER_POOL(챕터+노드 구간 기반)이다.
           이 메서드는 구 탐험 모드(none_Explore)/콘솔 테스트 호환용으로만 유지."""
         from random import choice
         pool = self._available_enemy_types()
