@@ -2,7 +2,12 @@
 <html lang="ko">
 <head>
 <meta charset="UTF-8">
-<title>RPG AI Balancing Dashboard</title>
+<title>ADVENTURER'S CHRONICLE</title>
+
+<!-- 판타지 세리프 폰트 (모달 타이틀/브랜드 등에서 사용) -->
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@500;600;700&display=swap" rel="stylesheet">
 
 <!-- ═══════════════════════════════════════════════════════════
      CSS 모듈
@@ -20,7 +25,7 @@
 <link rel="stylesheet" href="css/Modal_Start.css">   <!-- 시작 플로우 -->
 <link rel="stylesheet" href="css/Modal_Game.css">    <!-- 게임 중 모달 -->
 <link rel="stylesheet" href="css/Ranking_BIG.css">   <!-- 랭킹 모달 -->
-<link rel="stylesheet" href="css/AI_Monitor.css">    <!-- 우측 AI 패널 -->
+<link rel="stylesheet" href="css/SidePanel.css">     <!-- 우측: 모험 기록 + 몬스터 도감 -->
 <link rel="stylesheet" href="css/ThemeFantasy.css"> <!-- 판타지 테마 -->
 </head>
 <body>
@@ -31,7 +36,7 @@
 <div class="topbar">
     <div class="brand">
         <div class="brand-icon">⬢</div>
-        RPG AI Balancing Dashboard
+        ADVENTURER'S CHRONICLE
     </div>
 
     <!-- ★ 우측 그룹: 랭킹 버튼 + 시계 -->
@@ -353,82 +358,19 @@
 </div>
 
 <!-- ──────────────────────────────────────────────────────
-     RIGHT: AI Monitor 패널
+     RIGHT: 모험 기록 + 몬스터 도감
      ────────────────────────────────────────────────────── -->
 <div class="right-col">
     <div class="panel">
-        <div class="panel-title">AI MONITOR: BALANCE STATE</div>
-        <div class="pentagon-wrap">
-            <svg class="pentagon-svg" viewBox="0 0 220 220">
-                <g id="pentagon-bg"></g>
-                <g id="pentagon-labels"></g>
-                <polygon id="pentagon-ideal" fill="rgba(45, 212, 191, 0.15)"
-                         stroke="#2dd4bf" stroke-width="1.5" stroke-dasharray="4 2"/>
-                <polygon id="pentagon-current" fill="rgba(251, 191, 36, 0.2)"
-                         stroke="#fbbf24" stroke-width="2"/>
-            </svg>
-        </div>
-        <div class="pentagon-legend">
-            <div class="legend-item"><div class="legend-dot ideal"></div>IDEAL</div>
-            <div class="legend-item"><div class="legend-dot current"></div>CURRENT</div>
-        </div>
-        <div class="balance-state">
-            CURRENT STATE: <span class="label" id="balance-label">[INIT]</span>
+        <div class="panel-title">ADVENTURE LOG</div>
+        <div id="adventure-log" class="adventure-log">
+            <div class="adv-line system"><span class="adv-ts">--:--</span><span>모험을 기다리는 중...</span></div>
         </div>
     </div>
 
-    <div class="panel">
-        <div class="panel-title">SIMULATOR CONTROL</div>
-        <div class="sim-controls">
-            <button class="btn start" id="btn-sim-start">▶ START SIM</button>
-            <button class="btn" id="btn-sim-stop">■ STOP</button>
-        </div>
-        <div class="ai-level-row">
-            <span class="lbl">AI LEVEL:</span>
-            <div class="ai-level-toggle">
-                <button class="ai-level-btn" data-level="hard">HARD</button>
-                <button class="ai-level-btn active" data-level="normal">MID</button>
-                <button class="ai-level-btn" data-level="easy">EASY</button>
-            </div>
-        </div>
-        <div class="winrate-bars">
-            <div class="wr-row">
-                <div class="wr-label">WIN: PLAYER</div>
-                <div class="wr-track"><div id="wr-player" class="wr-fill player" style="width:0%"></div></div>
-                <div class="wr-pct" id="wr-player-pct">0%</div>
-            </div>
-            <div class="wr-row">
-                <div class="wr-label">WIN: ENEMY</div>
-                <div class="wr-track"><div id="wr-enemy" class="wr-fill enemy" style="width:0%"></div></div>
-                <div class="wr-pct" id="wr-enemy-pct">0%</div>
-            </div>
-        </div>
-        <div class="sim-stats">
-            AVG TURNS: <span id="sim-avg-turns" class="v">--</span> &nbsp;|&nbsp;
-            ITER: <span id="sim-iter" class="v">--</span>
-        </div>
-    </div>
-
-    <div class="panel">
-        <div class="panel-title">STATE TUNER</div>
-        <div class="tuner-row">
-            <div class="lbl">MONSTER HP <span style="color:var(--text-muted)">(±5%)</span></div>
-            <div class="tuner-bar"><div id="tuner-hp" class="tuner-bar-fill" style="width:50%"></div></div>
-        </div>
-        <div class="tuner-row">
-            <div class="lbl">PLAYER DMG <span style="color:var(--text-muted)">(±3%)</span></div>
-            <div class="tuner-bar"><div id="tuner-dmg" class="tuner-bar-fill" style="width:50%"></div></div>
-        </div>
-        <div class="sim-stats">
-            <span id="error-margin">±0%</span> ERROR MARGIN
-        </div>
-    </div>
-
-    <div class="panel terminal-panel-wrap">
-        <div class="panel-title terminal-panel-title">SYSTEM TERMINAL</div>
-        <div class="terminal" id="terminal">
-            <div class="terminal-line">[init] dashboard ready</div>
-        </div>
+    <div class="panel bestiary-panel">
+        <div class="panel-title">BESTIARY</div>
+        <div id="bestiary-list" class="bestiary-list"></div>
     </div>
 </div>
 </div><!-- /.dashboard -->
@@ -721,10 +663,10 @@
      ═══════════════════════════════════════════════════════════ -->
 <script src="js/Api.js"></script>               <!-- fetch wrapper -->
 <script src="js/State.js"></script>             <!-- 전역 state + 매핑 -->
-<script src="js/CharSprite.js"></script>  
+<script src="js/CharSprite.js"></script>
 <script src="js/BattleSequencer.js"></script>   <!-- 배틀 턴 시퀀싱 -->
 <script src="js/Utils.js"></script>             <!-- 시계, 토스트, 로그 -->
-<script src="js/Pentagon.js"></script>          <!-- 펜타곤 차트 -->
+<script src="js/SidePanel.js"></script>         <!-- 우측: 모험 기록 + 몬스터 도감 -->
 <script src="js/UI_Player.js"></script>         <!-- 좌측 패널 -->
 <script src="js/InventorySwap.js"></script>         <!-- 인벤토리 UI + 관리 -->
 <!-- 배틀 UI 분리 모듈 (UI_Battle.js 오케스트레이터보다 먼저 로드) -->

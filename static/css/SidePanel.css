@@ -1,0 +1,94 @@
+/* ═══════════════════════════════════════════════════════════
+   SidePanel.css — 우측 컬럼: 모험 기록 + 몬스터 도감
+   (구 AI_Monitor.css 대체 — 펜타곤/시뮬레이터/터미널 제거)
+   ═══════════════════════════════════════════════════════════ */
+
+/* ── 모험 기록 ── */
+.adventure-log {
+    display: flex;
+    flex-direction: column-reverse; /* 최신 항목이 위로 오도록 prepend 대신 이 방식 사용 */
+    gap: 6px;
+    max-height: 220px;
+    overflow-y: auto;
+    padding-right: 2px;
+}
+.adv-line {
+    display: flex;
+    align-items: baseline;
+    gap: 6px;
+    font-size: 11px;
+    line-height: 1.5;
+    color: var(--text-dim);
+    padding: 4px 6px;
+    border-left: 2px solid rgba(212, 175, 106, 0.22);
+    background: rgba(212, 175, 106, 0.03);
+}
+.adv-line .adv-ts {
+    flex: 0 0 auto;
+    font-size: 9px;
+    color: var(--text-muted);
+}
+.adv-line.win    { border-left-color: var(--accent-gold); color: var(--fantasy-gold, var(--accent-gold)); }
+.adv-line.lose   { border-left-color: var(--hp-red); color: #e59a8f; }
+.adv-line.system { border-left-color: rgba(212, 175, 106, 0.4); }
+.adv-line.loot   { border-left-color: var(--df-item, var(--accent-gold)); }
+
+/* ── 몬스터 도감 ── */
+.bestiary-panel { flex: 1; display: flex; flex-direction: column; min-height: 0; }
+.bestiary-list {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    overflow-y: auto;
+    flex: 1;
+}
+.bestiary-entry {
+    display: flex;
+    align-items: flex-start;
+    gap: 8px;
+    padding: 6px 8px;
+    border: 1px solid rgba(212, 175, 106, 0.18);
+    background: rgba(212, 175, 106, 0.03);
+    border-radius: 3px;
+}
+.bestiary-entry.unknown {
+    opacity: 0.55;
+    filter: grayscale(80%);
+}
+.bestiary-icon {
+    flex: 0 0 auto;
+    width: 26px;
+    height: 26px;
+    display: grid;
+    place-items: center;
+    font-size: 17px;
+    border: 1px solid rgba(212, 175, 106, 0.24);
+    border-radius: 3px;
+    background: rgba(0, 0, 0, 0.3);
+    overflow: hidden;
+}
+.bestiary-icon img { width: 100%; height: 100%; object-fit: cover; }
+.bestiary-body { flex: 1; min-width: 0; }
+.bestiary-name {
+    font-size: 11px;
+    font-weight: 700;
+    color: var(--fantasy-gold, var(--accent-gold));
+    letter-spacing: 0.03em;
+}
+.bestiary-entry.unknown .bestiary-name { color: var(--text-dim); }
+.bestiary-tip {
+    font-size: 10px;
+    color: var(--text-dim);
+    line-height: 1.45;
+    margin-top: 2px;
+}
+.bestiary-discovery {
+    color: var(--fantasy-amber, var(--accent-gold));
+    padding-top: 3px;
+    margin-top: 4px;
+    border-top: 1px dashed rgba(212, 175, 106, 0.2);
+}
+.bestiary-discovery.undiscovered {
+    color: var(--text-muted);
+    font-style: italic;
+}

@@ -214,3 +214,61 @@ class NodeChoice(Base):
  
     def __repr__(self):
         return f"<NodeChoice run={self.run_id} turn={self.turn} {self.node_type}>"
+
+
+# ═══════════════════════════════════════════════════════════
+# player_states 테이블
+# ───────────────────────────────────────────────────────────
+# 진행 중인 게임 세션의 "최신 스냅샷" 하나만 유지(덮어쓰기).
+# GAME_SESSIONS(워커 인메모리 dict)/Redis가 다 비어있을 때
+# 최종 폴백으로 복구하는 용도 — app/Shared.py:_get_session 참고.
+# battle(진행 중인 전투)/hook(BalanceHook)은 저장하지 않는다.
+# ═══════════════════════════════════════════════════════════
+class PlayerState(Base):
+    __tablename__ = "player_states"
+
+    user_id      = Column(Integer, ForeignKey("users.id"), primary_key=True)
+    updated_at   = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    player_json     = Column(Text, nullable=False)   # Player.to_dict()
+    inventory_json  = Column(Text, nullable=False)   # Inventory.to_dict()
+    map_json        = Column(Text, nullable=True)    # gs["map"] (FloorMap.to_dict())
+
+    chapter          = Column(Integer, nullable=True)
+    turn             = Column(Integer, nullable=False, default=0)
+    map_turn         = Column(Integer, nullable=False, default=0)
+    mid_boss_cleared = Column(Boolean, default=False)
+    gold             = Column(Integer, default=100)
+    run_id           = Column(Integer, nullable=True)
+    pending_node_id  = Column(String(16), nullable=True)
+    battle_node_type = Column(String(16), nullable=True)
+    battle_map_layer = Column(Integer, nullable=True)
+
+    def __repr__(self):
+        return f"<PlayerState user={self.user_id} updated={self.updated_at}>"
+
+
+# ═══════════════════════════════════════════════════════════
+# battle_logs 테이블
+# ───────────────────────────────────────────────────────────
+# (state, action, result) 행동 로그 — 모방학습/RL 데이터 원천.
+# 기존에는 data/RL_LOG/user_{id}/*.json 로 저장하던 걸 대체.
+# 게스트(로그인 없는 유저)도 저장하던 기존 동작 유지 → user_id nullable.
+# ═══════════════════════════════════════════════════════════
+class BattleLog(Base):
+    __tablename__ = "battle_logs"
+
+    id           = Column(Integer, primary_key=True, autoincrement=True)
+    user_id      = Column(Integer, ForeignKey("users.id"), nullable=True)
+    created_at   = Column(DateTime, default=datetime.utcnow, nullable=False)
+
+    meta_json    = Column(Text, nullable=False)   # job/level/enemies/chapter 등
+    records_json = Column(Text, nullable=False)   # (state, action, result) 레코드 리스트
+
+    __table_args__ = (
+        Index("ix_battle_logs_user_id", "user_id"),
+        Index("ix_battle_logs_created_at", "created_at"),
+    )
+
+    def __repr__(self):
+        return f"<BattleLog id={self.id} user={self.user_id}>"

@@ -23,7 +23,7 @@
 .modal-bg.active { display: flex; }
 .modal {
     background: var(--bg-panel);
-    border: 1px solid var(--accent-cyan);
+    border: 1px solid var(--accent-gold);
     border-radius: 4px;
     padding: 24px;
     width: 360px;
@@ -31,7 +31,7 @@
 }
 .modal h2 {
     font-size: 13px;
-    color: var(--accent-cyan);
+    color: var(--accent-gold);
     margin-bottom: 16px;
     letter-spacing: 0.15em;
 }
@@ -57,13 +57,13 @@
     border-radius: 3px;
 }
 .form-row input:focus, .form-row select:focus {
-    border-color: var(--accent-cyan);
+    border-color: var(--accent-gold);
     outline: none;
 }
 .modal .btn.primary {
-    background: var(--accent-cyan);
+    background: var(--accent-gold);
     color: var(--bg-darkest);
-    border-color: var(--accent-cyan);
+    border-color: var(--accent-gold);
     font-weight: 700;
     margin-top: 8px;
 }

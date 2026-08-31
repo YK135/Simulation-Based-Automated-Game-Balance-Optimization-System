@@ -96,7 +96,7 @@ img.combatant-art {
 .target-tag {
     position: absolute;
     top: -10px;
-    background: var(--accent-cyan);
+    background: var(--accent-gold);
     color: var(--bg-darkest);
     font-size: 8px; font-weight: 700;
     padding: 2px 6px;
@@ -123,7 +123,7 @@ img.combatant-art {
 .cb-fill.atb {
     background: linear-gradient(90deg,
         rgba(0, 255, 208, 0.4) 0%,
-        var(--accent-cyan, #00ffd0) 100%);
+        var(--accent-gold, #00ffd0) 100%);
     box-shadow: inset 0 0 4px rgba(255,255,255,0.2);
     transition: width 0.3s ease;
 }
@@ -167,14 +167,14 @@ img.combatant-art {
 
 /* ATB 라벨 — 작게 */
 .cb-row.atb-row .cb-label {
-    color: var(--accent-cyan, #00ffd0);
+    color: var(--accent-gold, #00ffd0);
     font-size: 8px;
     letter-spacing: 0.1em;
 }
 
 /* ATB 텍스트 — 수치 작게 */
 .cb-row.atb-row .cb-text {
-    color: var(--accent-cyan, #00ffd0);
+    color: var(--accent-gold, #00ffd0);
     font-size: 9px;
     font-family: 'Cormorant Garamond', monospace;
 }

@@ -36,6 +36,12 @@ function updateShieldBar(rowId, fillId, textId, shield, maxhp) {
 function renderPlayerCombatant(bs) {
     const p = state.player;
     document.getElementById('player-combatant-art').textContent = JOB_ICONS[p.job] || '?';
+
+    // ★ setCharState 경유(=CharSprite.js) — enemy 슬롯과 동일한 패턴.
+    //   기존엔 player_battle의 idle을 트는 호출(resetAllSprites)이 어디서도 실행되지
+    //   않아 스프라이트시트가 등록돼 있어도 항상 이모지 폴백만 보이는 버그가 있었음.
+    const playerStateKey = bs.player_hp > 0 ? 'idle' : 'dead';
+    setCharState('player_battle', playerStateKey, { persist: playerStateKey === 'dead' });
     renderNameWithStatus(document.getElementById('player-combatant-name'), {
         name: p.name,
         element_aura: bs.player_element_aura || p.element_aura || '',
@@ -94,8 +100,12 @@ function renderEnemySlots(bs) {
         const artEl = document.getElementById(`enemy-art${enemyIdSuffix(i)}`);
         if (artEl) artEl.textContent = ENEMY_ICONS[en.name] || '👹';
 
+        // ★ setCharState 경유(=CharSprite.js) — 스프라이트시트(원소/애니메이션) 메타를
+        //   이해 못 하는 옛 _updateBattleSprite로 매 렌더 덮어쓰면, 시트 로딩 사이의
+        //   찰나에 이모지 폴백이 깜빡이는 버그가 있었음(모든 시트 몬스터 공통).
+        //   idle/dead는 자동 idle 복귀 타이머를 안 타므로 매 렌더 호출해도 안전.
         const stateKey = en.alive ? 'idle' : 'dead';
-        _updateBattleSprite('enemy_battle', i, en.name, stateKey);
+        setCharState(`enemy_battle:${i}`, stateKey, { persist: stateKey === 'dead' });
 
         const nameEl = document.getElementById(`enemy-name${enemyIdSuffix(i)}`);
         const metaEl = document.getElementById(`enemy-meta${enemyIdSuffix(i)}`);

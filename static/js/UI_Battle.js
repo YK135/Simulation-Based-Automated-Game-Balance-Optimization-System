@@ -18,8 +18,7 @@
                          refreshPlayerStatusList
      BattleTurn.js     — showPlayerTurn, showEnemyTurn, selectTarget,
                          refreshBattleTargetTags, refreshBattleBackground
-     BattleEffects.js  — _triggerSpriteStates, _scheduleSetState,
-                         _updateBattleSprite
+     BattleEffects.js  — _triggerSpriteStates, _scheduleSetState
    이 파일은 refreshBattle 오케스트레이터만 담당.
    ─────────────────────────────────────────────────────────── */
 

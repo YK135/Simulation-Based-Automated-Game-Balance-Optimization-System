@@ -134,63 +134,8 @@ function _triggerSpriteStates(bs) {
 function _scheduleSetState(target, state, delay) {
     setTimeout(() => setCharState(target, state), delay);
 }
-// ═══════════════════════════════════════════════════════════
-// 배틀필드 캐릭터 이미지 갱신 헬퍼
-// ───────────────────────────────────────────────────────────
-// section: 'player_battle' | 'enemy_battle'
-// slotIdx: enemy_battle일 때 0/1/2, player_battle일 때 null
-// name:    직업명 or 몬스터명
-// state:   'idle' | 'attack' | 'skill' | 'hurt' | 'dead'
-//
-// 동작:
-//   1. CHAR_IMAGES에서 경로 조회
-//   2. 해당 슬롯의 <img> 가 있으면 src 갱신
-//   3. <img>가 없으면 div(이모지) 그대로 사용 (이미 위에서 textContent 설정함)
-//   4. 이미지 로드 실패하면 자동으로 img 숨기고 div 표시
-// ═══════════════════════════════════════════════════════════
 
-function _updateBattleSprite(section, slotIdx, name, stateName) {
-    // 이미지 경로 조회
-    const imgPath = (typeof getCharImage === 'function')
-        ? getCharImage(section, name, stateName)
-        : null;
-
-    // 대상 <img> / <div> 요소 찾기
-    let imgEl, iconEl;
-    if (section === 'player_battle') {
-        imgEl  = document.getElementById('player-combatant-art-img');
-        iconEl = document.getElementById('player-combatant-art');
-    } else if (section === 'enemy_battle') {
-        if (slotIdx === 0) {
-            imgEl  = document.getElementById('enemy-art-img');
-            iconEl = document.getElementById('enemy-art');
-        } else if (slotIdx === 1) {
-            imgEl  = document.getElementById('enemy-art-2-img');
-            iconEl = document.getElementById('enemy-art-2');
-        } else if (slotIdx === 2) {
-            imgEl  = document.getElementById('enemy-art-3-img');
-            iconEl = document.getElementById('enemy-art-3');
-        }
-    }
-
-    // <img> 태그가 HTML에 없으면 → 이모지(div)만 표시하고 종료
-    if (!imgEl) {
-        if (iconEl) iconEl.style.display = '';
-        return;
-    }
-
-    if (imgPath) {
-        imgEl.src = imgPath;
-        imgEl.style.display = '';
-        imgEl.onerror = function() {
-            this.style.display = 'none';
-            if (iconEl) iconEl.style.display = '';
-        };
-        imgEl.onload = function() {
-            if (iconEl) iconEl.style.display = 'none';
-        };
-    } else {
-        imgEl.style.display = 'none';
-        if (iconEl) iconEl.style.display = '';
-    }
-}
+// ※ 예전엔 여기 _updateBattleSprite(raw img.src 갱신)가 있었는데, 스프라이트시트
+//   메타({src,type:'sheet',...})를 문자열로 착각해 깨진 src를 만들고 이모지
+//   폴백을 잠깐 보여주는 버그가 있었음. BattleRender.js가 이제 CharSprite.js의
+//   setCharState를 직접 쓰도록 바꾸면서 이 함수는 제거함 (더 이상 호출부 없음).

@@ -2,12 +2,21 @@
 app/shared.py — 공용 상태 + 헬퍼
 ─────────────────────────────────────────────
 모든 Blueprint가 공유하는 것들:
-  - GAME_SESSIONS dict
-  - _get_session()
+  - GAME_SESSIONS dict (워커 인메모리 1차 캐시)
+  - _get_session()      — 메모리 → Redis → DB 3단계 조회/복구
+  - _persist_session()  — 세션을 Redis+DB에 write-through 저장
   - _get_db_user_id()
   - _player_to_snap()
   - _player_dict()
   - _save_battle_to_db()
+
+세션 영속화 설계 (배포 인프라 하드닝 v2):
+  진행 중인 battle(BattleSession)/hook(BalanceHook)은 저장하지 않는다 —
+  스티키 세션(같은 유저는 항상 같은 워커) 전제라 워커가 살아있는 한
+  GAME_SESSIONS(메모리)에서 바로 찾아진다. Redis/DB는 워커 재시작·스케일
+  이벤트처럼 메모리가 비어있을 때만 타는 폴백이며, 그 경우 battle=None으로
+  복구되고(진행 중이던 전투 1개만 다시 시작하면 됨) 나머지(player/inventory/
+  map/챕터/골드 등)는 그대로 이어진다.
 """
 from __future__ import annotations
 
@@ -18,14 +27,153 @@ from flask import session
 
 from game.Inventory import Inventory
 from ai.battle import EntitySnapshot
+from core.RedisCache import redis_get, redis_set
 
 
 # ─────────────────────────────────────────────
-# 전역 세션 저장소
+# 전역 세션 저장소 (워커별 인메모리 — 1차 캐시)
 # ─────────────────────────────────────────────
-# user_id(str) → gs(dict) 매핑.
-# 2학기 PostgreSQL 전환 시 이 dict만 DB로 교체.
 GAME_SESSIONS: dict = {}
+
+
+# ─────────────────────────────────────────────
+# 세션 영속화 — 직렬화/역직렬화
+# ─────────────────────────────────────────────
+
+def _snapshot_dict(gs: dict) -> dict:
+    """gs(런타임 dict) → 직렬화 가능한 스냅샷. Redis에는 이 형태 그대로 저장,
+    DB에는 player/inventory/map만 문자열로 dump해서 각 컬럼에 나눠 저장."""
+    player = gs.get("player")
+    inv = gs.get("inventory")
+    return {
+        "player":    player.to_dict() if player else None,
+        "inventory": inv.to_dict() if inv else None,
+        "map":       gs.get("map"),
+        "chapter":   gs.get("chapter"),
+        "turn":      gs.get("turn", 0),
+        "map_turn":  gs.get("map_turn", 0),
+        "mid_boss_cleared": bool(gs.get("mid_boss_cleared", False)),
+        "gold":      gs.get("gold", 100),
+        "run_id":    gs.get("run_id"),
+        "pending_node_id":  gs.get("pending_node_id"),
+        "battle_node_type": gs.get("battle_node_type"),
+        "battle_map_layer": gs.get("battle_map_layer"),
+    }
+
+
+def _gs_from_snapshot(uid: str, snap: dict) -> Optional[dict]:
+    """스냅샷 → 런타임 gs 재구성. hook은 새로 생성, battle은 None."""
+    if not snap or not snap.get("player"):
+        return None
+
+    from game.Player_Class import Player
+    from core.Balance_Hook import BalanceHook
+
+    player = Player.from_dict(snap["player"])
+    inv = Inventory.from_dict(snap.get("inventory") or {})
+    items = inv.to_flat_list()
+    hook = BalanceHook(player, items, show_graph=False, verbose=False)
+
+    try:
+        db_user_id = int(uid)
+    except (TypeError, ValueError):
+        db_user_id = None
+
+    return {
+        "player":           player,
+        "inventory":        inv,
+        "items":            items,
+        "battle":           None,
+        "turn":             snap.get("turn", 0),
+        "mid_boss_cleared": bool(snap.get("mid_boss_cleared", False)),
+        "last_event":       None,
+        "hook":             hook,
+        "db_user_id":       db_user_id,
+        "nickname":         player.name,
+        "map":              snap.get("map"),
+        "chapter":          snap.get("chapter"),
+        "map_turn":         snap.get("map_turn", 0),
+        "pending_node_id":  snap.get("pending_node_id"),
+        "run_id":           snap.get("run_id"),
+        "gold":             snap.get("gold", 100),
+        "battle_node_type": snap.get("battle_node_type"),
+        "battle_map_layer": snap.get("battle_map_layer"),
+    }
+
+
+def _load_session_from_db(uid: str) -> Optional[dict]:
+    """Redis에도 없을 때 최종 폴백 — DB(PlayerState)에서 복구."""
+    try:
+        user_id = int(uid)
+    except (TypeError, ValueError):
+        return None
+
+    from DB import get_session as db_session
+    from DB.Models import PlayerState
+
+    try:
+        with db_session() as db:
+            row = db.query(PlayerState).filter_by(user_id=user_id).first()
+            if not row:
+                return None
+            snap = {
+                "player":    json.loads(row.player_json),
+                "inventory": json.loads(row.inventory_json),
+                "map":       json.loads(row.map_json) if row.map_json else None,
+                "chapter":   row.chapter,
+                "turn":      row.turn,
+                "map_turn":  row.map_turn,
+                "mid_boss_cleared": row.mid_boss_cleared,
+                "gold":      row.gold,
+                "run_id":    row.run_id,
+                "pending_node_id":  row.pending_node_id,
+                "battle_node_type": row.battle_node_type,
+                "battle_map_layer": row.battle_map_layer,
+            }
+    except Exception as e:
+        print(f"[Session] DB 복구 실패: {e}")
+        return None
+
+    return _gs_from_snapshot(uid, snap)
+
+
+def _persist_session(uid: str, gs: dict) -> None:
+    """세션을 Redis(있으면)+DB에 write-through. app/__init__.py의
+    after_request 훅에서 매 요청마다 호출됨 — 실패해도 응답엔 영향 없음."""
+    if not gs or not gs.get("player"):
+        return
+
+    snap = _snapshot_dict(gs)
+    redis_set(f"session:{uid}", snap)
+
+    try:
+        user_id = int(uid)
+    except (TypeError, ValueError):
+        return  # DB 유저 생성이 실패했던 게스트는 FK가 없어 DB 저장 스킵 (Redis만)
+
+    try:
+        from DB import get_session as db_session
+        from DB.Models import PlayerState
+
+        with db_session() as db:
+            row = db.query(PlayerState).filter_by(user_id=user_id).first()
+            if row is None:
+                row = PlayerState(user_id=user_id)
+                db.add(row)
+            row.player_json     = json.dumps(snap["player"], ensure_ascii=False)
+            row.inventory_json  = json.dumps(snap["inventory"], ensure_ascii=False)
+            row.map_json        = json.dumps(snap["map"], ensure_ascii=False) if snap["map"] else None
+            row.chapter          = snap["chapter"]
+            row.turn              = snap["turn"]
+            row.map_turn          = snap["map_turn"]
+            row.mid_boss_cleared  = snap["mid_boss_cleared"]
+            row.gold              = snap["gold"]
+            row.run_id            = snap["run_id"]
+            row.pending_node_id   = snap["pending_node_id"]
+            row.battle_node_type  = snap["battle_node_type"]
+            row.battle_map_layer  = snap["battle_map_layer"]
+    except Exception as e:
+        print(f"[Session] DB 저장 실패: {e}")
 
 
 # ─────────────────────────────────────────────
@@ -33,11 +181,30 @@ GAME_SESSIONS: dict = {}
 # ─────────────────────────────────────────────
 
 def _get_session() -> Optional[dict]:
-    """Flask session 쿠키의 user_id로 GAME_SESSIONS 조회. 없으면 None."""
+    """Flask session 쿠키의 user_id로 세션 조회.
+    메모리(GAME_SESSIONS) → Redis → DB 순으로 찾고, 찾으면 상위 캐시에 채워둔다."""
     uid = session.get("user_id")
     if not uid:
         return None
-    return GAME_SESSIONS.get(uid)
+
+    gs = GAME_SESSIONS.get(uid)
+    if gs is not None:
+        return gs
+
+    snap = redis_get(f"session:{uid}")
+    if snap:
+        gs = _gs_from_snapshot(uid, snap)
+        if gs:
+            GAME_SESSIONS[uid] = gs
+            return gs
+
+    gs = _load_session_from_db(uid)
+    if gs:
+        GAME_SESSIONS[uid] = gs
+        redis_set(f"session:{uid}", _snapshot_dict(gs))
+        return gs
+
+    return None
 
 
 def _get_db_user_id() -> Optional[int]:
@@ -121,18 +288,18 @@ def _player_dict(player, inv) -> dict:
 # ─────────────────────────────────────────────
 
 def _save_rl_log(gs: dict, battle) -> None:
-    """(state, action, result) 행동 로그를 JSON 파일로 저장.
-    경로: data/RL_LOG/user_{id}/battle_{timestamp}.json — 실패해도 게임 계속."""
-    import json, os
-    from datetime import datetime
+    """(state, action, result) 행동 로그를 BattleLog 테이블에 저장.
+    ※ 예전엔 data/RL_LOG/user_{id}/*.json 로컬 파일이었음 — 호스팅 디스크가
+      ephemeral이면 재배포마다 학습 데이터가 사라질 수 있어 DB로 이전.
+      실패해도 게임은 계속 진행."""
     rl_log = getattr(battle, "rl_log", None)
     if not rl_log:
         return
     try:
-        uid = gs.get("db_user_id") or "guest"
-        base = os.path.join("data", "RL_LOG", f"user_{uid}")
-        os.makedirs(base, exist_ok=True)
-        fname = datetime.now().strftime("battle_%Y%m%d_%H%M%S_%f.json")
+        from DB import get_session as db_session
+        from DB.Models import BattleLog
+
+        db_user_id = gs.get("db_user_id")
         player = gs.get("player")
         meta = dict(getattr(battle, "battle_meta", {}) or {})
         meta.update({
@@ -142,12 +309,13 @@ def _save_rl_log(gs: dict, battle) -> None:
             "enemy_count": len(getattr(battle, "enemies", [])),
             "enemies":     [e.name for e in getattr(battle, "enemies", [])],
         })
-        payload = {
-            "meta": meta,
-            "records": rl_log,
-        }
-        with open(os.path.join(base, fname), "w", encoding="utf-8") as f:
-            json.dump(payload, f, ensure_ascii=False)
+
+        with db_session() as db:
+            db.add(BattleLog(
+                user_id=db_user_id,
+                meta_json=json.dumps(meta, ensure_ascii=False),
+                records_json=json.dumps(rl_log, ensure_ascii=False),
+            ))
     except Exception as ex:
         print(f"[RL_LOG] save skipped: {ex}")
 

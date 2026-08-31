@@ -2,6 +2,16 @@
 const _spriteTimers = {};
 const _spriteCurrentState = {};
 
+// 1x1 투명 PNG — 스프라이트시트 모드에서 <img src>를 완전히 비우면 브라우저가
+// 기본 "깨진 이미지" 장식을 그리므로, 유효한(그러나 안 보이는) src로 채워둔다.
+// 하드코딩된 base64 문자열은 오타로 불투명 픽셀이 되기 쉬워, 캔버스로 직접
+// 생성해 확실히 투명한 PNG를 만든다(1x1 캔버스의 기본값은 완전 투명).
+const _TRANSPARENT_PIXEL = (function () {
+    const c = document.createElement('canvas');
+    c.width = 1; c.height = 1;
+    return c.toDataURL('image/png');
+})();
+
 
 /**
  * 캐릭터 이미지 상태 변경
@@ -222,7 +232,14 @@ function _playSheet(imgEl, iconEl, meta) {
 
     probe.onload = function () {
         if (imgEl.dataset.sheetSeq !== String(seqId)) return;  // 더 최신 상태로 교체됨
-        imgEl.removeAttribute('src');                 // <img> 자체 이미지 제거 (background로 표시)
+        // ★ src를 완전히 지우면(removeAttribute) 브라우저가 <img>에 기본
+        //   "깨진 이미지" 테두리/아이콘을 그린다 — background-image로 실제
+        //   그림을 깔아도 그 장식은 그대로 남아있음. 1x1 투명 픽셀로 채워서
+        //   "정상 로드된 이미지" 취급을 받게 해 그 장식을 없앤다.
+        imgEl.src = _TRANSPARENT_PIXEL;
+        // ★ src가 있어도(위 1x1 픽셀) CSS 안전망이 "src=''"만 걸러내진 않으므로
+        //   이 클래스로 시트 모드임을 명시해 관련 규칙에서 안전하게 예외 처리.
+        imgEl.classList.add('sprite-sheet-active');
         imgEl.style.display = '';
         imgEl.style.backgroundImage = "url('" + meta.src + "')";
         imgEl.style.backgroundRepeat = 'no-repeat';
@@ -253,6 +270,7 @@ function _clearSheet(imgEl) {
     imgEl.style.backgroundSize = '';
     imgEl.style.backgroundPosition = '';
     imgEl.style.animation = '';
+    imgEl.classList.remove('sprite-sheet-active');
 }
 
 // steps 키프레임 동적 주입 — background-position % 기반 (슬롯 크기 무관)

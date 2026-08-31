@@ -328,8 +328,16 @@ def map_choose():
     if not gs:
         return jsonify({"ok": False, "error": "게임 세션이 없습니다."}), 404
 
+    player = gs.get("player")
+    if player and player.hp <= 0:
+        return jsonify({"ok": False, "error": "사망한 상태입니다. 새 게임을 시작하세요.",
+                        "reason": "player_dead"}), 400
+
     if gs.get("battle"):
         return jsonify({"ok": False, "error": "전투 중입니다. 먼저 전투를 완료하세요."})
+
+    if not gs.get("map"):
+        return jsonify({"ok": False, "error": "맵이 없습니다. /api/map/generate 먼저 호출하세요."}), 400
 
     data    = request.get_json() or {}
     node_id = data.get("node_id", "").strip()
@@ -475,6 +483,9 @@ def map_node_complete():
     gs = _get_session()
     if not gs:
         return jsonify({"ok": False, "error": "게임 세션이 없습니다."}), 404
+
+    if not gs.get("map"):
+        return jsonify({"ok": False, "error": "맵이 없습니다. /api/map/generate 먼저 호출하세요."}), 400
 
     data    = request.get_json() or {}
     node_id = data.get("node_id") or gs.get("pending_node_id", "")

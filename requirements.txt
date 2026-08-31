@@ -1,2 +1,7 @@
+flask
+sqlalchemy
+gunicorn
+psycopg2-binary
+redis
 matplotlib
 numpy

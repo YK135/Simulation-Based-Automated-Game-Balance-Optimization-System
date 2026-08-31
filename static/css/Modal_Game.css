@@ -84,10 +84,10 @@
 .rest-option.escape-no { border-color: rgba(45, 212, 191, 0.4); }
 .rest-option.escape-no:hover {
     background: rgba(45, 212, 191, 0.1);
-    border-color: var(--accent-cyan);
+    border-color: var(--accent-gold);
 }
-.rest-option.escape-no .rest-icon { color: var(--accent-cyan); }
-.rest-option.escape-no .rest-label { color: var(--accent-cyan); }
+.rest-option.escape-no .rest-icon { color: var(--accent-gold); }
+.rest-option.escape-no .rest-label { color: var(--accent-gold); }
 
 /* ═══════════════════════════════════════════════════════════
    3단계 시작 모달 (정사각형 모달)
@@ -112,7 +112,7 @@
     padding: 14px 16px;
     margin-bottom: 8px;
     background: var(--bg-darkest);
-    border: 1px solid var(--accent-cyan);
+    border: 1px solid var(--accent-gold);
     border-radius: 4px;
 }
 .sa-points-label {
@@ -122,7 +122,7 @@
     text-transform: uppercase;
 }
 .sa-points-value {
-    color: var(--accent-cyan);
+    color: var(--accent-gold);
     font-size: 22px;
     font-weight: 700;
     font-family: 'Cormorant Garamond', serif;
@@ -157,7 +157,7 @@
     padding: 10px 14px;
 }
 .sa-stat-row:hover {
-    border-color: var(--accent-cyan);
+    border-color: var(--accent-gold);
 }
  
 .sa-stat-label {
@@ -176,7 +176,7 @@
     font-family: 'Cormorant Garamond', serif;
 }
 .sa-stat-value .added {
-    color: var(--accent-cyan);
+    color: var(--accent-gold);
     font-weight: 700;
     margin-left: 6px;
 }
@@ -192,7 +192,7 @@
     height: 30px;
     background: var(--bg-darker);
     border: 1px solid var(--border);
-    color: var(--accent-cyan);
+    color: var(--accent-gold);
     font-size: 16px;
     font-weight: 700;
     cursor: pointer;
@@ -205,7 +205,7 @@
     padding: 0;
 }
 .sa-btn-pm:hover:not(:disabled) {
-    background: var(--accent-cyan);
+    background: var(--accent-gold);
     color: var(--bg-darkest);
     transform: scale(1.05);
 }
@@ -215,7 +215,7 @@
 }
  
 .sa-alloc-count {
-    color: var(--accent-cyan);
+    color: var(--accent-gold);
     font-size: 14px;
     font-weight: 700;
     width: 24px;
@@ -278,7 +278,7 @@
     line-height: 1.6;
 }
 .iv-incoming {
-    color: var(--accent-cyan);
+    color: var(--accent-gold);
     font-weight: 700;
     font-family: 'Cormorant Garamond', serif;
     font-size: 16px;
@@ -380,14 +380,14 @@
     border-bottom: 1px solid var(--border);
 }
 .inv-section-header.special {
-    color: var(--accent-cyan);
+    color: var(--accent-gold);
 }
 
 .inv-item.special {
     border-color: rgba(0, 255, 208, 0.2);
 }
 .inv-item .qty.special {
-    color: var(--accent-cyan);
+    color: var(--accent-gold);
     font-weight: 700;
 }
 

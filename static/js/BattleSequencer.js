@@ -1,6 +1,10 @@
 // ─────────────────────────────────────────────
 // 타이밍 상수 (밀리초)
-// 한 곳에서 모두 조정 가능
+// ★ 애니메이션 에셋(스프라이트시트)이 있는 상태(attack/skill/hurt/dead)는
+//   _animDuration()이 실제 프레임수/fps로 계산한 값을 우선 쓰고, 여기 상수는
+//   시트가 없는 캐릭터(정지 이미지/이모지)에 대한 폴백으로만 쓰인다.
+//   ITEM_USE/ESCAPE_TRY/NEXT_ENEMY_GAP/NEXT_TURN_GAP처럼 캐릭터 모션과
+//   무관한(순수 페이싱용) 값은 그대로 고정 상수.
 // ─────────────────────────────────────────────
 const SEQ_TIMING = {
     PASSIVE_MSG:        400,  // 패시브 메시지 표시 후 대기
@@ -20,6 +24,25 @@ const SEQ_TIMING = {
 // 비동기 sleep 헬퍼
 function _seqSleep(ms) {
     return new Promise(resolve => setTimeout(resolve, ms));
+}
+
+// 실제 스프라이트시트 재생 시간(ms) — 프레임 수/fps 기반으로 계산.
+// 시트가 아니면(정지 이미지/이모지 폴백) fallbackMs를 그대로 씀.
+// 이렇게 하면 다음 단계로 넘어가기 전에 "지금 캐릭터가 보여주는 모션"이
+// 실제로 다 재생될 시간을 확보할 수 있음 — 애니메이션 에셋이 없는 캐릭터는
+// 기존 고정 대기시간(SEQ_TIMING.*)이 폴백으로 그대로 적용되어 회귀 없음.
+// section: 'player_battle' | 'enemy_battle', stateName: 'attack'|'skill'|'hurt'|'dead'
+function _animDuration(section, name, stateName, fallbackMs) {
+    const meta = (typeof getCharImage === 'function') ? getCharImage(section, name, stateName) : null;
+    if (meta && typeof meta === 'object' && meta.type === 'sheet' && meta.frames > 1) {
+        const fps = meta.fps || 8;
+        return Math.ceil((meta.frames / fps) * 1000) + 150;   // +150ms 여유 버퍼
+    }
+    return fallbackMs;
+}
+
+function _deathAnimDuration(section, name) {
+    return _animDuration(section, name, 'dead', SEQ_TIMING.ENEMY_DEAD);
 }
 
 
@@ -196,20 +219,24 @@ async function playBattleSequence(action, bs) {
 
     // ── 2. 플레이어 행동 + 모션 ──
     if (groups.player.length > 0 || isItem || isEscape) {
-        // 모션 트리거 (이미지 변화)
-        if (typeof setCharState === 'function') {
-            if (isSkill) {
-                setCharState('player_battle', 'skill', {
-                    duration: SEQ_TIMING.PLAYER_ACTION + SEQ_TIMING.SKILL_MOTION_BONUS
-                });
-            } else if (isItem) {
-                // 아이템은 별도 모션 없음 — 메시지만
-            } else if (isEscape) {
-                // 도망도 별도 모션 없음
-            } else {
-                setCharState('player_battle', 'attack', {
-                    duration: SEQ_TIMING.PLAYER_ACTION
-                });
+        const job = (window.state && window.state.player) ? window.state.player.job : '';
+
+        // 모션 트리거 (이미지 변화) — 대기 시간도 실제 시트 재생 길이로 계산
+        let actionTime;
+        if (isSkill) {
+            actionTime = _animDuration('player_battle', job, 'skill',
+                SEQ_TIMING.PLAYER_ACTION + SEQ_TIMING.SKILL_MOTION_BONUS);
+            if (typeof setCharState === 'function') {
+                setCharState('player_battle', 'skill', { duration: actionTime });
+            }
+        } else if (isItem) {
+            actionTime = SEQ_TIMING.ITEM_USE;   // 아이템은 별도 모션 없음 — 메시지만
+        } else if (isEscape) {
+            actionTime = SEQ_TIMING.ESCAPE_TRY;  // 도망도 별도 모션 없음
+        } else {
+            actionTime = _animDuration('player_battle', job, 'attack', SEQ_TIMING.PLAYER_ACTION);
+            if (typeof setCharState === 'function') {
+                setCharState('player_battle', 'attack', { duration: actionTime });
             }
         }
 
@@ -219,10 +246,6 @@ async function playBattleSequence(action, bs) {
         }
 
         // 모션 시간만큼 대기
-        let actionTime = SEQ_TIMING.PLAYER_ACTION;
-        if (isSkill) actionTime += SEQ_TIMING.SKILL_MOTION_BONUS;
-        if (isItem) actionTime = SEQ_TIMING.ITEM_USE;
-        if (isEscape) actionTime = SEQ_TIMING.ESCAPE_TRY;
         await _seqSleep(actionTime);
     }
 
@@ -243,15 +266,16 @@ async function playBattleSequence(action, bs) {
             damagedSlots.add(bs.target_idx);
         }
 
-        // 적들에게 hurt 적용
+        // 적들에게 hurt 적용 — 실제 hurt 시트 길이만큼 대기 (여러 마리면 최댓값)
+        let hurtWait = SEQ_TIMING.DAMAGE_APPLY;
         if (typeof setCharState === 'function') {
             for (const slotIdx of damagedSlots) {
                 // 슬롯이 살아있는 적인지 확인
                 const en = bs.enemies && bs.enemies[slotIdx];
                 if (en && en.alive) {
-                    setCharState(`enemy_battle:${slotIdx}`, 'hurt', {
-                        duration: SEQ_TIMING.DAMAGE_APPLY
-                    });
+                    const d = _animDuration('enemy_battle', en.name, 'hurt', SEQ_TIMING.DAMAGE_APPLY);
+                    setCharState(`enemy_battle:${slotIdx}`, 'hurt', { duration: d });
+                    hurtWait = Math.max(hurtWait, d);
                 }
             }
         }
@@ -261,16 +285,21 @@ async function playBattleSequence(action, bs) {
             logLine(m, _msgCls(m));
         }
 
-        await _seqSleep(SEQ_TIMING.DAMAGE_APPLY);
+        await _seqSleep(hurtWait);
     }
 
     // ── 4. 적 사망 처리 ──
     if (groups.enemy_dead.length > 0) {
-        // 죽은 적 슬롯에 dead 상태
+        // 죽은 적 슬롯에 dead 상태 — 마지막 킬이 곧바로 전투 종료(보상/다음 노드)로
+        // 이어지는 경우, 죽는 애니메이션이 다 재생되기 전에 화면이 넘어가버리는
+        // 문제가 있었음. 실제 사망 시트 재생 시간(프레임수/fps)만큼 대기하도록
+        // 계산해서, 여러 마리가 동시에 죽어도(AoE) 가장 긴 애니메이션 기준으로 맞춤.
+        let deadWait = SEQ_TIMING.ENEMY_DEAD;
         if (typeof setDeadState === 'function') {
             (bs.enemies || []).forEach((en, i) => {
                 if (en && !en.alive) {
                     setDeadState(`enemy_battle:${i}`);
+                    deadWait = Math.max(deadWait, _deathAnimDuration('enemy_battle', en.name));
                 }
             });
         }
@@ -279,7 +308,7 @@ async function playBattleSequence(action, bs) {
             logLine(m, _msgCls(m));
         }
 
-        await _seqSleep(SEQ_TIMING.ENEMY_DEAD);
+        await _seqSleep(deadWait);
     }
 
     // ── 5. 적 행동 처리 (다대일은 적별로 순차) ──
@@ -289,18 +318,18 @@ async function playBattleSequence(action, bs) {
 
         for (const enemyGroup of enemyMessages) {
             const { slotIdx, messages: emsgs } = enemyGroup;
+            const en = bs.enemies && bs.enemies[slotIdx];
+            const enemyName = en ? en.name : '';
 
-            // 적 모션 (attack/skill)
+            // 적 모션 (attack/skill) — 실제 시트 길이만큼 대기
+            const isEnemySkill = emsgs.some(m =>
+                m.includes('홀리볼트') || m.includes('사제힐') || m.includes('사제축복') ||
+                m.includes('1') || m.includes('2')  // 스킬명에 숫자 포함
+            );
+            const motionState = isEnemySkill ? 'skill' : 'attack';
+            const motionTime = _animDuration('enemy_battle', enemyName, motionState, SEQ_TIMING.ENEMY_ACTION);
             if (typeof setCharState === 'function' && slotIdx !== null) {
-                // 스킬 메시지인지 확인
-                const isEnemySkill = emsgs.some(m =>
-                    m.includes('홀리볼트') || m.includes('사제힐') || m.includes('사제축복') ||
-                    m.includes('1') || m.includes('2')  // 스킬명에 숫자 포함
-                );
-                const motionState = isEnemySkill ? 'skill' : 'attack';
-                setCharState(`enemy_battle:${slotIdx}`, motionState, {
-                    duration: SEQ_TIMING.ENEMY_ACTION
-                });
+                setCharState(`enemy_battle:${slotIdx}`, motionState, { duration: motionTime });
             }
 
             // 메시지 출력
@@ -309,23 +338,21 @@ async function playBattleSequence(action, bs) {
             }
 
             // 모션 시간 대기
-            await _seqSleep(SEQ_TIMING.ENEMY_ACTION);
+            await _seqSleep(motionTime);
 
             // ── 6. 플레이어 피격 (적 행동 결과) ──
             // 플레이어 HP 메시지가 있으면 피격
             const playerHurtMsg = groups.player_hurt.shift();  // 적별로 하나씩 소비
             if (playerHurtMsg) {
-                // 플레이어 hurt 표정 + 배틀 이미지
+                // 플레이어 hurt 표정 + 배틀 이미지 — 실제 시트 길이만큼 대기
+                const job = (window.state && window.state.player) ? window.state.player.job : '';
+                const hurtTime = _animDuration('player_battle', job, 'hurt', SEQ_TIMING.PLAYER_HURT);
                 if (typeof setCharState === 'function') {
-                    setCharState('player_battle', 'hurt', {
-                        duration: SEQ_TIMING.PLAYER_HURT
-                    });
-                    setCharState('player_panel', 'hurt', {
-                        duration: SEQ_TIMING.PLAYER_HURT + 100
-                    });
+                    setCharState('player_battle', 'hurt', { duration: hurtTime });
+                    setCharState('player_panel', 'hurt', { duration: hurtTime + 100 });
                 }
                 logLine(playerHurtMsg, _msgCls(playerHurtMsg));
-                await _seqSleep(SEQ_TIMING.PLAYER_HURT);
+                await _seqSleep(hurtTime);
             }
 
             // 다음 적 전환 대기 (다대일)
@@ -342,19 +369,23 @@ async function playBattleSequence(action, bs) {
 
     // ── 7. 종료 메시지 ──
     if (groups.ending.length > 0) {
-        // 플레이어 사망이면 dead
+        // 플레이어 사망이면 dead — 적 사망과 동일하게 실제 시트 길이만큼 대기
+        // (게임오버 화면으로 넘어가기 전에 애니메이션이 끊기지 않도록)
+        let endingWait = SEQ_TIMING.NEXT_TURN_GAP;
         if (typeof setDeadState === 'function') {
             const playerDied = groups.ending.some(m => m.includes('쓰러졌다'));
             if (playerDied) {
                 setDeadState('player_battle');
                 setDeadState('player_panel');
+                const job = window.state && window.state.player ? window.state.player.job : '';
+                endingWait = Math.max(endingWait, _deathAnimDuration('player_battle', job));
             }
         }
 
         for (const m of groups.ending) {
             logLine(m, _msgCls(m));
         }
-        await _seqSleep(SEQ_TIMING.NEXT_TURN_GAP);
+        await _seqSleep(endingWait);
     }
 
     // ── 8. 분류 안 된 메시지 (안전망) ──

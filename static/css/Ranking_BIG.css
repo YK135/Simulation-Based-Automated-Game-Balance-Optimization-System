@@ -23,7 +23,7 @@
     background: linear-gradient(180deg,
         rgba(20, 26, 34, 0.98) 0%,
         rgba(13, 17, 23, 0.98) 100%);
-    border: 1px solid var(--accent-cyan, #00ffd0);
+    border: 1px solid var(--accent-gold, #00ffd0);
     border-radius: 8px;
     box-shadow:
         0 0 60px rgba(0, 255, 208, 0.25),
@@ -49,7 +49,7 @@
     height: 44px;
     background: transparent;
     border: 1px solid var(--border, #2d3a4a);
-    color: var(--accent-cyan, #00ffd0);
+    color: var(--accent-gold, #00ffd0);
     font-size: 22px;
     font-weight: 700;
     cursor: pointer;
@@ -92,7 +92,7 @@
 .ranking-big-title-wrap h2 {
     margin: 0;
     font-size: 36px;
-    color: var(--accent-cyan, #00ffd0);
+    color: var(--accent-gold, #00ffd0);
     letter-spacing: 0.15em;
     font-weight: 700;
     text-shadow: 0 0 16px rgba(0, 255, 208, 0.4);
@@ -112,7 +112,7 @@
     height: 56px;
     background: rgba(0, 255, 208, 0.05);
     border: 1px solid rgba(0, 255, 208, 0.3);
-    color: var(--accent-cyan, #00ffd0);
+    color: var(--accent-gold, #00ffd0);
     font-size: 26px;
     cursor: pointer;
     border-radius: 50%;
@@ -126,7 +126,7 @@
 
 .ranking-arrow:hover {
     background: rgba(0, 255, 208, 0.15);
-    border-color: var(--accent-cyan, #00ffd0);
+    border-color: var(--accent-gold, #00ffd0);
     box-shadow: 0 0 20px rgba(0, 255, 208, 0.4);
     transform: scale(1.05);
 }
@@ -276,7 +276,7 @@
 
 /* 점수 */
 .score-col {
-    color: var(--accent-cyan, #00ffd0);
+    color: var(--accent-gold, #00ffd0);
     font-family: 'Cormorant Garamond', monospace;
     font-size: 22px;
     font-weight: 700;
@@ -325,7 +325,7 @@
 }
 
 .my-rank-score {
-    color: var(--accent-cyan, #00ffd0);
+    color: var(--accent-gold, #00ffd0);
     margin-left: 14px;
     font-family: 'Cormorant Garamond', monospace;
 }

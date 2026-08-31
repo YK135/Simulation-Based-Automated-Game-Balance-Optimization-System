@@ -2,7 +2,7 @@ let state = {
     player: null,
     inBattle: false,
     battleState: null,
-    aiLevel: 'normal',
+    battleMessages: [],   // 도감 "발견" 판정용 — 현재 전투의 누적 메시지 (MapActions.js가 전투 시작 시 리셋)
     exploreTurn: 0,
 
     // 비동기 락 (race condition 방지)
@@ -217,11 +217,12 @@ const CHAR_IMAGES = {
             dead:   '/img/sprites/player/warrior_E.png',
         },
         '마법사': {
-            idle:   '/img/sprites/player/mage_A.png',
-            attack: '/img/sprites/player/mage_B.png',
+            // ★ "Free/Characters/1" 에셋 적용 (walk→idle 대용, skill 프레임은 없어서 보류)
+            idle:   { src: '/img/sprites/player/mage_A.png', type: 'sheet', frames: 8, fps: 8,  loop: true },
+            attack: { src: '/img/sprites/player/mage_B.png', type: 'sheet', frames: 8, fps: 14, loop: false },
             skill:  '/img/sprites/player/mage_C.png',
-            hurt:   '/img/sprites/player/mage_D.png',
-            dead:   '/img/sprites/player/mage_E.png',
+            hurt:   { src: '/img/sprites/player/mage_D.png', type: 'sheet', frames: 8, fps: 14, loop: false },
+            dead:   { src: '/img/sprites/player/mage_E.png', type: 'sheet', frames: 8, fps: 10, loop: false },
         },
         '탱커': {
             idle:   '/img/sprites/player/tanker_A.png',
@@ -251,12 +252,20 @@ const CHAR_IMAGES = {
             hurt:   '/img/sprites/monsters/goblin_D.png',
             dead:   '/img/sprites/monsters/goblin_E.png',
         },
+        // DarkFantasyEnemies_FREE 팩 적용 (VFX 포함 버전 — 타격/사망 이펙트가
+        // 프레임에 이미 그려져 있어 별도 이펙트 레이어 없이도 효과가 보임).
+        // 프레임 수는 각 시트 실제 픽셀폭 ÷ 64(프레임 높이)로 확인한 값.
         '박쥐': {
-            idle:   '/img/sprites/monsters/bat_A.png',
-            attack: '/img/sprites/monsters/bat_B.png',
-            skill:  '/img/sprites/monsters/bat_C.png',
-            hurt:   '/img/sprites/monsters/bat_D.png',
-            dead:   '/img/sprites/monsters/bat_E.png',
+            idle:   { src: '/img/sprites/monsters/bat_A.png', type: 'sheet',
+                      frames: 9,  fps: 8,  loop: true },   // Bat-IdleFly (날갯짓)
+            attack: { src: '/img/sprites/monsters/bat_B.png', type: 'sheet',
+                      frames: 8,  fps: 14, loop: false },  // Bat-Attack1
+            skill:  { src: '/img/sprites/monsters/bat_C.png', type: 'sheet',
+                      frames: 11, fps: 12, loop: false },  // Bat-Attack2 (스킬용으로 구분)
+            hurt:   { src: '/img/sprites/monsters/bat_D.png', type: 'sheet',
+                      frames: 5,  fps: 14, loop: false },  // Bat-Hurt
+            dead:   { src: '/img/sprites/monsters/bat_E.png', type: 'sheet',
+                      frames: 12, fps: 10, loop: false },  // Bat-Die
         },
         '슬라임': {
             idle:   '/img/sprites/monsters/slime_A.png',

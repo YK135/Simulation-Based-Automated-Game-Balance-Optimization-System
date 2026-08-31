@@ -46,7 +46,7 @@
 /* ── 서브 메뉴 (스킬/아이템 선택) ── */
 .submenu {
     background: var(--bg-darkest);
-    border: 1px solid var(--accent-cyan);
+    border: 1px solid var(--accent-gold);
     border-radius: 3px;
     padding: 8px;
     margin-bottom: 8px;
@@ -55,7 +55,7 @@
 .submenu.active { display: block; }
 .submenu-title {
     font-size: 9px;
-    color: var(--accent-cyan);
+    color: var(--accent-gold);
     margin-bottom: 6px;
     letter-spacing: 0.1em;
     font-weight: 700;
@@ -78,8 +78,8 @@
 }
 .submenu-item:hover {
     background: var(--bg-panel-2);
-    border-color: var(--accent-cyan);
-    color: var(--accent-cyan);
+    border-color: var(--accent-gold);
+    color: var(--accent-gold);
 }
 .submenu-item .cost {
     font-size: 8px;
@@ -110,7 +110,7 @@
 .turn-indicator.player-turn {
     display: block;
     color: var(--bg-darkest);
-    background: var(--accent-cyan);
+    background: var(--accent-gold);
     box-shadow: 0 0 16px rgba(45, 212, 191, 0.5);
     animation: indicator-glow 1s ease-in-out infinite alternate;
 }

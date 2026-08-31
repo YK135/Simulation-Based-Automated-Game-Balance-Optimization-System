@@ -23,6 +23,9 @@ function _showEventResult(r) {
     `;
     overlay.querySelector("#event-continue-btn")
         ?.addEventListener("click", closeEventPanel);
+    if (typeof logAdventure === "function") {
+        logAdventure(r.message || "무언가를 발견했다.", r.item ? "loot" : "system");
+    }
     if (r.player) {
         state.player = r.player;
         if (typeof refreshPlayer === "function") refreshPlayer();

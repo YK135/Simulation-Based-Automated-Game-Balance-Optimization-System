@@ -443,31 +443,6 @@ class BalanceHook:
     def make_battle_unit(self, snap: EntitySnapshot):
         return _SnapUnit(snap)
 
-    def run_auto_battle(self, enemy_snap, ai_mode="balanced", show_log=True) -> BattleResult:
-        p_snap = _player_to_snap(self.player, self.item_list)
-        engine = BattleEngine(p_snap, enemy_snap)
-        result = engine.run(PlayerAI(ai_mode), EnemyAI())
-        if show_log:
-            self._print_auto_battle_log(result)
-        return result
-
-    def _print_auto_battle_log(self, result: BattleResult):
-        print("\n" + "="*45)
-        print("  ◆ 자동 전투 로그")
-        print("="*45)
-        for log in result.logs:
-            actor = result.player_name if log.actor == "player" else result.enemy_name
-            tag   = (" ★크리!" if log.is_crit else "") + (" (회피)" if log.is_dodge else "")
-            if log.action == "attack":
-                print(f"  턴{log.turn:>2} [{actor}] 공격 → {log.damage_dealt}의 데미지{tag}")
-            elif log.action == "skill":
-                print(f"  턴{log.turn:>2} [{actor}] {log.action_detail} 사용 → {log.damage_dealt}의 데미지{tag}")
-            elif log.action == "item":
-                print(f"  턴{log.turn:>2} [{actor}] {log.action_detail} 사용")
-        winner = result.player_name if result.winner == "player" else result.enemy_name
-        print(f"\n  결과: {winner} 승리 | 총 {result.total_turns}턴 | 잔여 HP {result.final_player_hp:.0f}")
-        print("="*45 + "\n")
-
 
 class _SnapUnit:
     def __init__(self, snap: EntitySnapshot):

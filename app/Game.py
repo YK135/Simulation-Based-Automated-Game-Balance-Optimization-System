@@ -43,11 +43,6 @@ def new_game():
     if job not in ("전사", "마법사", "탱커", "도적"):
         return jsonify({"ok": False, "error": "잘못된 직업입니다."}), 400
 
-    # Flask session user_id
-    if "user_id" not in session:
-        session["user_id"] = str(uuid.uuid4())
-    uid = session["user_id"]
-
     # DB User 생성 — auth_type='guest', nickname 사용 (name/job 필드 없음)
     db_user_id = None
     try:
@@ -59,6 +54,12 @@ def new_game():
             print(f"[DB] User created: id={db_user_id}, nickname={name}, job={job}")
     except Exception as e:
         print(f"[DB] User creation failed: {e}")
+
+    # Flask session user_id — db_user_id를 그대로 세션 키로 사용해야
+    # 워커 재시작/Redis-DB 복구 시 "이 쿠키가 몇 번 유저인지" 바로 알 수 있음.
+    # DB 생성이 실패한 경우에만 예전처럼 uuid4로 폴백(게스트로 계속 진행은 됨).
+    session["user_id"] = str(db_user_id) if db_user_id is not None else str(uuid.uuid4())
+    uid = session["user_id"]
 
     player = create_player_by_job(name, job)
 

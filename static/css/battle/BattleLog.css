@@ -23,5 +23,5 @@
 .log-line.crit  { color: var(--accent-warn); }
 .log-line.dmg   { color: #fcd5d5; }
 .log-line.heal  { color: #a7f3d0; }
-.log-line.skill { color: var(--accent-cyan); }
+.log-line.skill { color: var(--accent-gold); }
 .log-line.system { color: var(--text-muted); font-style: italic; }

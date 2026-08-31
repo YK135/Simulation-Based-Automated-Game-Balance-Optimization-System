@@ -88,10 +88,10 @@
 .entry-option.instant-play { border-color: rgba(45, 212, 191, 0.4); }
 .entry-option.instant-play:hover {
     background: rgba(45, 212, 191, 0.1);
-    border-color: var(--accent-cyan);
+    border-color: var(--accent-gold);
 }
-.entry-option.instant-play .entry-icon { color: var(--accent-cyan); }
-.entry-option.instant-play .entry-label { color: var(--accent-cyan); }
+.entry-option.instant-play .entry-icon { color: var(--accent-gold); }
+.entry-option.instant-play .entry-label { color: var(--accent-gold); }
 
 
 /* ─────────────────────────────────────────────
@@ -118,7 +118,7 @@
     margin-top: 2px;
     width: 14px;
     height: 14px;
-    accent-color: var(--accent-cyan);
+    accent-color: var(--accent-gold);
     cursor: pointer;
     flex-shrink: 0;
 }
@@ -183,7 +183,7 @@
 }
 .job-icon {
     font-size: 64px;
-    color: var(--accent-cyan);
+    color: var(--accent-gold);
     line-height: 1;
     margin-bottom: 8px;
     transition: all 0.3s;
@@ -192,7 +192,7 @@
     font-size: 12px;
     font-weight: 700;
     letter-spacing: 0.15em;
-    color: var(--accent-cyan);
+    color: var(--accent-gold);
 }
 
 /* 이미지 교체 시 사용: <img id="job-portrait-img" class="job-portrait-img"> */
@@ -211,7 +211,7 @@
 }
 .job-description .job-title {
     font-size: 13px;
-    color: var(--accent-cyan);
+    color: var(--accent-gold);
     font-weight: 700;
     margin-bottom: 6px;
     letter-spacing: 0.1em;
@@ -257,13 +257,13 @@
     gap: 4px;
 }
 .job-btn:hover {
-    border-color: var(--accent-cyan);
-    color: var(--accent-cyan);
+    border-color: var(--accent-gold);
+    color: var(--accent-gold);
 }
 .job-btn.active {
     background: rgba(45, 212, 191, 0.15);
-    border-color: var(--accent-cyan);
-    color: var(--accent-cyan);
+    border-color: var(--accent-gold);
+    color: var(--accent-gold);
 }
 .job-btn-icon {
     font-size: 20px;

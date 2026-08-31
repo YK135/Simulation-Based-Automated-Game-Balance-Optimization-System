@@ -15,7 +15,7 @@ for _sub in ["game", "ai", "core", "interface"]:
     if _p not in sys.path:
         sys.path.insert(0, _p)
 
-from flask import Flask, send_from_directory
+from flask import Flask, send_from_directory, session
 from DB import init_db
 
 # Blueprint import — 파일명 대문자 기준 (깃허브 파일명)
@@ -25,6 +25,7 @@ from .Inventory import inventory_bp
 from .Rest      import rest_bp
 from .Ranking   import ranking_bp
 from .Map       import map_bp
+from .Shared    import GAME_SESSIONS, _persist_session
 
 
 def create_app() -> Flask:
@@ -45,5 +46,17 @@ def create_app() -> Flask:
     @app.route("/")
     def index():
         return send_from_directory(static_dir, "index.html")
+
+    # 세션 영속화 — 요청마다 현재 워커 메모리에 있는 세션을 Redis+DB에
+    # write-through. 라우트마다 저장 호출을 흩뿌리지 않기 위한 전역 훅.
+    @app.after_request
+    def _persist_game_session(resp):
+        uid = session.get("user_id")
+        if uid and uid in GAME_SESSIONS:
+            try:
+                _persist_session(uid, GAME_SESSIONS[uid])
+            except Exception as e:
+                print(f"[Session] persist 훅 실패: {e}")
+        return resp
 
     return app

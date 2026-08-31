@@ -1,4 +1,25 @@
-/* map/MapChapter.js — 챕터 클리어/전환 */
+/* map/MapChapter.js — 챕터 클리어/전환 + 게임 오버 */
+
+// 플레이어 사망 시 전체 화면 오버레이 — NEW GAME(restartGame)으로만 재시작 가능.
+// (백엔드도 player.hp<=0이면 /api/map/choose를 거부하지만, 애초에 맵으로
+//  돌아가지 못하게 여기서 막아 "죽었는데 계속 노드 선택되는" 버그를 차단)
+function showGameOver() {
+    if (document.getElementById('chapter-clear-overlay')) return; // 중복 방지
+    const overlay = document.createElement('div');
+    overlay.id = 'chapter-clear-overlay';
+    overlay.className = 'chapter-clear-overlay game-over';
+    overlay.innerHTML = `
+        <div class="chapter-clear-title game-over-title">☠ GAME OVER</div>
+        <div class="chapter-clear-sub">모험이 여기서 끝났다...</div>
+        <button class="btn chapter-clear-btn" id="game-over-restart-btn">⚡ NEW GAME</button>
+    `;
+    document.body.appendChild(overlay);
+    overlay.querySelector('#game-over-restart-btn')
+        ?.addEventListener('click', () => {
+            overlay.remove();
+            restartGame();
+        });
+}
 
 function _showChapterClear(result) {
     const isGameClear = result.game_clear;
@@ -42,6 +63,7 @@ async function startNextChapter(chapter) {
         setMapMode();
         renderMap(_mapState);
         logLine(`📍 챕터 ${chapter} 시작!`, "system");
+        logAdventure(`챕터 ${chapter}에 발을 들였다.`, "system");
         toast(`챕터 ${chapter} 시작!`, "ok");
     } catch (e) {
         console.error("[startNextChapter]", e);

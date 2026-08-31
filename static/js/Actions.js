@@ -16,6 +16,13 @@ async function loadStatus() {
     if (r.gold !== undefined) state.gold = r.gold;
     refreshPlayer();
 
+    // ★ 사망 상태로 새로고침한 경우 — 맵 대신 바로 게임 오버 화면
+    if (r.player && r.player.hp <= 0) {
+        state.inBattle = false;
+        if (typeof showGameOver === 'function') showGameOver();
+        return true;
+    }
+
     if (r.in_battle) {
         let bs = r.battle;
         if (!bs) {
@@ -59,6 +66,7 @@ async function newGame(name, job) {
             document.getElementById('modal-newgame')?.classList.remove('active');
             clearLog();
             logLine(`▶ ${name} (${job}) 모험 시작!`, 'skill');
+            logAdventure(`${name}(${job})의 모험이 시작되었다.`, 'system');
             term(`session created: ${name}/${job}`, 'ok');
             toast(`Welcome, ${name}!`);
             // ★ 노드맵 챕터 1 생성
@@ -103,6 +111,8 @@ async function battleAction(action) {
         }
 
         const messages = r.messages || [];
+        if (!Array.isArray(state.battleMessages)) state.battleMessages = [];
+        state.battleMessages.push(...messages);
         const bsForRefresh = { ...r, messages: [] };
         refreshBattle(bsForRefresh);
         showEnemyTurn();
@@ -118,17 +128,26 @@ async function battleAction(action) {
         // ── 종료 처리 ──
         if (r.done) {
             _pendingBattleAction = null;   // 전투 종료 — 예약 초기화
+            const _foeNames = (state.battleState?.enemies || []).map(e => e.name).join(', ') || '적';
             if (r.winner === 'player') {
                 logLine('★ VICTORY!', 'crit');
+                logAdventure(`${_foeNames}을(를) 물리쳤다.`, 'win');
                 term('battle won', 'ok');
                 toast('승리!');
                 if (typeof showHappyState === 'function') showHappyState('player_panel', 2000);
+                // ★ 전투에서 이긴 적(전멸시켰으므로 전원 처치)만 도감 해금 대상
+                if (typeof recordBestiaryKill === 'function') {
+                    const deadNames = (state.battleState?.enemies || []).map(e => e.name);
+                    recordBestiaryKill(deadNames, state.battleMessages || []);
+                }
             } else if (r.winner === 'enemy') {
                 logLine('✖ DEFEAT', 'crit');
+                logAdventure(`${_foeNames}에게 쓰러졌다...`, 'lose');
                 term('battle lost', 'warn');
                 toast('패배...', 'error');
             } else {
                 logLine('▶ 도망쳤다.', 'system');
+                logAdventure(`${_foeNames}에게서 도망쳤다.`, 'system');
                 term('escaped');
             }
 
@@ -149,11 +168,25 @@ async function battleAction(action) {
             if (typeof checkPendingPoints === 'function') checkPendingPoints();
 
             // ★ 승리 시 보상 팝업 (확인 클릭까지 대기) → 노드맵 완료 처리
-            if (r.winner === 'player' && typeof showRewardModal === 'function') {
-                await showRewardModal(r);
+            if (r.winner === 'player') {
+                const _gold = r.gold_gained || 0;
+                const _items = r.items_gained || [];
+                if (_gold > 0 || _items.length > 0) {
+                    const _itemPart = _items.length
+                        ? _items.map(id => (typeof itemLabel === 'function' ? itemLabel(id) : id)).join(', ')
+                        : '';
+                    const _parts = [];
+                    if (_gold > 0) _parts.push(`${_gold} G`);
+                    if (_itemPart) _parts.push(_itemPart);
+                    logAdventure(`전리품 획득: ${_parts.join(' / ')}`, 'loot');
+                }
+                if (typeof showRewardModal === 'function') await showRewardModal(r);
             }
             if (r.winner === 'player' && typeof handleMapNodeDone === 'function') {
                 await handleMapNodeDone(r);
+            } else if (r.winner === 'enemy') {
+                // ★ 사망 시 맵으로 돌아가지 않음 — NEW GAME으로만 재시작 가능
+                if (typeof showGameOver === 'function') showGameOver();
             } else {
                 await loadStatus();
             }

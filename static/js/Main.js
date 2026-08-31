@@ -15,10 +15,6 @@ function safeBind(id, handler) {
 setInterval(tick, 1000);
 tick();
 
-// ── 펜타곤 차트 초기 ──
-drawPentagonBackground();
-updatePentagon([0.7,0.7,0.7,0.7,0.7], [0.65,0.7,0.7,0.65,0.65]);
-
 // ═══════════════════════════════════════════════════════════
 // 3단계 시작 모달 이벤트 바인딩
 // ═══════════════════════════════════════════════════════════
@@ -74,10 +70,12 @@ if (nameInput) {
 }
 
 // ── 게임 종료 후 NEW GAME ──
-safeBind('btn-restart', () => {
+// (게임 클리어/게임 오버 오버레이의 재시작 버튼도 동일 로직 사용 — restartGame())
+function restartGame() {
     if (typeof showStartModal === 'function') showStartModal('modal-entry');
     else document.getElementById('modal-newgame')?.classList.add('active');
-});
+}
+safeBind('btn-restart', restartGame);
 
 // ── 휴식 모달 ──
 safeBind('btn-rest-heal',  () => performRest('heal'));
@@ -107,23 +105,6 @@ safeBind('btn-escape-no', () => {
     document.getElementById('modal-escape')?.classList.remove('active');
     term('escape canceled', 'warn');
 });
-
-// ── AI Level 토글 ──
-document.querySelectorAll('.ai-level-btn').forEach(btn => {
-    btn.onclick = () => {
-        document.querySelectorAll('.ai-level-btn').forEach(b => b.classList.remove('active'));
-        btn.classList.add('active');
-        state.aiLevel = btn.dataset.level;
-        term(`AI level set: ${state.aiLevel}`);
-    };
-});
-
-// ── 시뮬 컨트롤 ──
-safeBind('btn-sim-start', () => {
-    term('manual sim start', 'ok');
-    if (typeof animateBalanceTuning === 'function') animateBalanceTuning();
-});
-safeBind('btn-sim-stop', () => { term('sim stopped', 'warn'); });
 
 // ── 랭킹 모달 ──
 safeBind('btn-ranking', () => {

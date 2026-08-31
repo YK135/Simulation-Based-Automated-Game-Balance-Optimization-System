@@ -52,6 +52,8 @@ function handleNodeResult(r) {
         case "boss":
             logLine(`⚔ ${r.enemy?.name || "적"}이(가) 나타났다!`, "crit");
             hideMapMode();
+            // 도감 "발견" 판정용 — 이번 전투의 전체 메시지를 새로 쌓기 시작
+            state.battleMessages = [];
             if (r.battle_state && typeof refreshBattle === "function") {
                 refreshBattle(r.battle_state);
                 // ★ 전투 시작 시 실제 첫 행동자에 맞춰 턴 처리

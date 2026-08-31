@@ -26,7 +26,7 @@
 }
 .player-art-icon {
     font-size: 80px;
-    color: var(--accent-cyan);
+    color: var(--accent-gold);
     text-shadow: 0 0 20px rgba(45, 212, 191, 0.4);
     z-index: 1;
 }
@@ -187,9 +187,10 @@
    - <img> 가 영역을 점유하지 않게 alt 텍스트 처리
    ═══════════════════════════════════════════════════════════ */
 
-/* src가 비어있는 img 자동 숨김 */
-img.player-art-img[src=""],
-img.player-art-img:not([src]) {
+/* src가 비어있는 img 자동 숨김 — 단, 스프라이트시트 모드(.sprite-sheet-active,
+   CharSprite.js가 background-image로 그리는 중이라 의도적으로 src가 없음)는 예외 */
+img.player-art-img[src=""]:not(.sprite-sheet-active),
+img.player-art-img:not([src]):not(.sprite-sheet-active) {
     display: none !important;
 }
 
@@ -204,8 +205,8 @@ img.player-art-img {
 /* ═══════════════════════════════════════════════════════════
    ▼▼▼ 배틀필드 이미지 안전망 ▼▼▼
    ═══════════════════════════════════════════════════════════ */
-img.combatant-art[src=""],
-img.combatant-art:not([src]) {
+img.combatant-art[src=""]:not(.sprite-sheet-active),
+img.combatant-art:not([src]):not(.sprite-sheet-active) {
     display: none !important;
 }
 img.combatant-art {
@@ -273,7 +274,7 @@ img.combatant-art {
 }
 
 .pip-section-title.special {
-    color: var(--accent-cyan, #00ffd0);
+    color: var(--accent-gold, #00ffd0);
 }
 
 .pip-item-list {
@@ -304,7 +305,7 @@ img.combatant-art {
 .pip-item.usable:hover {
     border-color: rgba(0,255,208,0.5);
     background: rgba(0,255,208,0.06);
-    color: var(--accent-cyan, #00ffd0);
+    color: var(--accent-gold, #00ffd0);
 }
 
 .pip-item.pip-special {
@@ -322,7 +323,7 @@ img.combatant-art {
 }
 
 .pip-item-badge {
-    color: var(--accent-cyan, #00ffd0);
+    color: var(--accent-gold, #00ffd0);
     margin-left: 6px;
     font-size: 8px;
 }
