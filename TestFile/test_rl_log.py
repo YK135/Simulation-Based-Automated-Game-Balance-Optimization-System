@@ -3,7 +3,7 @@
 test_rl_log.py — RL/행동 로그 (state, action, result) 회귀 테스트
 
 검증:
-  · RL 로그 파일 생성 (data/RL_LOG/)
+  · RL 로그가 BattleLog 테이블에 저장됨 (예전엔 data/RL_LOG/ 로컬 파일)
   · DB 유저 없어도(게스트) 로그 저장
   · 실드 데미지가 로그에 분리 기록 (shield_damage / hp_damage)
   · 아이템 사용 후 available_actions 갱신 (전투 인벤토리 기준)
@@ -14,15 +14,14 @@ test_rl_log.py — RL/행동 로그 (state, action, result) 회귀 테스트
 """
 import sys, os
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-import glob
 import json
-import os
-import shutil
 import sys
 
 from ai.Battlesession import BattleSession
 from ai.battle import EntitySnapshot, Buff
 from app.Shared import _save_rl_log
+from DB import get_session as db_session
+from DB.Models import BattleLog
 
 PASS = 0
 FAIL = 0
@@ -56,6 +55,9 @@ def make_enemy(hp=100000, shield=0.0):
 
 
 def main():
+    from DB import init_db
+    init_db()   # player_states/battle_logs 등 신규 테이블이 없으면 생성
+
     print("=" * 52)
     print(" RL 행동 로그 회귀 테스트")
     print("=" * 52)
@@ -118,23 +120,30 @@ def main():
     buffs = bs4.rl_log[0]["state"]["player"]["buffs"]
     check("버프 turns=3 기록", buffs and buffs[0]["turns"] == 3, str(buffs))
 
-    print("\n[5] 파일 저장 — DB 유저 없이(게스트)")
-    tmpdir = "data/RL_LOG"
-    before = set(glob.glob(os.path.join(tmpdir, "user_guest", "*.json")))
+    print("\n[5] DB 저장 (BattleLog 테이블) — DB 유저 없이(게스트)")
+    with db_session() as db:
+        before_max_id = db.query(BattleLog.id).order_by(BattleLog.id.desc()).first()
+        before_max_id = before_max_id[0] if before_max_id else 0
+
     gs = {"player": p4, "db_user_id": None}   # DB 유저 없음
     _save_rl_log(gs, bs4)
-    after = set(glob.glob(os.path.join(tmpdir, "user_guest", "*.json")))
-    new_files = after - before
-    check("게스트도 파일 생성", len(new_files) == 1, str(new_files))
-    if new_files:
-        payload = json.load(open(new_files.pop()))
-        meta = payload["meta"]
-        check("meta: job/level/enemy_count/enemies",
-              all(k in meta for k in ("job", "level", "enemy_count", "enemies")),
-              str(meta))
-        blob = json.dumps(payload, ensure_ascii=False)
-        check("개인정보 미저장 (email/nickname 없음)",
-              "email" not in blob and "nickname" not in blob)
+
+    with db_session() as db:
+        new_rows = db.query(BattleLog).filter(BattleLog.id > before_max_id).all()
+        check("게스트도 row 생성", len(new_rows) == 1, str(new_rows))
+        if new_rows:
+            row = new_rows[0]
+            check("게스트는 user_id=None", row.user_id is None, str(row.user_id))
+            meta = json.loads(row.meta_json)
+            check("meta: job/level/enemy_count/enemies",
+                  all(k in meta for k in ("job", "level", "enemy_count", "enemies")),
+                  str(meta))
+            records = json.loads(row.records_json)
+            check("records_json이 rl_log 레코드 그대로", len(records) == len(bs4.rl_log),
+                  f"{len(records)} vs {len(bs4.rl_log)}")
+            blob = row.meta_json + row.records_json
+            check("개인정보 미저장 (email/nickname 없음)",
+                  "email" not in blob and "nickname" not in blob)
 
     print("\n" + "=" * 52)
     print(f" 결과: {PASS} 통과 / {FAIL} 실패")

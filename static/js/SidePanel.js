@@ -29,21 +29,21 @@ const BESTIARY_DATA = [
     { name: '화염 슬라임', icon: '🔥',
       tip: '화염 계열 공격은 무효화된다.',
       discovery: {
-          tip: '(초안) 번개 공격으로 과부하 반응을 일으키면 큰 추가 피해를 줄 수 있다.',
+          tip: '번개 공격으로 과부하 반응을 일으키면 큰 추가 피해를 줄 수 있다.',
           match: (msgs) => msgs.some(m => m.includes('과부하')),
       } },
 
     { name: '빙결 슬라임', icon: '❄',
       tip: '빙결 계열 공격은 무효화된다.',
       discovery: {
-          tip: '(초안) 화염 공격으로 융해, 물리 공격으로 파쇄를 유도할 수 있다.',
+          tip: '화염 공격으로 융해, 물리 공격으로 파쇄를 유도할 수 있다.',
           match: (msgs) => msgs.some(m => m.includes('융해') || m.includes('파쇄')),
       } },
 
     { name: '번개 슬라임', icon: '⚡',
       tip: '번개 계열 공격은 무효화된다.',
       discovery: {
-          tip: '(초안) 화염 공격으로 과부하 반응을 일으킬 수 있다.',
+          tip: '화염 공격으로 과부하 반응을 일으킬 수 있다.',
           match: (msgs) => msgs.some(m => m.includes('과부하')),
       } },
 
@@ -55,10 +55,10 @@ const BESTIARY_DATA = [
       } },
 
     { name: '유령',       icon: '👻',
-      tip: '물리 저항이 강하지만 마법에는 약하다.',
+      tip: '회피율이 매우 높아 공격이 잘 빗나간다.',
       discovery: {
-          tip: '(초안) 빙결시킨 뒤 물리 공격으로 파쇄를 유도하면 물리 저항을 무시할 수 있다.',
-          match: (msgs) => msgs.some(m => m.includes('파쇄')),
+          tip: '연속공격 계열 스킬로 여러 번 몰아치면, 맞을수록 회피율이 낮아져 뒤로 갈수록 잘 맞는다.',
+          match: (msgs, name) => msgs.some(m => m.includes(name)) && msgs.some(m => m.includes('연속공격')),
       } },
 
     { name: '암살자',     icon: '🥷',
