@@ -1,0 +1,30 @@
+services:
+  - type: web
+    name: ai-rpg-engine
+    runtime: python
+    plan: free
+    buildCommand: pip install -r requirements.txt
+    startCommand: gunicorn App:app --workers 1 --threads 4 --worker-class gthread --bind 0.0.0.0:$PORT
+    envVars:
+      - key: SECRET_KEY
+        generateValue: true
+      - key: FLASK_DEBUG
+        value: "0"
+      - key: DATABASE_URL
+        fromDatabase:
+          name: ai-rpg-db
+          property: connectionString
+      - key: REDIS_URL
+        fromService:
+          type: keyvalue
+          name: ai-rpg-redis
+          property: connectionString
+
+  - type: keyvalue
+    name: ai-rpg-redis
+    plan: free
+    ipAllowList: []   # 외부 공개 접근 차단 — 같은 프로젝트 내부(private network)에서만 사용
+
+databases:
+  - name: ai-rpg-db
+    plan: free
