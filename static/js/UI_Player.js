@@ -147,23 +147,3 @@ async function usePotionFromPanel(itemName) {
     await useItemInField(itemName);
     // useItemInField 내부에서 state.player 갱신 + refreshPlayer() 호출됨
 }
-
-// 스킬 아이콘 매핑
-function skillIcon(sk) {
-    if (sk.includes('파이어'))   return '🔥';
-    if (sk.includes('힐'))       return '✚';
-    if (sk.includes('실드'))     return '⛨';
-    if (sk.includes('강타'))     return '⚒';
-    if (sk.includes('연속'))     return '⚔';
-    if (sk.includes('찌르기'))   return '⚡';
-    if (sk.includes('아이스'))   return '❄';
-    if (sk.includes('라이트닝')) return '⚡';
-    if (sk.includes('수비'))     return '⛨';
-    if (sk.includes('몸통'))     return '◆';
-    if (sk.includes('추진력'))   return '➤';
-    if (sk.includes('급소'))     return '✦';
-    if (sk.includes('홀리'))     return '✝';
-    if (sk.includes('축복'))     return '★';
-    if (sk.includes('셰이드'))   return '🌑';
-    return '★';
-}

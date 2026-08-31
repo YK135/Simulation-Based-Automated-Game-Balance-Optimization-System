@@ -165,28 +165,6 @@ function _getIconElement(section, slotIdx) {
 }
 
 
-/**
- * 모든 슬롯을 idle로 초기화 (새 전투 시작 시 등)
- */
-function resetAllSprites() {
-    // 타이머 클리어
-    Object.keys(_spriteTimers).forEach(function(k) {
-        if (_spriteTimers[k]) clearTimeout(_spriteTimers[k]);
-    });
-    Object.keys(_spriteTimers).forEach(function(k) {
-        delete _spriteTimers[k];
-    });
-
-    setCharState('player_battle', 'idle');
-    for (let i = 0; i < 3; i++) {
-        const slotEl = document.getElementById('enemy-slot-' + (i + 1));
-        if (slotEl && slotEl.style.display !== 'none') {
-            setCharState('enemy_battle:' + i, 'idle');
-        }
-    }
-}
-
-
 
 // ═══════════════════════════════════════════════════════════
 // 스프라이트 메타 정규화 + 재생 helper (정지 PNG / sprite sheet 둘 다 지원)
