@@ -24,6 +24,17 @@ function setCharState(target, stateName, opts) {
     const duration = opts.duration !== undefined ? opts.duration : 400;
     const persist  = opts.persist === true;
 
+    // ★ dead는 마지막 프레임에 정지된 채로 영구 유지되어야 함. 그런데
+    //   renderEnemySlots/renderPlayerCombatant는 매 렌더(다른 객체가 행동할 때마다)
+    //   죽은 슬롯에도 setCharState(...,'dead')를 계속 재호출한다 — _playSheet는
+    //   호출될 때마다 새 CSS 애니메이션을 프레임 0부터 재생하므로, 죽은 지 한참
+    //   지나도 매 렌더마다 첫 프레임(죽음 시트 초반 = 서 있는 자세)으로 리셋되어
+    //   "반투명 대기모션으로 돌아간 것처럼" 보이는 버그가 있었다. 이미 dead면
+    //   재적용을 건너뛰어 마지막 프레임에서 그대로 멈춰있게 한다.
+    if (stateName === 'dead' && _spriteCurrentState[target] === 'dead') {
+        return;
+    }
+
     // target 파싱
     let section, slotIdx = 0;
     if (target.indexOf(':') !== -1) {

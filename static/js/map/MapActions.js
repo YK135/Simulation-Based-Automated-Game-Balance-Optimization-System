@@ -33,7 +33,7 @@ async function chooseNode(nodeId, nodeType) {
 function _kickoffBattleTurn(bs) {
     const na = (bs && bs.next_actor) || "player";
     if (na === "enemy") {
-        if (typeof showEnemyTurn === "function") showEnemyTurn();
+        if (typeof showEnemyTurn === "function") showEnemyTurn(bs && bs.acting_enemy_idx);
         // 적 선공 — auto 루프 시작 (battleAction이 done/player까지 진행)
         if (typeof battleAction === "function") {
             setTimeout(() => battleAction("auto"), 500);

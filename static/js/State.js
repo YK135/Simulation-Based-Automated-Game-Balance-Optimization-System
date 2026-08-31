@@ -219,10 +219,10 @@ const CHAR_IMAGES = {
         '마법사': {
             // ★ "Free/Characters/1" 에셋 적용 (walk→idle 대용, skill 프레임은 없어서 보류)
             idle:   { src: '/img/sprites/player/mage_A.png', type: 'sheet', frames: 8, fps: 8,  loop: true },
-            attack: { src: '/img/sprites/player/mage_B.png', type: 'sheet', frames: 8, fps: 14, loop: false },
-            skill:  '/img/sprites/player/mage_C.png',
-            hurt:   { src: '/img/sprites/player/mage_D.png', type: 'sheet', frames: 8, fps: 14, loop: false },
-            dead:   { src: '/img/sprites/player/mage_E.png', type: 'sheet', frames: 8, fps: 10, loop: false },
+            attack: { src: '/img/sprites/player/mage_B.png', type: 'sheet', frames: 8, fps: 8, loop: false },
+            skill:  { src: '/img/sprites/player/mage_C.png', type: 'sheet', frames: 8, fps: 8, loop: false },
+            hurt:   { src: '/img/sprites/player/mage_D.png', type: 'sheet', frames: 8, fps: 8, loop: false },
+            dead:   { src: '/img/sprites/player/mage_E.png', type: 'sheet', frames: 8, fps: 8, loop: false },
         },
         '탱커': {
             idle:   '/img/sprites/player/tanker_A.png',

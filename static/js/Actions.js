@@ -115,7 +115,7 @@ async function battleAction(action) {
         state.battleMessages.push(...messages);
         const bsForRefresh = { ...r, messages: [] };
         refreshBattle(bsForRefresh);
-        showEnemyTurn();
+        showEnemyTurn(r.acting_enemy_idx);
 
         if (typeof playBattleSequence === 'function') {
             await playBattleSequence(action, { ...r, messages });

@@ -34,12 +34,20 @@ function showPlayerTurn() {
 
     // 배틀필드 acting 효과
     document.querySelector('.combatant.player')?.classList.add('acting');
-    document.querySelector('.combatant.enemy')?.classList.remove('acting');
+    // ★ querySelector('.combatant.enemy')는 슬롯1만 잡아서 다대일에서 실제
+    //   행동 중이던 슬롯(2·3)의 acting이 안 지워지고 계속 펄스(확대)되던 버그가
+    //   있었음 — 모든 적 슬롯에서 제거.
+    for (let i = 0; i < 3; i++) {
+        document.getElementById('enemy-slot-' + (i + 1))?.classList.remove('acting');
+    }
 }
 
 // ATB 시각화: 적 차례 (행동 불가)
-
-function showEnemyTurn() {
+//   actingIdx: 실제 행동 중인 적의 슬롯 인덱스(0~2, bs.acting_enemy_idx).
+//   과거엔 항상 document.querySelector('.combatant.enemy')(=슬롯1 고정)에만
+//   acting을 걸어서, 다대일 전투에서 슬롯2·3이 행동/피격할 때도 엉뚱하게
+//   슬롯1의 박스가 커지는(pulse) 것처럼 보이는 버그가 있었음.
+function showEnemyTurn(actingIdx) {
     // 버튼 비활성화 (동작 차단)
     ['btn-attack','btn-skill','btn-item','btn-escape'].forEach(id => {
         const btn = document.getElementById(id);
@@ -68,9 +76,13 @@ function showEnemyTurn() {
         ind.textContent = '◀ ENEMY TURN';
     }
 
-    // 배틀필드 acting 효과
+    // 배틀필드 acting 효과 — 실제 행동 중인 슬롯에만 적용
     document.querySelector('.combatant.player')?.classList.remove('acting');
-    document.querySelector('.combatant.enemy')?.classList.add('acting');
+    for (let i = 0; i < 3; i++) {
+        document.getElementById('enemy-slot-' + (i + 1))?.classList.remove('acting');
+    }
+    const idx = (typeof actingIdx === 'number' && actingIdx >= 0) ? actingIdx : 0;
+    document.getElementById('enemy-slot-' + (idx + 1))?.classList.add('acting');
 }
 
 // 다대일 — 슬롯 클릭으로 타깃 변경
@@ -191,11 +203,11 @@ function renderBattleTurnState(bs) {
     if (nextActor === 'player') {
         showPlayerTurn();
     } else if (nextActor === 'enemy') {
-        showEnemyTurn();
+        showEnemyTurn(bs.acting_enemy_idx);
     } else if (nextActor === 'done') {
         // 종료 — battleAction에서 처리
     } else {
-        showEnemyTurn();
+        showEnemyTurn(bs.acting_enemy_idx);
     }
 }
 
