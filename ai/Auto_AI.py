@@ -5,6 +5,7 @@ Auto_AI.py
 """
 from __future__ import annotations
 from ai.battle import Action, EntitySnapshot, SKILL_META, ITEM_META, MONSTER_SKILL_META, get_monster_kit
+from ai.battle.Elements import is_element_immune
 
 ATTACK_TYPES = {"physical", "magical", "multi_hit", "tank_attack", "counter"}
 SUPPORT_TYPES = {"buff", "heal", "shield", "debuff"}
@@ -74,6 +75,13 @@ def _skill_efficiency(skill_name: str, attacker: EntitySnapshot, defender: Entit
         expected_hits = 2.2
         base = attacker.effective_stg()
         return (base * expected_hits) / real_mp_cost
+
+    # 속성 스킬인데 상대가 그 속성에 완전 면역이면(예: 화염 슬라임에게 화염 스킬)
+    # 실제 데미지가 0이 되므로 효율 계산에서 아예 배제 — AI가 계속 헛스킬을 반복해
+    # 이기지 못하는 상황(예: 마법사 vs 화염 슬라임 승률 0%)을 막는다.
+    element = meta.get("element")
+    if element and defender is not None and is_element_immune(defender, element):
+        return -1.0
 
     if stype == "physical":
         dmg = attacker.effective_stg() * meta.get("mult", 1.0) * meta.get("hits", 1)
