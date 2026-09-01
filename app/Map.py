@@ -68,6 +68,19 @@ STAT_SCALE         = {1: 1.00, 2: 0.90, 3: 0.80}
 ELITE_STAT_SCALE   = {1: 1.00, 2: 0.90}
 
 
+def _early_game_multi_scale(player_lv: int) -> float:
+    """다대일 조기 완화 (밸런스 v6) — n_enemies 롤은 레벨과 무관하게 25%
+    확률로 3마리가 나올 수 있는데, 전사가 광역기(슬래시1)를 배우기 전인
+    Lv1~5 구간에서는 단일 대상 스킬로 3마리를 상대해야 해서 기존 -20%
+    보정만으로는 부족했음 (MC 실측: 전사 Lv1 1v3 30%, 목표 45%↑).
+    STAT_SCALE/ELITE_STAT_SCALE 위에 곱해서 적용."""
+    if player_lv <= 2:
+        return 0.80
+    if player_lv <= 5:
+        return 0.90
+    return 1.0
+
+
 def _pick_grade(pool: dict) -> str:
     """가중치 기반 난이도 선택."""
     from random import choices as _rc
@@ -387,6 +400,9 @@ def map_choose():
             n_enemies  = 1 if rd <= 11 else (2 if rd <= 15 else 3)
             grade_pool = NORMAL_GRADE_3 if n_enemies == 3 else NORMAL_GRADE_POOL
             scale      = STAT_SCALE[n_enemies]
+
+        if n_enemies > 1:
+            scale *= _early_game_multi_scale(player.lv)
 
         enemies, grades = _make_enemies(hook, n_enemies, grade_pool, chapter,
                                          layer=node.layer, is_elite=(node_type == "elite"))

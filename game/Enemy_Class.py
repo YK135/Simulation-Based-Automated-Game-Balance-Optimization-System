@@ -86,13 +86,32 @@ GRADE_MULT = {
 }
 
 
+def _level_curve_mult(lv: int) -> float:
+    """몬스터 스탯 보정 배율 (밸런스 v6).
+
+    MC 실측 결과 1v1은 Lv1부터 이미 99~100% — 레벨이 오르면서 벌어지는
+    문제가 아니라 애초에 단일 몬스터가 전반적으로 약했음. 여기에 더해
+    game/Lv.py의 플레이어 성장식(`기본값 + lv // N`, 레벨업당 증가폭 자체가
+    커지는 가속 성장)과 몬스터 쪽 선형 성장(`기본값 + 계수*(lv-1)`)의 격차가
+    후반으로 갈수록 벌어짐. 그래서 전 구간에 기본 상향을 걸고, 레벨이
+    오를수록 추가로 더 올린다. 다대일(1v2/1v3/엘리트)은 이 위에 별도
+    STAT_SCALE로 낮추므로 과하게 어려워지지 않음 — 실측하며 조정.
+    보스(중간/최종)는 이미 별도로 잘 맞춰져 있어 이 배율을 안 탐
+    (Make_MidBoss/Make_FinalBoss는 _apply_grade를 안 씀).
+    """
+    if lv <= 5:
+        return 1.10
+    return 1.10 + 0.06 * (lv - 5)
+
+
 def _apply_grade(unit: Unit, grade: str) -> Unit:
     m = GRADE_MULT[grade]
-    unit.hp    = int(unit.hp    * m["hp"])
-    unit.stg   = round(unit.stg   * m["stg"],   1)
-    unit.arm   = round(unit.arm   * m["arm"],   1)
-    unit.sparm = round(unit.sparm * m["sparm"], 1)
-    unit.sp    = round(unit.sp    * m["sp"],    1)
+    lvm = _level_curve_mult(unit.lv)
+    unit.hp    = int(unit.hp    * m["hp"]    * lvm)
+    unit.stg   = round(unit.stg   * m["stg"]   * lvm, 1)
+    unit.arm   = round(unit.arm   * m["arm"]   * lvm, 1)
+    unit.sparm = round(unit.sparm * m["sparm"] * lvm, 1)
+    unit.sp    = round(unit.sp    * m["sp"]    * lvm, 1)
     unit.grade = grade
     return unit
 
