@@ -98,6 +98,11 @@ def _level_curve_mult(lv: int) -> float:
     STAT_SCALE로 낮추므로 과하게 어려워지지 않음 — 실측하며 조정.
     보스(중간/최종)는 이미 별도로 잘 맞춰져 있어 이 배율을 안 탐
     (Make_MidBoss/Make_FinalBoss는 _apply_grade를 안 씀).
+
+    ★ 다대일 초반 완화(app/Map.py의 _early_game_multi_scale)와 이 함수는
+      서로 다른 문제를 겨냥한 별도 배율이라 함께 곱해진다 — 다음에 밸런스를
+      다시 만질 땐 이 함수만 보지 말고 그쪽도 같이 봐야 최종 스탯을 제대로
+      가늠할 수 있음(GRADE_MULT * 이 배율 * STAT_SCALE * _early_game_multi_scale).
     """
     if lv <= 5:
         return 1.10

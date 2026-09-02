@@ -151,27 +151,45 @@ def _persist_session(uid: str, gs: dict) -> None:
     except (TypeError, ValueError):
         return  # DB 유저 생성이 실패했던 게스트는 FK가 없어 DB 저장 스킵 (Redis만)
 
+    def _apply_snapshot_to_row(row) -> None:
+        row.player_json     = json.dumps(snap["player"], ensure_ascii=False)
+        row.inventory_json  = json.dumps(snap["inventory"], ensure_ascii=False)
+        row.map_json        = json.dumps(snap["map"], ensure_ascii=False) if snap["map"] else None
+        row.chapter          = snap["chapter"]
+        row.turn              = snap["turn"]
+        row.map_turn          = snap["map_turn"]
+        row.mid_boss_cleared  = snap["mid_boss_cleared"]
+        row.gold              = snap["gold"]
+        row.run_id            = snap["run_id"]
+        row.pending_node_id   = snap["pending_node_id"]
+        row.battle_node_type  = snap["battle_node_type"]
+        row.battle_map_layer  = snap["battle_map_layer"]
+
     try:
         from DB import get_session as db_session
         from DB.Models import PlayerState
+        from sqlalchemy.exc import IntegrityError
 
         with db_session() as db:
             row = db.query(PlayerState).filter_by(user_id=user_id).first()
             if row is None:
+                # ★ 멀티 스레드(gunicorn --threads N)에서 같은 user_id로 두 요청이
+                #   동시에 여기 들어오면 둘 다 row=None을 보고 INSERT를 시도할 수
+                #   있음 — PK 충돌(IntegrityError) 시 조용히 버리지 않고 UPDATE로
+                #   전환해서 재시도.
                 row = PlayerState(user_id=user_id)
                 db.add(row)
-            row.player_json     = json.dumps(snap["player"], ensure_ascii=False)
-            row.inventory_json  = json.dumps(snap["inventory"], ensure_ascii=False)
-            row.map_json        = json.dumps(snap["map"], ensure_ascii=False) if snap["map"] else None
-            row.chapter          = snap["chapter"]
-            row.turn              = snap["turn"]
-            row.map_turn          = snap["map_turn"]
-            row.mid_boss_cleared  = snap["mid_boss_cleared"]
-            row.gold              = snap["gold"]
-            row.run_id            = snap["run_id"]
-            row.pending_node_id   = snap["pending_node_id"]
-            row.battle_node_type  = snap["battle_node_type"]
-            row.battle_map_layer  = snap["battle_map_layer"]
+                _apply_snapshot_to_row(row)
+                try:
+                    db.flush()
+                except IntegrityError:
+                    db.rollback()
+                    row = db.query(PlayerState).filter_by(user_id=user_id).first()
+                    if row is None:
+                        raise
+                    _apply_snapshot_to_row(row)
+            else:
+                _apply_snapshot_to_row(row)
     except Exception as e:
         print(f"[Session] DB 저장 실패: {e}")
 

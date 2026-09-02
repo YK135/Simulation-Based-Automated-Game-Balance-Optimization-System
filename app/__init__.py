@@ -15,7 +15,7 @@ for _sub in ["game", "ai", "core", "interface"]:
     if _p not in sys.path:
         sys.path.insert(0, _p)
 
-from flask import Flask, send_from_directory, session
+from flask import Flask, send_from_directory, session, request
 from DB import init_db
 
 # Blueprint import — 파일명 대문자 기준 (깃허브 파일명)
@@ -51,6 +51,10 @@ def create_app() -> Flask:
     # write-through. 라우트마다 저장 호출을 흩뿌리지 않기 위한 전역 훅.
     @app.after_request
     def _persist_game_session(resp):
+        # ★ 상태를 바꾸는 라우트는 전부 POST — GET(상태 조회 전용)은 아무것도
+        #   안 바뀌므로 매 요청마다 Redis+DB에 다시 쓰는 걸 건너뛴다.
+        if request.method == "GET":
+            return resp
         uid = session.get("user_id")
         if uid and uid in GAME_SESSIONS:
             try:

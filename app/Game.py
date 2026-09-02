@@ -55,11 +55,20 @@ def new_game():
     except Exception as e:
         print(f"[DB] User creation failed: {e}")
 
+    # ★ 새 게임을 만들 때마다 db_user_id가 새로 발급되면서 session["user_id"]도
+    #   매번 바뀌는데, 예전 uid를 GAME_SESSIONS에서 안 지우면(같은 브라우저로
+    #   "새 게임"을 반복할 때마다) 워커 메모리에 계속 쌓여서 새지도록 방치됨 —
+    #   새 세션을 만들기 전에 이전 uid 항목을 정리.
+    old_uid = session.get("user_id")
+
     # Flask session user_id — db_user_id를 그대로 세션 키로 사용해야
     # 워커 재시작/Redis-DB 복구 시 "이 쿠키가 몇 번 유저인지" 바로 알 수 있음.
     # DB 생성이 실패한 경우에만 예전처럼 uuid4로 폴백(게스트로 계속 진행은 됨).
     session["user_id"] = str(db_user_id) if db_user_id is not None else str(uuid.uuid4())
     uid = session["user_id"]
+
+    if old_uid and old_uid != uid:
+        GAME_SESSIONS.pop(old_uid, None)
 
     player = create_player_by_job(name, job)
 

@@ -322,9 +322,13 @@ async function playBattleSequence(action, bs) {
             const enemyName = en ? en.name : '';
 
             // 적 모션 (attack/skill) — 실제 시트 길이만큼 대기
+            // ★ 예전엔 메시지에 숫자 '1'/'2'가 있으면 스킬로 판정했는데, 데미지
+            //   숫자에도 1/2가 흔히 섞여있어 평범한 공격("... | 12 데미지")까지
+            //   스킬로 오판되는 버그가 있었음. 일반 공격 메시지는 항상
+            //   "이름 → 공격..." 형태(ai/battle_session/Enemy_Actions.py)라
+            //   "→ 공격"이 아닌 경우만 스킬로 판정.
             const isEnemySkill = emsgs.some(m =>
-                m.includes('홀리볼트') || m.includes('사제힐') || m.includes('사제축복') ||
-                m.includes('1') || m.includes('2')  // 스킬명에 숫자 포함
+                m.includes('→') && !m.includes('→ 공격')
             );
             const motionState = isEnemySkill ? 'skill' : 'attack';
             const motionTime = _animDuration('enemy_battle', enemyName, motionState, SEQ_TIMING.ENEMY_ACTION);

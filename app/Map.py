@@ -73,7 +73,11 @@ def _early_game_multi_scale(player_lv: int) -> float:
     확률로 3마리가 나올 수 있는데, 전사가 광역기(슬래시1)를 배우기 전인
     Lv1~5 구간에서는 단일 대상 스킬로 3마리를 상대해야 해서 기존 -20%
     보정만으로는 부족했음 (MC 실측: 전사 Lv1 1v3 30%, 목표 45%↑).
-    STAT_SCALE/ELITE_STAT_SCALE 위에 곱해서 적용."""
+    STAT_SCALE/ELITE_STAT_SCALE 위에 곱해서 적용.
+
+    ★ game/Enemy_Class.py의 _level_curve_mult()와는 별개 배율(다른 문제를
+      겨냥함)이라 두 배율이 함께 곱해진다 — 밸런스 재조정 시 이 함수만
+      보지 말고 그쪽도 같이 확인할 것."""
     if player_lv <= 2:
         return 0.80
     if player_lv <= 5:

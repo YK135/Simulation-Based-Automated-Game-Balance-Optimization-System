@@ -93,13 +93,25 @@ async function battleAction(action) {
 
     document.getElementById('skill-menu')?.classList.remove('active');
     document.getElementById('item-menu')?.classList.remove('active');
-    showEnemyTurn();
+    // ★ 여기서 바로 showEnemyTurn()을 부르면 실제 행동할 적 인덱스를 아직
+    //   몰라서 슬롯1로 기본값 처리되는데, 다대일 전투에서 2·3번 슬롯이 행동할
+    //   차례면 응답이 오기 전까지 슬롯1이 "행동 중" 상태로 잘못 반짝임 —
+    //   서버 응답으로 acting_enemy_idx를 알고 난 뒤(아래)에만 호출.
 
     try {
         const r = await api('/battle/action', { action });
         if (!r.ok) {
             toast(r.error || 'action 실패', 'error');
-            showPlayerTurn();
+            // ★ 서버가 "전투 중이 아닙니다"를 주는 경우는 워커 재시작 등으로
+            //   진행 중이던 전투(gs["battle"])가 사라져 세션이 복구된 상태 —
+            //   클라이언트는 여전히 전투 화면인 채로 계속 같은 400을 재시도하며
+            //   멈춰있게 되므로, 실제 서버 상태로 다시 동기화한다.
+            if (r.error && r.error.includes('전투 중이 아닙니다')) {
+                state.inBattle = false;
+                await loadStatus();
+            } else {
+                showPlayerTurn();
+            }
             return;
         }
 
@@ -171,13 +183,18 @@ async function battleAction(action) {
             if (r.winner === 'player') {
                 const _gold = r.gold_gained || 0;
                 const _items = r.items_gained || [];
-                if (_gold > 0 || _items.length > 0) {
+                // ★ RewardModal.js가 relics_gained도 같이 보므로(유물 UI 영역
+                //   예약돼 있음), 여기서도 같이 챙겨야 팝업엔 뜨는데 모험 기록엔
+                //   빠지는 불일치가 안 생김.
+                const _relics = r.relics_gained || [];
+                if (_gold > 0 || _items.length > 0 || _relics.length > 0) {
                     const _itemPart = _items.length
                         ? _items.map(id => (typeof itemLabel === 'function' ? itemLabel(id) : id)).join(', ')
                         : '';
                     const _parts = [];
                     if (_gold > 0) _parts.push(`${_gold} G`);
                     if (_itemPart) _parts.push(_itemPart);
+                    if (_relics.length) _parts.push(`유물 ${_relics.length}개`);
                     logAdventure(`전리품 획득: ${_parts.join(' / ')}`, 'loot');
                 }
                 if (typeof showRewardModal === 'function') await showRewardModal(r);
