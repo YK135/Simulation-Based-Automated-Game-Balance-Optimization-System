@@ -148,56 +148,56 @@ body {
 .battle-stage.battle-bg-normal-early {
     background-image:
         linear-gradient(180deg, rgba(2,5,7,0.04), rgba(2,5,7,0.42)),
-        url('../img/backgrounds/battle_ch1_sun.png'),
+        url('../img/backgrounds/battle_ch1_sun.jpg'),
         radial-gradient(circle at 50% 30%, rgba(199,164,93,0.14), transparent 34%),
         linear-gradient(180deg, #0a1519 0%, #05090b 100%);
 }
 .battle-stage.battle-bg-normal-mid {
     background-image:
         linear-gradient(180deg, rgba(2,5,7,0.06), rgba(2,5,7,0.46)),
-        url('../img/backgrounds/battle_ch1_sunset.png'),
+        url('../img/backgrounds/battle_ch1_sunset.jpg'),
         radial-gradient(circle at 50% 30%, rgba(224,150,60,0.14), transparent 34%),
         linear-gradient(180deg, #171008 0%, #070504 100%);
 }
 .battle-stage.battle-bg-normal-late {
     background-image:
         linear-gradient(180deg, rgba(2,5,7,0.10), rgba(2,5,7,0.54)),
-        url('../img/backgrounds/battle_ch1_night.png'),
+        url('../img/backgrounds/battle_ch1_night.jpg'),
         radial-gradient(circle at 50% 30%, rgba(120,150,200,0.12), transparent 34%),
         linear-gradient(180deg, #0a141c 0%, #05080b 100%);
 }
 .battle-stage.battle-bg-midboss {
     background-image:
         linear-gradient(180deg, rgba(5,5,16,0.08), rgba(5,5,16,0.50)),
-        url('../img/backgrounds/battle_ch1_midboss.png'),
+        url('../img/backgrounds/battle_ch1_midboss.jpg'),
         radial-gradient(circle at 50% 35%, rgba(120,80,224,0.16), transparent 32%),
         linear-gradient(180deg, #080d18 0%, #03060c 100%);
 }
 .battle-stage.battle-bg-finalboss {
     background-image:
         linear-gradient(180deg, rgba(15,5,5,0.20), rgba(15,5,5,0.60)),
-        url('../img/backgrounds/battle_ch2_finalboss.png'),
+        url('../img/backgrounds/battle_ch2_finalboss.jpg'),
         radial-gradient(circle at 50% 35%, rgba(120,80,224,0.20), transparent 32%),
         linear-gradient(180deg, #080616 0%, #03030a 100%);
 }
 .battle-stage.battle-bg-ch2-entrance {
     background-image:
         linear-gradient(180deg, rgba(2,5,7,0.04), rgba(2,5,7,0.42)),
-        url('../img/backgrounds/battle_ch2_entrance.png'),
+        url('../img/backgrounds/battle_ch2_entrance.jpg'),
         radial-gradient(circle at 50% 30%, rgba(180,150,110,0.10), transparent 34%),
         linear-gradient(180deg, #0b0d0e 0%, #050607 100%);
 }
 .battle-stage.battle-bg-ch2-inner {
     background-image:
         linear-gradient(180deg, rgba(2,5,7,0.05), rgba(2,5,7,0.46)),
-        url('../img/backgrounds/battle_ch2_inner.png'),
+        url('../img/backgrounds/battle_ch2_inner.jpg'),
         radial-gradient(circle at 50% 30%, rgba(90,130,180,0.12), transparent 34%),
         linear-gradient(180deg, #080d12 0%, #040608 100%);
 }
 .battle-stage.battle-bg-ch2-depths {
     background-image:
         linear-gradient(180deg, rgba(4,4,14,0.06), rgba(4,4,14,0.48)),
-        url('../img/backgrounds/battle_ch2_depths.png'),
+        url('../img/backgrounds/battle_ch2_depths.jpg'),
         radial-gradient(circle at 50% 35%, rgba(120,80,224,0.16), transparent 32%),
         linear-gradient(180deg, #090818 0%, #03030a 100%);
 }

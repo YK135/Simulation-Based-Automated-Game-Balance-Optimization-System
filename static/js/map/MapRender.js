@@ -8,9 +8,13 @@ function renderMap(mapState) {
     // ── 챕터 배경 이미지 적용 ──
     /*
       챕터 배경 이미지 자리
-      Chapter 1: static/img/map/chapter_1_bg.png
-      Chapter 2: static/img/map/chapter_2_bg.png
+      Chapter 1: static/img/map/chapter_1_bg.jpg
+      Chapter 2: static/img/map/chapter_2_bg.jpg
       권장 크기: 1280x720px, 16:9, 어두운 배경 권장
+      ★ PNG가 아니라 JPEG로 — 이 배경들은 알파 채널이 필요 없는데(완전 불투명)
+        PNG로 저장하면 장당 1.8MB가 넘어가 새 게임 시작 직후 맵 진입이 눈에
+        띄게 느려짐. JPEG q85 변환 시 장당 ~200KB로 90% 가까이 줄고 화질
+        차이는 거의 안 보임 — 새 배경을 추가할 때도 JPEG로 저장할 것.
     */
     // 배경은 실제 노드맵 뷰포트인 #map-scroll에만 적용 (map-mode는 clipping만).
     // map-mode에 넣으면 header/overlay/footer까지 감싸 이미지가 아래로 새 보임.
@@ -268,10 +272,10 @@ function _mapBackgroundForState(mapState) {
     const layer = mapState.current_layer || 0;
 
     if (chapter === 1) {
-        if (layer >= 11) return "/img/map/chapter_1_night.png";
-        if (layer >= 6) return "/img/map/chapter_1_sunset.png";
-        return "/img/map/chapter_1_sun.png";
+        if (layer >= 11) return "/img/map/chapter_1_night.jpg";
+        if (layer >= 6) return "/img/map/chapter_1_sunset.jpg";
+        return "/img/map/chapter_1_sun.jpg";
     }
 
-    return `/${mapState.bg_image || `img/map/chapter_${chapter}_bg.png`}`;
+    return `/${mapState.bg_image || `img/map/chapter_${chapter}_bg.jpg`}`;
 }

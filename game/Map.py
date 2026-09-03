@@ -234,10 +234,12 @@ class FloorMap:
             "nodes":          [n.to_dict() for n in self.nodes.values()],
             "available":      [n.node_id for n in self.get_available()],
             # 배경 이미지 자리
-            # Chapter 1: static/img/map/chapter_1_bg.png
-            # Chapter 2: static/img/map/chapter_2_bg.png
+            # Chapter 1: static/img/map/chapter_1_bg.jpg
+            # Chapter 2: static/img/map/chapter_2_bg.jpg
             # 권장 크기: 1280x720px, 16:9, 어두운 배경 권장
-            "bg_image": f"img/map/chapter_{self.chapter}_bg.png",
+            # ★ PNG 아니라 JPEG로 — 알파 불필요한 배경을 PNG로 저장하면 장당
+            #   1.8MB 넘어감(JPEG q85 변환 시 ~200KB, 화질 차이는 안 보임).
+            "bg_image": f"img/map/chapter_{self.chapter}_bg.jpg",
         }
 
     # ── 선택 처리 ──────────────────────────────
