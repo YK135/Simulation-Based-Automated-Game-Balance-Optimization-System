@@ -194,7 +194,7 @@ function logAdventure(msg, type = '') {
                String(d.getMinutes()).padStart(2, '0');
     const line = document.createElement('div');
     line.className = 'adv-line ' + type;
-    line.innerHTML = `<span class="adv-ts">${ts}</span><span>${msg}</span>`;
+    line.innerHTML = `<span class="adv-ts">${ts}</span><span>${escapeHtml(msg)}</span>`;
     el.appendChild(line);
     while (el.children.length > 30) el.removeChild(el.firstChild);
 }

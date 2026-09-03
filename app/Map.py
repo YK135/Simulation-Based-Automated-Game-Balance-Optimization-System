@@ -629,7 +629,10 @@ import random  # _pick_event에서 사용
 def shop_buy():
     """
     상점 아이템 구매.
-    요청: { "item_id": "HP_M_potion", "price": 50 }
+    요청: { "item_id": "HP_M_potion" }
+    ★ price는 요청 바디로 받지 않는다 — 클라이언트가 보낸 값을 그대로 믿으면
+      {"price": 0}이나 음수 price로 무료 구매/골드 무한 생성이 가능해짐.
+      항상 _get_shop_items(player.lv)의 서버 측 가격표에서 조회한다.
     """
     gs = _get_session()
     if not gs:
@@ -637,8 +640,13 @@ def shop_buy():
 
     data    = request.get_json() or {}
     item_id = data.get("item_id", "")
-    price   = int(data.get("price", 0))
     gold    = gs.get("gold", 0)
+
+    shop_items = _get_shop_items(gs["player"].lv)
+    item_meta  = next((it for it in shop_items if it["id"] == item_id), None)
+    if item_meta is None:
+        return jsonify({"ok": False, "error": "판매하지 않는 아이템입니다."}), 400
+    price = item_meta["price"]
 
     if gold < price:
         return jsonify({"ok": False, "error": f"골드가 부족합니다. (보유: {gold}G)"}), 400

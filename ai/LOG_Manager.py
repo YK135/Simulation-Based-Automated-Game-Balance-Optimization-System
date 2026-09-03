@@ -37,6 +37,32 @@ def _ensure_dirs():
 
 
 # ────────────────────────────────────────────
+# 파일명 안전화 — result.player_name(플레이어가 /api/new_game에 직접
+# 입력하는 닉네임, app/Game.py 참고)이 검증 없이 이 모듈까지 흘러들어와
+# 그대로 파일명 f-string에 들어감. "../../etc/passwd" 같은 이름을 쓰면
+# os.path.join이 경로 순회를 막아주지 않으므로, 파일명에 쓰기 전에
+# 안전한 문자만 남기고 나머지는 치환한다 (경로 구분자 포함 전부 제거).
+# ────────────────────────────────────────────
+import re as _re
+_UNSAFE_FILENAME_CHARS = _re.compile(r"[^0-9A-Za-z가-힣._-]")
+
+def _safe_filename_part(s: str, fallback: str = "unknown", max_len: int = 40) -> str:
+    s = _UNSAFE_FILENAME_CHARS.sub("_", str(s or ""))
+    s = s.strip("._") or fallback
+    return s[:max_len]
+
+
+def _safe_join(base_dir: str, filename: str) -> str:
+    """base_dir 하위로 경로가 실제로 벗어나지 않는지 최종 확인(2중 방어)."""
+    path = os.path.join(base_dir, filename)
+    real_base = os.path.realpath(base_dir)
+    real_path = os.path.realpath(path)
+    if os.path.commonpath([real_base, real_path]) != real_base:
+        raise ValueError(f"경로가 저장 디렉토리를 벗어남: {filename!r}")
+    return path
+
+
+# ────────────────────────────────────────────
 # 로그 포맷터 — 사람이 읽기 좋은 텍스트 변환
 # ────────────────────────────────────────────
 
@@ -220,9 +246,11 @@ class LogManager:
     ) -> str:
         """시뮬레이션 로그 저장 — JSON + 텍스트 동시 저장"""
         ts       = datetime.now().strftime("%Y%m%d_%H%M%S")
-        base     = f"{result.player_name}_lv{player_lv}_{result.enemy_name}_{difficulty}_{ts}"
-        json_path = os.path.join(SIM_DIR, base + ".json")
-        txt_path  = os.path.join(SIM_DIR, base + ".txt")
+        safe_player = _safe_filename_part(result.player_name, "player")
+        safe_enemy  = _safe_filename_part(result.enemy_name, "enemy")
+        base     = f"{safe_player}_lv{player_lv}_{safe_enemy}_{difficulty}_{ts}"
+        json_path = _safe_join(SIM_DIR, base + ".json")
+        txt_path  = _safe_join(SIM_DIR, base + ".txt")
 
         extra = {
             "log_type": "simulation", "difficulty": difficulty,
@@ -260,9 +288,11 @@ class LogManager:
     ) -> str:
         """플레이어 실전 로그 저장 — JSON + 텍스트 동시 저장"""
         ts        = datetime.now().strftime("%Y%m%d_%H%M%S")
-        base      = f"{result.player_name}_lv{player_lv}_{result.enemy_name}_{ts}"
-        json_path = os.path.join(PLAYER_DIR, base + ".json")
-        txt_path  = os.path.join(PLAYER_DIR, base + ".txt")
+        safe_player = _safe_filename_part(result.player_name, "player")
+        safe_enemy  = _safe_filename_part(result.enemy_name, "enemy")
+        base      = f"{safe_player}_lv{player_lv}_{safe_enemy}_{ts}"
+        json_path = _safe_join(PLAYER_DIR, base + ".json")
+        txt_path  = _safe_join(PLAYER_DIR, base + ".txt")
 
         extra = {
             "log_type": "player", "player_lv": player_lv,

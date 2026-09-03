@@ -36,7 +36,35 @@ def create_app() -> Flask:
         static_folder=static_dir,
         static_url_path=""   # ← index.html이 "css/Base.css", "js/Api.js" 상대경로 사용
     )
-    app.secret_key = os.environ.get("SECRET_KEY", "dev-secret-change-in-prod")
+    _secret_key = os.environ.get("SECRET_KEY")
+    if not _secret_key:
+        # ★ 세션 쿠키 서명 키가 없으면 이 값으로 조용히 폴백했었는데, 이 문자열은
+        #   소스에 커밋돼 있어 공개된 값 — 이 상태로 배포되면 누구나 SECRET_KEY를
+        #   알고 있으니 session["user_id"]를 위조해서 다른 플레이어 세션을 가로챌
+        #   수 있음. Render 배포(render.yaml의 generateValue: true)는 안전하지만,
+        #   그 외 환경(로컬을 "프로덕션"처럼 돌리거나 다른 호스팅)에서 SECRET_KEY를
+        #   깜빡하면 아무 경고 없이 이 취약한 상태로 떠버렸음 — 최소한 로그에는
+        #   눈에 띄게 남긴다(로컬 개발 편의를 위해 부팅을 막지는 않음).
+        _secret_key = "dev-secret-change-in-prod"
+        print(
+            "[SECURITY WARNING] SECRET_KEY 환경변수가 설정되지 않아 "
+            "하드코드된 기본값을 사용합니다. 이 값은 소스에 공개돼 있어 "
+            "세션 위조가 가능합니다 — 실제 배포 전 반드시 SECRET_KEY를 "
+            "설정하세요 (.env.example 참고)."
+        )
+    app.secret_key = _secret_key
+
+    # 세션 쿠키 보안 옵션 — HTTPONLY는 Flask 기본값이 True라 원래도 안전했지만
+    # 명시해서 향후 Flask 버전이 기본값을 바꿔도 흔들리지 않게 고정.
+    # SECURE(HTTPS에서만 쿠키 전송)는 로컬 http 개발환경에서 켜면 쿠키가 아예
+    # 안 붙어서 로그인이 깨지므로, Render가 서비스에 자동 주입하는 RENDER
+    # 환경변수로 "HTTPS 뒤에 있다"를 감지해 그때만 기본으로 켠다.
+    # 다른 호스팅(HTTPS 종단이지만 RENDER 변수가 없는 경우)은
+    # SESSION_COOKIE_SECURE=1을 직접 설정해 덮어쓸 수 있다.
+    app.config["SESSION_COOKIE_HTTPONLY"] = True
+    app.config["SESSION_COOKIE_SAMESITE"] = "Lax"
+    _secure_default = "1" if os.environ.get("RENDER") else "0"
+    app.config["SESSION_COOKIE_SECURE"] = os.environ.get("SESSION_COOKIE_SECURE", _secure_default) == "1"
 
     init_db()
 

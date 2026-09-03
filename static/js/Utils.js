@@ -35,6 +35,19 @@ function term(msg, type='') {
     }
 }
 
+// ── HTML 이스케이프 — innerHTML에 꽂는 모든 동적 문자열(특히 플레이어가
+//    직접 입력하는 이름)은 이걸 거쳐야 함. logLine/logAdventure/Ranking.js
+//    등 여러 파일이 공유하는 유틸이라 가장 먼저 로드되는 Utils.js에 둠.
+function escapeHtml(str) {
+    if (!str) return '';
+    return String(str)
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#039;');
+}
+
 // ── 배틀 로그 (중앙) ──
 function logLine(msg, type='') {
     const l = document.getElementById('log-area');
@@ -44,7 +57,7 @@ function logLine(msg, type='') {
                String(d.getSeconds()).padStart(2,'0');
     const line = document.createElement('div');
     line.className = 'log-line ' + type;
-    line.innerHTML = `<span class="ts">[${ts}]</span> ${msg}`;
+    line.innerHTML = `<span class="ts">[${ts}]</span> ${escapeHtml(msg)}`;
     l.appendChild(line);
     l.scrollTop = l.scrollHeight;
     while (l.children.length > 50) l.removeChild(l.firstChild);
