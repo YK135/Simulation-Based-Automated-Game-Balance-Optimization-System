@@ -52,14 +52,31 @@ def _safe_filename_part(s: str, fallback: str = "unknown", max_len: int = 40) ->
     return s[:max_len]
 
 
-def _safe_join(base_dir: str, filename: str) -> str:
-    """base_dir 하위로 경로가 실제로 벗어나지 않는지 최종 확인(2중 방어)."""
+def _safe_join(base_dir: str, filename: str, _real_base_cache: dict = {}) -> str:
+    """base_dir 하위로 경로가 실제로 벗어나지 않는지 최종 확인(2중 방어).
+    real_base는 base_dir(고정값 2개, SIM_DIR/PLAYER_DIR)당 1회만 계산해 캐싱."""
     path = os.path.join(base_dir, filename)
-    real_base = os.path.realpath(base_dir)
+    real_base = _real_base_cache.get(base_dir)
+    if real_base is None:
+        real_base = os.path.realpath(base_dir)
+        _real_base_cache[base_dir] = real_base
     real_path = os.path.realpath(path)
     if os.path.commonpath([real_base, real_path]) != real_base:
         raise ValueError(f"경로가 저장 디렉토리를 벗어남: {filename!r}")
     return path
+
+
+def _build_log_path(base_dir: str, parts: list, ext: str) -> str:
+    """로그 파일 경로를 만드는 유일한 통로 — save_sim_log/save_player_log가
+    각자 _safe_filename_part()/_safe_join()을 따로 호출하던 걸 여기 하나로
+    합침. 앞으로 로그 저장 함수가 늘어나도 이 함수를 거치지 않고는 경로를
+    만들 수 없게 해서, 위생화를 깜빡하고 os.path.join을 직접 쓰는 실수
+    자체를 구조적으로 막는다. parts는 전부 여기서 _safe_filename_part를
+    거치므로, 호출부가 "player"/"enemy" 같은 폴백 문구를 미리 채워서
+    넘겨도(이미 안전한 문자열이라 무해) 실제 사용자 입력값(player_name 등)이
+    섞여 있어도 항상 안전하게 치환된다."""
+    base = "_".join(_safe_filename_part(str(p)) for p in parts)
+    return _safe_join(base_dir, base + ext)
 
 
 # ────────────────────────────────────────────
@@ -245,12 +262,11 @@ class LogManager:
         monster_stats: dict = None,
     ) -> str:
         """시뮬레이션 로그 저장 — JSON + 텍스트 동시 저장"""
-        ts       = datetime.now().strftime("%Y%m%d_%H%M%S")
-        safe_player = _safe_filename_part(result.player_name, "player")
-        safe_enemy  = _safe_filename_part(result.enemy_name, "enemy")
-        base     = f"{safe_player}_lv{player_lv}_{safe_enemy}_{difficulty}_{ts}"
-        json_path = _safe_join(SIM_DIR, base + ".json")
-        txt_path  = _safe_join(SIM_DIR, base + ".txt")
+        ts    = datetime.now().strftime("%Y%m%d_%H%M%S")
+        parts = [result.player_name or "player", f"lv{player_lv}",
+                 result.enemy_name or "enemy", difficulty, ts]
+        json_path = _build_log_path(SIM_DIR, parts, ".json")
+        txt_path  = _build_log_path(SIM_DIR, parts, ".txt")
 
         extra = {
             "log_type": "simulation", "difficulty": difficulty,
@@ -287,12 +303,11 @@ class LogManager:
         items_used: list = None,
     ) -> str:
         """플레이어 실전 로그 저장 — JSON + 텍스트 동시 저장"""
-        ts        = datetime.now().strftime("%Y%m%d_%H%M%S")
-        safe_player = _safe_filename_part(result.player_name, "player")
-        safe_enemy  = _safe_filename_part(result.enemy_name, "enemy")
-        base      = f"{safe_player}_lv{player_lv}_{safe_enemy}_{ts}"
-        json_path = _safe_join(PLAYER_DIR, base + ".json")
-        txt_path  = _safe_join(PLAYER_DIR, base + ".txt")
+        ts    = datetime.now().strftime("%Y%m%d_%H%M%S")
+        parts = [result.player_name or "player", f"lv{player_lv}",
+                 result.enemy_name or "enemy", ts]
+        json_path = _build_log_path(PLAYER_DIR, parts, ".json")
+        txt_path  = _build_log_path(PLAYER_DIR, parts, ".txt")
 
         extra = {
             "log_type": "player", "player_lv": player_lv,
@@ -349,11 +364,16 @@ class LogManager:
         results = []
         if not os.path.exists(PLAYER_DIR):
             return results
+        # ★ 파일명은 저장 시 _safe_filename_part()를 거쳐 있으므로, 검색어도
+        #   같은 함수로 위생화해야 매칭된다 — 원본 이름(공백 등 포함)을 그대로
+        #   비교하면 항상 실패한다.
+        safe_player = _safe_filename_part(player_name) if player_name else None
+        safe_enemy  = _safe_filename_part(enemy_name) if enemy_name else None
         for filename in sorted(os.listdir(PLAYER_DIR)):
             if not filename.endswith(".json"):
                 continue
-            if player_name and player_name not in filename: continue
-            if enemy_name  and enemy_name  not in filename: continue
+            if safe_player and safe_player not in filename: continue
+            if safe_enemy  and safe_enemy  not in filename: continue
             r = self._load_file(os.path.join(PLAYER_DIR, filename))
             if r:
                 results.append(r)
@@ -366,9 +386,13 @@ class LogManager:
         result = []
         if not os.path.exists(directory):
             return result
+        # difficulty/player_lv는 애초에 안전한 값(hard/normal/easy, 정수)이라
+        # 위생화가 필요 없지만, enemy_name은 플레이어 이름과 마찬가지로
+        # _safe_filename_part()를 거친 파일명과 비교해야 한다.
+        safe_enemy = _safe_filename_part(enemy_name) if enemy_name else None
         for filename in os.listdir(directory):
             if not filename.endswith(ext): continue
-            if enemy_name  and enemy_name  not in filename: continue
+            if safe_enemy  and safe_enemy  not in filename: continue
             if difficulty  and difficulty  not in filename: continue
             if player_lv   and f"lv{player_lv}" not in filename: continue
             result.append(filename)

@@ -12,6 +12,7 @@ app/battle.py — 전투 Blueprint
 """
 from __future__ import annotations
 
+import traceback
 
 from flask import Blueprint, jsonify, request
 
@@ -325,8 +326,11 @@ def _finish_battle(gs: dict, battle, result: dict, winner: str) -> None:
                     "suggestions": report.suggestions,
                     "score":       report.score,
                 }
-        except Exception as e:
-            print(f"[Feedback] 생성 실패: {e}")
+        except Exception:
+            # ★ 그냥 print(e)만 하면 이 새로 배선한 경로가 실제로 왜 실패했는지
+            #   운영 로그에서 알 방법이 없음(예외 종류/발생 위치 안 남음) — 전체
+            #   traceback을 남겨서 최소한 gunicorn stdout에서 원인 추적 가능하게.
+            print(f"[Feedback] 생성 실패:\n{traceback.format_exc()}")
 
     gs["battle"] = None
     gs.pop("battle_node_type", None)   # 전투 종료 — 노드 타입 캐시 초기화

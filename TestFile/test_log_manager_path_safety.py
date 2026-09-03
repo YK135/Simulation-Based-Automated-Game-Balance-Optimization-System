@@ -112,8 +112,11 @@ def test_safe_filename_part_helper():
 
     check("경로 구분자 제거", "/" not in _safe_filename_part("a/b/c"))
     check("빈 문자열 → fallback", _safe_filename_part("", "player") == "player")
-    check("공백만 있는 경로순회 → fallback 아닌 치환 문자로 대체",
-          ".." not in _safe_filename_part("..", "player") or
+    # ★ 예전엔 "or" 두 분기 중 첫 번째가 늘 참이라(반환값 "player"엔 ".."이
+    #   없음) 두 번째 분기(실제 계약)가 검증되지 않는 죽은 코드였음 — sanitizer가
+    #   나중에 약해져서 ".." 일부가 남아도("_.") 이 테스트가 못 잡았을 것.
+    #   실제로 확인해야 하는 것 하나만 직접 단언.
+    check("경로순회 문자열('..') → fallback으로 대체됨",
           _safe_filename_part("..", "player") == "player")
     check("길이 제한 적용", len(_safe_filename_part("a" * 100)) <= 40)
 

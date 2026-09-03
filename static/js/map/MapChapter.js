@@ -12,13 +12,16 @@ function showGameOver(feedback) {
     // ★ 서버가 BehaviorAnalyzer/FeedbackEngine으로 생성한 복기 리포트(있을 때만).
     //   escapeHtml 필수 — headline/good_plays 등에 전투 로그 문구가 그대로 들어있고,
     //   그 문구엔 플레이어가 직접 입력한 이름이 섞여 있을 수 있음(Utils.js 참고).
-    const _esc = typeof escapeHtml === 'function' ? escapeHtml : (s => s);
+    //   Ranking.js/SidePanel.js와 동일하게 escapeHtml을 직접 호출한다 — "없으면
+    //   그냥 통과시키는" 폴백을 두면 스크립트 로드 순서가 깨졌을 때 조용히
+    //   이스케이프가 빠져버려서(에러도 안 남음) 막으려던 XSS가 그대로 재현된다.
+    //   escapeHtml이 없으면 즉시 ReferenceError로 시끄럽게 터지는 쪽이 맞다.
     const _list = (arr) => (arr && arr.length)
-        ? arr.map(t => `· ${_esc(t)}`).join('<br>') : '';
+        ? arr.map(t => `· ${escapeHtml(t)}`).join('<br>') : '';
     const fbHtml = feedback ? `
         <div class="battle-feedback">
             <div class="battle-feedback-score">${feedback.score} / 100</div>
-            <div class="battle-feedback-headline">${_esc(feedback.headline)}</div>
+            <div class="battle-feedback-headline">${escapeHtml(feedback.headline)}</div>
             ${feedback.good_plays?.length ? `<div class="fb-good">${_list(feedback.good_plays)}</div>` : ''}
             ${feedback.bad_plays?.length ? `<div class="fb-bad">${_list(feedback.bad_plays)}</div>` : ''}
             ${feedback.suggestions?.length ? `<div class="fb-suggest">${_list(feedback.suggestions)}</div>` : ''}

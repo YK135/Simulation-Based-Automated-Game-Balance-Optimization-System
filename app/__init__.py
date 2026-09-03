@@ -65,6 +65,17 @@ def create_app() -> Flask:
     app.config["SESSION_COOKIE_SAMESITE"] = "Lax"
     _secure_default = "1" if os.environ.get("RENDER") else "0"
     app.config["SESSION_COOKIE_SECURE"] = os.environ.get("SESSION_COOKIE_SECURE", _secure_default) == "1"
+    if not app.config["SESSION_COOKIE_SECURE"]:
+        # ★ SECRET_KEY 폴백은 경고를 찍는데 이쪽은 조용히 꺼진 채로 넘어갔음 —
+        #   로컬 http 개발이면 정상이지만, Render가 아닌 다른 HTTPS 호스팅에
+        #   올렸는데 SESSION_COOKIE_SECURE=1을 깜빡한 경우도 똑같이 조용히
+        #   넘어가 버려서 최소한 부팅 로그에는 남긴다(부팅은 막지 않음 —
+        #   로컬 개발에서 매번 뜨는 게 더 시끄러움).
+        print(
+            "[Session] SESSION_COOKIE_SECURE=off로 부팅 — 로컬 http 개발이면 "
+            "정상입니다. HTTPS로 배포한 환경(Render 제외)이라면 "
+            "SESSION_COOKIE_SECURE=1을 설정하세요 (.env.example 참고)."
+        )
 
     init_db()
 

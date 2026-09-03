@@ -20,6 +20,7 @@ test_persist_race.py — _persist_session 동시성 회귀 테스트
 import sys, os
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 import threading
+from _helpers import make_session_dict
 
 PASS = 0
 FAIL = 0
@@ -36,25 +37,12 @@ def check(name, cond, detail=""):
 
 
 def _make_gs(turn):
-    from game.Player_Class import create_player_by_job
-    from game.Inventory import Inventory
-
-    player = create_player_by_job("동시성테스터", "전사")
-    inv = Inventory.new()
-    return {
-        "player": player,
-        "inventory": inv,
-        "map": None,
-        "chapter": None,
-        "turn": turn,
-        "map_turn": 0,
-        "mid_boss_cleared": False,
-        "gold": 100,
-        "run_id": None,
-        "pending_node_id": None,
-        "battle_node_type": None,
-        "battle_map_layer": None,
-    }
+    """세션 딕셔너리 모양은 _helpers.make_session_dict()가 표준으로 채워준다
+    (코드 리뷰에서 발견된 필드 drift 방지 — 이전엔 이 파일과
+    test_shop_buy_price_authority.py가 각자 손으로 다른 필드 집합을 나열해서
+    이미 서로 어긋나 있었음). 매 스레드가 독립된 player를 갖도록 매 호출마다
+    새로 만든다."""
+    return make_session_dict(turn=turn)
 
 
 def test_concurrent_first_persist():

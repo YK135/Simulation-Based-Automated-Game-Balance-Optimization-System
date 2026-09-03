@@ -74,17 +74,14 @@ def _build_inventory(items):
 
 
 def _make_client_with_session(items, hp=500):
-    """create_app() 후 GAME_SESSIONS에 가짜 gs 주입, session 쿠키 연결."""
-    from app import create_app
-    from app.Shared import GAME_SESSIONS
-
-    app = create_app()
-    app.config["TESTING"] = True
-    client = app.test_client()
+    """create_app() 후 GAME_SESSIONS에 가짜 gs 주입, session 쿠키 연결.
+    이 테스트는 일부러 가벼운 StubPlayer를 쓰므로(레벨업/스킬 시스템과
+    분리해서 가드 로직만 검증) _helpers.make_session_dict()의 실제 Player
+    기본값은 안 쓰고, 세션 주입 절차(app/client/쿠키)만 _helpers를 공유한다."""
+    from _helpers import inject_test_session
 
     inv = _build_inventory(items)
-    uid = "test-uid-guard"
-    GAME_SESSIONS[uid] = {
+    gs = {
         "player": StubPlayer(hp=hp),
         "inventory": inv,                  # 실제 Inventory (정상 포션 경로용)
         "items": inv.to_flat_list(),       # 세션 구조와 동일
@@ -93,9 +90,7 @@ def _make_client_with_session(items, hp=500):
         "hook": None,
         "gold": 100,
     }
-    with client.session_transaction() as sess:
-        sess["user_id"] = uid
-    return client, uid, GAME_SESSIONS
+    return inject_test_session(gs, uid="test-uid-guard")
 
 
 def _post_use(client, item):

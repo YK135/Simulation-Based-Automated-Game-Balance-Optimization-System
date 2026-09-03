@@ -22,6 +22,7 @@ test_shop_buy_price_authority.py — /api/shop/buy 클라이언트 price 신뢰 
 """
 import sys, os
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+from _helpers import make_session_dict, inject_test_session
 
 PASS = 0
 FAIL = 0
@@ -38,35 +39,16 @@ def check(name, cond, detail=""):
 
 
 def _make_client_with_session(gold=100, lv=5):
-    from app import create_app
-    from app.Shared import GAME_SESSIONS
+    """세션 딕셔너리 모양은 _helpers.make_session_dict()가 표준으로 채워주므로
+    (코드 리뷰에서 발견된 필드 drift 방지), 여기선 이 테스트에 필요한
+    player.lv/gold만 지정한다."""
     from game.Player_Class import create_player_by_job
-    from game.Inventory import Inventory
-
-    app = create_app()
-    app.config["TESTING"] = True
-    client = app.test_client()
 
     player = create_player_by_job("상점테스터", "전사")
     player.lv = lv
-    inv = Inventory.new()
 
-    uid = "test-uid-shop"
-    GAME_SESSIONS[uid] = {
-        "player": player,
-        "inventory": inv,
-        "items": inv.to_flat_list(),
-        "battle": None,
-        "turn": 0,
-        "hook": None,
-        "gold": gold,
-        "map": None, "chapter": None, "map_turn": 0,
-        "mid_boss_cleared": False, "run_id": None,
-        "pending_node_id": None,
-    }
-    with client.session_transaction() as sess:
-        sess["user_id"] = uid
-    return client, uid, GAME_SESSIONS
+    gs = make_session_dict(player=player, gold=gold)
+    return inject_test_session(gs, uid="test-uid-shop")
 
 
 def test_zero_price_manipulation():

@@ -399,13 +399,20 @@ class BalanceHook:
           _cache_sim_log()가 매번 갱신해두므로, 방금 그 전투와 같은 몬스터를
           상대로 한 "AI 최적 플레이" 시뮬레이션과 비교된다.
         """
-        try:
-            self._lm.save_player_log(
-                result=result,
-                player_lv=self.player.lv,
-            )
-        except Exception as e:
-            if self.verbose:
+        # ★ 로컬 파일(JSON+TXT) 저장은 self.verbose(로컬/CLI 사용)일 때만 —
+        #   실제 서비스(verbose=False)에서는 이미 app/Shared.py의
+        #   _save_rl_log()가 같은 요청 안에서 BattleLog DB 테이블에 이 전투를
+        #   저장하고 있어서, 여기서 또 로컬 디스크에 쓰는 건 (1) DB에 이미
+        #   있는 걸 중복으로 쓰는 것이고 (2) Render 같은 ephemeral 디스크에서는
+        #   다음 재배포 때 사라져서 애초에 아무도 못 읽는 낭비. 굳이 매 패배마다
+        #   요청 스레드를 블로킹할 이유가 없다.
+        if self.verbose:
+            try:
+                self._lm.save_player_log(
+                    result=result,
+                    player_lv=self.player.lv,
+                )
+            except Exception as e:
                 print(f"  [AI] save_player_log 실패: {e}")
 
         if result.winner != "enemy":
