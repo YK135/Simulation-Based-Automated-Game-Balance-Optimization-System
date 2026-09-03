@@ -518,6 +518,43 @@
    가로로 과도하게 길어지므로 내용 크기만큼만 차지하도록 고정폭으로 좁힘 */
 .chapter-clear-btn { width: auto; min-width: 220px; padding: 12px 32px; font-size: 13px; }
 
+/* ─── 게임오버 AI 복기 리포트 (BehaviorAnalyzer/FeedbackEngine) ─── */
+.battle-feedback {
+    width: min(420px, 86vw);
+    max-height: 44vh;
+    overflow-y: auto;
+    background: rgba(20, 12, 12, 0.55);
+    border: 1px solid rgba(239, 68, 68, 0.25);
+    border-radius: 8px;
+    padding: 16px 20px;
+    text-align: left;
+}
+.battle-feedback-score {
+    font-size: 20px;
+    font-weight: 900;
+    letter-spacing: 0.08em;
+    color: var(--accent-gold, #d8b46a);
+    text-align: center;
+    margin-bottom: 4px;
+}
+.battle-feedback-headline {
+    font-size: 13px;
+    color: #cbd5e1;
+    text-align: center;
+    margin-bottom: 12px;
+    line-height: 1.5;
+}
+.battle-feedback .fb-good,
+.battle-feedback .fb-bad,
+.battle-feedback .fb-suggest {
+    font-size: 12px;
+    line-height: 1.7;
+    margin-top: 8px;
+}
+.battle-feedback .fb-good   { color: #4ade80; }
+.battle-feedback .fb-bad    { color: var(--hp-red, #ef4444); }
+.battle-feedback .fb-suggest { color: #6b7a8d; }
+
 /* ─── 보스 행 래퍼 — grid 전체 너비 중앙 ─── */
 .map-boss-row {
     grid-column: 1 / -1;

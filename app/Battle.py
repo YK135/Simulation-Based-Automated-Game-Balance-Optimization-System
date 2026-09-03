@@ -310,6 +310,24 @@ def _finish_battle(gs: dict, battle, result: dict, winner: str) -> None:
     # DB 저장 (보상 반영된 result 기준)
     _save_battle_to_db(gs, battle, result, winner)
 
+    # ── 패배 시 AI 복기 리포트 생성 (BehaviorAnalyzer/FeedbackEngine) ──
+    #    core/Balance_Hook.py의 after_battle() 참고 — 실패해도 게임 진행에는
+    #    영향 없어야 하므로 별도 try/except로 감쌈.
+    if winner == "enemy":
+        try:
+            battle_result = battle.to_battle_result()
+            report = gs["hook"].after_battle(battle_result)
+            if report:
+                result["feedback"] = {
+                    "headline":    report.headline,
+                    "good_plays":  report.good_plays,
+                    "bad_plays":   report.bad_plays,
+                    "suggestions": report.suggestions,
+                    "score":       report.score,
+                }
+        except Exception as e:
+            print(f"[Feedback] 생성 실패: {e}")
+
     gs["battle"] = None
     gs.pop("battle_node_type", None)   # 전투 종료 — 노드 타입 캐시 초기화
     gs.pop("battle_map_layer", None)   # 전투 종료 — 배틀 배경 층 캐시 초기화

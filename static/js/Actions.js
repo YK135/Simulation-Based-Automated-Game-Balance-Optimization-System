@@ -203,7 +203,9 @@ async function battleAction(action) {
                 await handleMapNodeDone(r);
             } else if (r.winner === 'enemy') {
                 // ★ 사망 시 맵으로 돌아가지 않음 — NEW GAME으로만 재시작 가능
-                if (typeof showGameOver === 'function') showGameOver();
+                // r.feedback: 서버가 BehaviorAnalyzer/FeedbackEngine으로 생성한
+                // 복기 리포트(headline/good_plays/bad_plays/suggestions/score) — 있으면 표시.
+                if (typeof showGameOver === 'function') showGameOver(r.feedback);
             } else {
                 await loadStatus();
             }

@@ -391,24 +391,31 @@ class BalanceHook:
     # ── 2. 전투 후: 로그 저장 + 복기 ────────
 
     def after_battle(self, result: BattleResult):
-        """전투 결과 저장 + 패배 시 복기"""
+        """전투 결과 저장 + 패배 시 복기.
+
+        ★ 실제 게임 흐름(app/Battle.py의 _finish_battle)에서 패배 시 이 메서드를
+          호출하고, 반환된 FeedbackReport를 API 응답에 실어 게임오버 화면에
+          보여준다. sim_result(self._last_sim_result)는 get_enemy() 안의
+          _cache_sim_log()가 매번 갱신해두므로, 방금 그 전투와 같은 몬스터를
+          상대로 한 "AI 최적 플레이" 시뮬레이션과 비교된다.
+        """
         try:
             self._lm.save_player_log(
                 result=result,
                 player_lv=self.player.lv,
             )
         except Exception as e:
-            pass
+            if self.verbose:
+                print(f"  [AI] save_player_log 실패: {e}")
 
-        if result.winner == "enemy":
-            print("\n" + "─"*40)
-            print("  AI 복기 분석을 시작합니다...")
-            print("─"*40)
-            self._fb.run(
-                player_result=result,
-                sim_result=self._last_sim_result,
-                print_report=True,
-            )
+        if result.winner != "enemy":
+            return None
+
+        return self._fb.run(
+            player_result=result,
+            sim_result=self._last_sim_result,
+            print_report=self.verbose,
+        )
 
     # ── 3. 레벨업 시: 재시뮬레이션 ──────────
 
