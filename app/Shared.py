@@ -28,6 +28,7 @@ from flask import session
 from game.Inventory import Inventory
 from ai.battle import EntitySnapshot
 from core.RedisCache import redis_get, redis_set
+from core.ErrorLog import log_error
 
 
 # ─────────────────────────────────────────────
@@ -131,7 +132,7 @@ def _load_session_from_db(uid: str) -> Optional[dict]:
                 "battle_map_layer": row.battle_map_layer,
             }
     except Exception as e:
-        print(f"[Session] DB 복구 실패: {e}")
+        log_error("session_db_recovery", e)
         return None
 
     return _gs_from_snapshot(uid, snap)
@@ -191,7 +192,7 @@ def _persist_session(uid: str, gs: dict) -> None:
             else:
                 _apply_snapshot_to_row(row)
     except Exception as e:
-        print(f"[Session] DB 저장 실패: {e}")
+        log_error("session_persist_db", e)
 
 
 # ─────────────────────────────────────────────
@@ -335,7 +336,9 @@ def _save_rl_log(gs: dict, battle) -> None:
                 records_json=json.dumps(rl_log, ensure_ascii=False),
             ))
     except Exception as ex:
-        print(f"[RL_LOG] save skipped: {ex}")
+        # ★ 이 데이터가 이 프로젝트의 실제 목적(모방학습/RL용 로그 수집)이라
+        #   조용히 유실되면 안 됨 — log_error()로 DB에 남겨서 나중에라도 확인 가능.
+        log_error("rl_log_save", ex)
 
 
 def _save_battle_to_db(gs: dict, battle, result: dict, winner: str) -> None:
@@ -397,4 +400,4 @@ def _save_battle_to_db(gs: dict, battle, result: dict, winner: str) -> None:
             print(f"[DB] Battle saved: id={new_battle.id}, user={db_user_id}, "
                   f"result={db_result}, turns={new_battle.turns}")
     except Exception as e:
-        print(f"[DB] Battle save failed: {e}")
+        log_error("battle_save_db", e)

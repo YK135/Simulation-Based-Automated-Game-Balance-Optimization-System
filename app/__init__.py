@@ -15,8 +15,9 @@ for _sub in ["game", "ai", "core", "interface"]:
     if _p not in sys.path:
         sys.path.insert(0, _p)
 
-from flask import Flask, send_from_directory, session, request
+from flask import Flask, send_from_directory, session, request, jsonify
 from DB import init_db
+from core.ErrorLog import log_error
 
 # Blueprint import — 파일명 대문자 기준 (깃허브 파일명)
 from .Game      import game_bp
@@ -99,7 +100,24 @@ def create_app() -> Flask:
             try:
                 _persist_session(uid, GAME_SESSIONS[uid])
             except Exception as e:
-                print(f"[Session] persist 훅 실패: {e}")
+                log_error("session_persist_hook", e)
         return resp
+
+    # ★ 지금까지 서버 쪽 실패는 전부 개별 print()뿐이라 Render 콘솔을 직접
+    #   열어보지 않으면 아무도 몰랐음(코드 리뷰에서 지적된 부분) — 여기서
+    #   못 잡고 올라온 예외는 최소한 이 핸들러가 log_error()로 남긴다.
+    #   route 안에서 이미 try/except로 잡아 처리하는 예외는 각자 그 자리에서
+    #   log_error()를 호출해야 함 — 이 핸들러는 "아무도 안 잡은" 마지막 방어선.
+    @app.errorhandler(Exception)
+    def _handle_uncaught_exception(exc):
+        # ★ HTTPException(404/400 등, werkzeug가 정적 파일 404·라우트 없음
+        #   같은 정상적인 경우에도 내부적으로 이 클래스를 씀)까지 Exception으로
+        #   같이 잡히므로, 그건 그대로 흘려보내야 함 — 안 그러면 흔한 404가
+        #   전부 500으로 둔갑하고, 진짜 문제가 아닌 것까지 에러 로그에 쌓인다.
+        from werkzeug.exceptions import HTTPException
+        if isinstance(exc, HTTPException):
+            return exc
+        log_error("unhandled_request_exception", exc)
+        return jsonify({"ok": False, "error": "서버 오류가 발생했습니다."}), 500
 
     return app

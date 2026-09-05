@@ -272,3 +272,36 @@ class BattleLog(Base):
 
     def __repr__(self):
         return f"<BattleLog id={self.id} user={self.user_id}>"
+
+
+# ═══════════════════════════════════════════════════════════
+# error_logs 테이블
+# ───────────────────────────────────────────────────────────
+# 지금까지 서버 쪽 실패는 전부 print()뿐이라 Render 콘솔을 직접 열어보지
+# 않으면 아무도 모름 — core/ErrorLog.py의 log_error()가 여기 기록한다.
+# 조회는 scripts/view_errors.py로 (관리자 웹 페이지는 만들지 않음 — 이
+# 앱엔 로그인/권한 시스템 자체가 없어서, HTTP로 노출하면 그 자체가 새
+# 보안 구멍이 됨).
+# ═══════════════════════════════════════════════════════════
+class ErrorLog(Base):
+    __tablename__ = "error_logs"
+
+    id            = Column(Integer, primary_key=True, autoincrement=True)
+    created_at    = Column(DateTime, default=datetime.utcnow, nullable=False)
+
+    context       = Column(String(64), nullable=False)   # 어디서 났는지 (예: "feedback_generation")
+    error_type    = Column(String(128), nullable=False)  # 예외 클래스명
+    error_message = Column(Text, nullable=True)
+    traceback     = Column(Text, nullable=True)
+
+    request_path   = Column(String(256), nullable=True)
+    request_method = Column(String(8), nullable=True)
+    user_id        = Column(Integer, nullable=True)      # FK 아님 — 게스트/uuid도 남을 수 있어 느슨하게
+
+    __table_args__ = (
+        Index("ix_error_logs_created_at", "created_at"),
+        Index("ix_error_logs_context", "context"),
+    )
+
+    def __repr__(self):
+        return f"<ErrorLog id={self.id} {self.context}:{self.error_type}>"
