@@ -247,3 +247,52 @@ body {
 .topbar-btn:active {
     transform: translateY(0);
 }
+
+/* ── 마스터 모드 (로컬 전용 디버그 패널) ──
+   서버가 MASTER_MODE로 부팅됐을 때만 JS가 hidden을 해제함.
+   경고색 테두리로 "치트 전용" 티를 냄 — 일반 UI와 확실히 구분. */
+.master-panel {
+    position: fixed;
+    bottom: 16px;
+    left: 16px;
+    z-index: 900;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    padding: 10px 12px;
+    background: var(--bg-panel);
+    border: 1px solid var(--hp-red);
+    border-radius: 6px;
+    box-shadow: 0 0 14px rgba(239, 68, 68, 0.25);
+    font-size: 11px;
+    max-width: 220px;
+}
+.master-panel-title {
+    color: var(--hp-red);
+    font-weight: 700;
+    letter-spacing: 0.05em;
+    margin-bottom: 2px;
+}
+.master-panel button,
+.master-panel select {
+    background: var(--bg-panel-2);
+    border: 1px solid var(--border);
+    color: var(--text-main);
+    border-radius: 4px;
+    padding: 5px 8px;
+    font-size: 11px;
+    cursor: pointer;
+}
+.master-panel button:hover:not(:disabled) {
+    border-color: var(--hp-red);
+}
+.master-panel button:disabled,
+.master-panel select:disabled {
+    opacity: 0.4;
+    cursor: not-allowed;
+}
+.master-panel-row {
+    display: flex;
+    gap: 6px;
+}
+.master-panel-row select { flex: 1; min-width: 0; }

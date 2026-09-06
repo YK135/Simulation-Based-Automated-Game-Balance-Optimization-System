@@ -28,6 +28,15 @@ from .Ranking   import ranking_bp
 from .Map       import map_bp
 from .Shared    import GAME_SESSIONS, _persist_session
 
+# ── 마스터 모드(로컬 전용 디버그) ──
+# RENDER 환경변수가 있으면(Render 자동 주입 — 배포 환경 감지) MASTER_MODE를
+# 실수로 켜도 무조건 꺼진다. 꺼져 있으면 아래에서 블루프린트 자체를
+# 등록하지 않으므로 /api/master/* 라우트가 존재하지 않는다(403이 아니라 404).
+_MASTER_MODE = (
+    os.environ.get("MASTER_MODE", "0") == "1"
+    and not os.environ.get("RENDER")
+)
+
 
 def create_app() -> Flask:
     static_dir = os.path.join(_ROOT, "static")
@@ -82,6 +91,12 @@ def create_app() -> Flask:
 
     for bp in (game_bp, battle_bp, inventory_bp, rest_bp, ranking_bp, map_bp):
         app.register_blueprint(bp)
+
+    app.config["MASTER_MODE"] = _MASTER_MODE
+    if _MASTER_MODE:
+        from .Master import master_bp
+        app.register_blueprint(master_bp)
+        print("[Master] 마스터 모드 활성화 — 로컬 디버그 전용 API가 열렸습니다 (/api/master/*).")
 
     @app.route("/")
     def index():

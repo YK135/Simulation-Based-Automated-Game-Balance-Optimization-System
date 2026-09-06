@@ -45,6 +45,9 @@ function refreshPlayer() {
     // ── 아이템 패널 (노드 선택 필드 전용) ──
     refreshInventoryPanel(p);
 
+    // ── 마스터 모드 패널 (전투 중 버튼 비활성화 동기화) ──
+    if (typeof refreshMasterPanel === 'function') refreshMasterPanel();
+
     // ── 버프/디버프는 UI_Battle.js의 refreshPlayerStatusList가 전투 중 처리 ──
 }
 
