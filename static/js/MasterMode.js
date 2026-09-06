@@ -14,6 +14,7 @@ async function _initMasterMode() {
     _masterModeEnabled = true;
     const panel = document.getElementById('master-panel');
     if (panel) panel.hidden = false;
+    _initMasterDrag();
 
     const sel = document.getElementById('master-monster-select');
     if (sel && Array.isArray(r.monsters)) {
@@ -23,6 +24,57 @@ async function _initMasterMode() {
     }
 
     refreshMasterPanel();
+}
+
+/** 타이틀 바를 잡고 끌면 패널 위치 이동 (기본 하단좌측 고정 → 드래그 시 자유 배치).
+ *  화면 밖으로 못 나가게 clamp, 위치는 localStorage에 저장해 새로고침 후에도 유지. */
+function _initMasterDrag() {
+    const panel  = document.getElementById('master-panel');
+    const handle = document.getElementById('master-panel-title');
+    if (!panel || !handle || panel.dataset.dragInit) return;
+    panel.dataset.dragInit = '1';
+
+    try {
+        const saved = JSON.parse(localStorage.getItem('masterPanelPos') || 'null');
+        if (saved && Number.isFinite(saved.left) && Number.isFinite(saved.top)) {
+            panel.style.left   = saved.left + 'px';
+            panel.style.top    = saved.top + 'px';
+            panel.style.bottom = 'auto';
+        }
+    } catch (e) { /* localStorage 접근 불가 — 기본 위치 유지 */ }
+
+    let dragging = false;
+    let offsetX = 0, offsetY = 0;
+
+    handle.addEventListener('pointerdown', (e) => {
+        dragging = true;
+        const rect = panel.getBoundingClientRect();
+        offsetX = e.clientX - rect.left;
+        offsetY = e.clientY - rect.top;
+        panel.style.left   = rect.left + 'px';
+        panel.style.top    = rect.top + 'px';
+        panel.style.bottom = 'auto';
+        handle.setPointerCapture(e.pointerId);
+    });
+
+    handle.addEventListener('pointermove', (e) => {
+        if (!dragging) return;
+        const maxX = window.innerWidth  - panel.offsetWidth;
+        const maxY = window.innerHeight - panel.offsetHeight;
+        const x = Math.max(0, Math.min(e.clientX - offsetX, maxX));
+        const y = Math.max(0, Math.min(e.clientY - offsetY, maxY));
+        panel.style.left = x + 'px';
+        panel.style.top  = y + 'px';
+    });
+
+    handle.addEventListener('pointerup', () => {
+        if (!dragging) return;
+        dragging = false;
+        try {
+            const rect = panel.getBoundingClientRect();
+            localStorage.setItem('masterPanelPos', JSON.stringify({ left: rect.left, top: rect.top }));
+        } catch (e) { /* localStorage 접근 불가 — 위치 저장 생략 */ }
+    });
 }
 
 /** state.inBattle 변화에 맞춰 패널 버튼 활성/비활성 동기화.

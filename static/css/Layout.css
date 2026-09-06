@@ -272,6 +272,12 @@ body {
     font-weight: 700;
     letter-spacing: 0.05em;
     margin-bottom: 2px;
+    cursor: grab;
+    user-select: none;
+    touch-action: none;
+}
+.master-panel-title:active {
+    cursor: grabbing;
 }
 .master-panel button,
 .master-panel select {
