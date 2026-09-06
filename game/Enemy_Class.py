@@ -16,7 +16,7 @@ Enemy_Class.py
   최종 보스: 동일 원칙 + 저항 50%
 """
 from __future__ import annotations
-from random import randint, random, choice
+from random import random, choice
 
 
 class Unit:
@@ -425,7 +425,7 @@ def Make_Random_Monster(player_lv: int) -> Unit:
     if player_lv >= 8:  pool.append(Make_Priest)
     return choice(pool)(player_lv, grade)
 
-def Make_MidBoss(player_lv: int, base_monster_snap=None) -> Unit:
+def Make_MidBoss(player_lv: int) -> Unit:
     # TODO(밸런스): MC 실측상 중간보스는 Lv15 근처 권장 (Lv10 승률: 마법사 62.8%,
     #   전사 7.8%, 탱커 0%, 도적 1%). 추후 UI/로그에 "권장 레벨 Lv15" 안내 예정.
     #   보스 수치 자체는 조정하지 않는다 (Lv15 이후 난이도 유지 목적).
@@ -458,7 +458,7 @@ def Make_MidBoss(player_lv: int, base_monster_snap=None) -> Unit:
     return unit
 
 
-def Make_FinalBoss(player_lv: int, base_monster_snap=None) -> Unit:
+def Make_FinalBoss(player_lv: int) -> Unit:
     """
     최종 보스: HP/저항 위주 (Lv25 전후) — 5차 조정.
     스펙(5차): hp 3450, mp 220, stg 64, arm 51, sparm 58, sp 62,

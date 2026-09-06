@@ -17,7 +17,6 @@ db/queries.py — 랭킹 점수 계산 + 두 가지 랭킹 쿼리
 from __future__ import annotations
 import json
 from typing import List, Dict, Optional
-from sqlalchemy import func
 from sqlalchemy.orm import Session
 
 from DB.Models import User, Battle

@@ -1,9 +1,6 @@
 """Battle/Items.py — ITEM_META, use_item"""
 from __future__ import annotations
 
-import copy
-from dataclasses import dataclass, field
-from random import randint, random, uniform
 
 from .Entity import EntitySnapshot, Debuff
 from .Elements import apply_element_and_react

@@ -22,7 +22,6 @@ os.makedirs(os.environ["MPLCONFIGDIR"], exist_ok=True)
 import matplotlib
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
-import matplotlib.patches as mpatches
 import numpy as np
 
 import platform
@@ -169,20 +168,8 @@ class Visualizer:
         전투 로그에서 턴별 HP 변화를 꺾은선 그래프로 표시.
         플레이어 HP(파랑) / 적 HP(레드) 두 선.
         """
-        # 로그에서 HP 시계열 추출
-        player_hp = [result.final_player_hp]  # 역순으로 쌓고 뒤집기
-        enemy_hp  = [result.final_enemy_hp]
-        turns     = [result.total_turns]
-
         # 턴 역순 재구성: 로그를 거슬러 올라가며 hp_after 복원
         # 플레이어 행동 → 적 HP 변화 / 적 행동 → 플레이어 HP 변화
-        p_hp_seq = []
-        e_hp_seq = []
-
-        # 초기값 추정 (로그 첫 턴 이전 HP 역산)
-        p_hp = result.final_player_hp
-        e_hp = result.final_enemy_hp
-
         turn_data = {}
         for log in result.logs:
             turn_data.setdefault(log.turn, []).append(log)
@@ -193,7 +180,6 @@ class Visualizer:
         turn_points = []
 
         # 시작 HP 추정 (첫 공격 전 역산)
-        first_logs = turn_data.get(1, [])
         start_p = result.final_player_hp
         start_e = result.final_enemy_hp
         for log in result.logs:

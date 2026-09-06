@@ -2,14 +2,11 @@
 battle_session/player_actions.py — 플레이어 행동
 """
 from __future__ import annotations
-import copy
 from random import randint, random as _random
 
 from ai.battle import (
-    apply_element_and_react, check_element_reaction, try_apply_element_aura_and_status,
-    ITEM_META, Debuff, Buff, _current_element,
-    EntitySnapshot, DamageCalc, execute_skill,
-    SKILL_META, BattleEngine, Action, BattleResult, TurnLog,
+    apply_element_and_react, ITEM_META, Debuff,
+    DamageCalc, execute_skill, SKILL_META, TurnLog,
     execute_single_hit, consume_skill_mp,
 )
 
@@ -187,7 +184,6 @@ class PlayerActionsMixin:
             dmg = apply_element_and_react(
                 self.player, cur, meta.get("element", "") or "physical",
                 dmg, reaction_msgs)
-            reacted = bool(reaction_msgs)
             msgs.extend(reaction_msgs)
 
             # ── 실드 흡수 → HP 적용 ──
@@ -463,7 +459,7 @@ class PlayerActionsMixin:
                     mp_after=self.player.mp,
                 ))
                 if self._next_skill_bonus > 1.0:
-                    msgs.append(f"✨ 집중 효과 적용됨!")
+                    msgs.append("✨ 집중 효과 적용됨!")
                     self._next_skill_bonus = 1.0
                 # ── 전사 광역 생존기: 명중한 적 수만큼 실드 (슬래시 전용) ──
                 sph = meta.get("shield_per_hit", 0.0)
@@ -489,7 +485,6 @@ class PlayerActionsMixin:
             if meta.get("hits", 1) > 1 and _stype_for_dice in ("physical", "magical"):
                 return self._exec_multi_hit_skill(skill_name, meta, target, msgs, dice_info)
 
-            mp_before = self.player.mp
             dmg, mp_lack, debuff_name = execute_skill(
                 skill_name, self.player, target
             )

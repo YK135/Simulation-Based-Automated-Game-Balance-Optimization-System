@@ -4,7 +4,7 @@ Auto_AI.py
 규칙 기반 자동 전투 AI.
 """
 from __future__ import annotations
-from ai.battle import Action, EntitySnapshot, SKILL_META, ITEM_META, MONSTER_SKILL_META, get_monster_kit
+from ai.battle import Action, EntitySnapshot, SKILL_META, MONSTER_SKILL_META, get_monster_kit
 from ai.battle.Elements import is_element_immune
 
 ATTACK_TYPES = {"physical", "magical", "multi_hit", "tank_attack", "counter"}

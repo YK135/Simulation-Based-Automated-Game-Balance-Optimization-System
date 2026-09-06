@@ -14,9 +14,7 @@ LOG_Manager.py
 from typing import Optional, List
 import json
 import os
-import time
 from datetime import datetime
-from dataclasses import asdict
 
 from ai.battle import BattleResult, TurnLog
 
@@ -97,7 +95,6 @@ class LogFormatter:
         player_name: str,
         enemy_name:  str,
         winner:      str,
-        start_time:  float = None,   # time.time() 기준 시작 시각
         total_turns: int   = 0,
         final_player_hp: float = 0,
     ) -> str:
@@ -106,11 +103,6 @@ class LogFormatter:
         lines.append(f"  전투 로그 — {player_name} vs {enemy_name}")
         lines.append(f"  기록 시각: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
         lines.append(f"{'='*55}")
-
-        # HP 추적 (로그에서 역산)
-        # 각 TurnLog의 hp_after 활용
-        prev_enemy_hp  = None
-        prev_player_hp = None
 
         for log in logs:
             # 경과 시간 (시작 시각 없으면 턴 번호로 대체)

@@ -9,7 +9,6 @@ from __future__ import annotations
 
 from flask import Blueprint, jsonify, request
 
-from game.Inventory    import Inventory
 from ai.battle.Battle_Engine  import ITEM_META
 
 from .Shared import _get_session, _player_dict

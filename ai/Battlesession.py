@@ -18,16 +18,11 @@ Flask용 전투 세션 클래스.
 """
 from __future__ import annotations
 import copy
-from random import randint, random as _random
 
 from ai.battle import (
-    apply_element_and_react, check_element_reaction, try_apply_element_aura_and_status,
-    ITEM_META, Debuff, Buff, _current_element,
-    SKILL_META as _SKILL_META_REF,
-    EntitySnapshot, DamageCalc, execute_skill,
-    SKILL_META, BattleEngine, Action, BattleResult, TurnLog,
+    EntitySnapshot, SKILL_META,
 )
-from ai.Auto_AI import PlayerAI, EnemyAI
+from ai.Auto_AI import EnemyAI
 
 from ai.battle_session.Targeting      import TargetingMixin
 from ai.battle_session.ATB_Flow       import ATBFlowMixin

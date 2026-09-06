@@ -18,12 +18,11 @@ app/Map.py — 노드맵 Blueprint
 """
 from __future__ import annotations
 
-import json
-from random import choices as rand_choices, random, randint, choice
+from random import choices as rand_choices, randint, choice
 
 from flask import Blueprint, jsonify, request
 
-from game.Map      import FloorMap, TOTAL_LAYERS, BOSS_LAYER, NORMAL_LAYERS
+from game.Map      import FloorMap, NORMAL_LAYERS
 from game.Enemy_Class import (
     Make_MidBoss, Make_FinalBoss,
 )
@@ -472,7 +471,7 @@ def map_choose():
             "node_id": node_id,
             "message": "휴식 지점에 도착했다.",
             "options": [
-                {"key": "heal",  "label": f"체력 회복 (maxHP의 1/3)"},
+                {"key": "heal",  "label": "체력 회복 (maxHP의 1/3)"},
                 {"key": "train", "label": "수련 (경험치 60~80%)"},
             ],
         })
@@ -587,7 +586,7 @@ def _pick_event() -> dict:
 def _get_boss(chapter: int, player_lv: int):
     """챕터별 보스 생성."""
     if chapter == 1:
-        return Make_MidBoss(player_lv, None)
+        return Make_MidBoss(player_lv)
     return Make_FinalBoss(player_lv)
 
 

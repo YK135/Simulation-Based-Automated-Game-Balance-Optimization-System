@@ -171,7 +171,7 @@ class Inventory:
                     "slot": "special",
                     "incoming": item_name,
                     "candidates": list(self.special),
-                    "message": f"특수 가방이 가득 찼습니다. 버릴 아이템을 선택하세요.",
+                    "message": "특수 가방이 가득 찼습니다. 버릴 아이템을 선택하세요.",
                 }
             self.special.append(item_name)
             return {"ok": True, "slot": "special", "item": item_name}

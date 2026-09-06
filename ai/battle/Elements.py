@@ -1,11 +1,9 @@
 """Battle/Elements.py — 원소 큐/반응/상태이상"""
 from __future__ import annotations
 
-import copy
-from dataclasses import dataclass, field
-from random import randint, random, uniform
+from random import randint
 
-from .Entity import EntitySnapshot, StatusEffect
+from .Entity import StatusEffect
 
 REACTIONS = {
     ("ice",       "fire"):      "melt",       # 단방향: ice→fire만 융해 발동 (fire→ice는 무반응)

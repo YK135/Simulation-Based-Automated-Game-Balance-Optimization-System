@@ -1,9 +1,7 @@
 """Battle/Actions.py — Action"""
 from __future__ import annotations
 
-import copy
-from dataclasses import dataclass, field
-from random import randint, random, uniform
+from dataclasses import dataclass
 
 
 @dataclass

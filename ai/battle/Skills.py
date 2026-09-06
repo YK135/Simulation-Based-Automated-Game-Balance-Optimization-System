@@ -1,8 +1,6 @@
 """Battle/Skills.py — SKILL_META, execute_skill"""
 from __future__ import annotations
 
-import copy
-from dataclasses import dataclass, field
 from random import randint, random, uniform
 
 from .Entity import EntitySnapshot, Debuff, Buff

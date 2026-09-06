@@ -17,7 +17,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Optional, List
 
-from ai.battle import BattleResult, TurnLog
+from ai.battle import BattleResult
 from ai.BehaviorAnalyzer import BehaviorAnalyzer
 
 

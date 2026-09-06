@@ -10,7 +10,7 @@ N회 반복 배틀 시뮬레이션 + 승률 기반 몬스터 스탯 역산.
   → 플레이어 상태가 좋을수록 몬스터를 강하게, 나쁠수록 약하게
 """
 
-from typing import Optional, List, Tuple
+from typing import Tuple
 import copy
 import statistics
 from dataclasses import dataclass
@@ -503,7 +503,6 @@ class StatTuner:
         # 0.60 + 2.40 = 3.0배까지만 늘어남 — 폭등 방지 유지.
         lo, hi     = 0.6, 8.0
         best_enemy = copy.deepcopy(self.base_enemy)
-        best_sim   = None
 
         for _ in range(self.MAX_ITER):
             mid   = (lo + hi) / 2
@@ -512,7 +511,6 @@ class StatTuner:
 
             if abs(sim.win_rate - target) <= self.TOLERANCE:
                 best_enemy = enemy
-                best_sim   = sim
                 break
 
             if sim.win_rate > target:
@@ -521,7 +519,6 @@ class StatTuner:
                 hi = mid   # 적이 너무 강함 → 약하게
 
             best_enemy = enemy
-            best_sim   = sim
 
         # 최종 검증
         final_sim = BattleSimulator(self.player, best_enemy, n=500).run()
