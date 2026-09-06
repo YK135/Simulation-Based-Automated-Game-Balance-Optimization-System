@@ -135,7 +135,14 @@ async function battleAction(action) {
             messages.forEach(m => logLine(m));
         }
 
-        await new Promise(resolve => setTimeout(resolve, 400));
+        // ★ 승리로 전투가 끝나는 순간엔 여유를 더 준다 — playBattleSequence가
+        //   몬스터별 실제 사망 애니메이션 길이(frames/fps 기반)는 이미 기다린
+        //   뒤이므로, 여기 추가되는 대기는 "이겼다"는 걸 느낄 여운용. 예전엔
+        //   승패 관계없이 항상 400ms뿐이라 승리 직후 화면이 훅 꺼지는
+        //   느낌이었음(사망 애니메이션이 끝나기도 전에 보상창으로 넘어가는
+        //   경우도 있었음).
+        const _postSeqWait = (r.done && r.winner === 'player') ? 2500 : 400;
+        await new Promise(resolve => setTimeout(resolve, _postSeqWait));
 
         // ── 종료 처리 ──
         if (r.done) {
@@ -198,6 +205,16 @@ async function battleAction(action) {
                     logAdventure(`전리품 획득: ${_parts.join(' / ')}`, 'loot');
                 }
                 if (typeof showRewardModal === 'function') await showRewardModal(r);
+
+                // ★ 보상 요약 확인 → (칸 넘친 아이템이 있으면) 교체 선택창 →
+                //   노드맵, 순서로 진행. openInvSwap()은 모달이 닫힐 때
+                //   resolve되는 Promise를 반환하므로 순서대로 하나씩 처리.
+                const _overflow = r.inventory_overflow || [];
+                if (_overflow.length && typeof openInvSwap === 'function') {
+                    for (const ov of _overflow) {
+                        await openInvSwap(ov.item, ov.candidates || []);
+                    }
+                }
             }
             if (r.winner === 'player' && typeof handleMapNodeDone === 'function') {
                 await handleMapNodeDone(r);

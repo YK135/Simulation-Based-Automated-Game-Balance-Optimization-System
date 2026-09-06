@@ -1,7 +1,7 @@
 /* map/MapEvents.js — 이벤트 노드 패널 */
 
 function _showEventResult(r) {
-    if (r.event === "item_full" || r.reason === "special_full") {
+    if (r.event === "item_full" || r.reason === "special_full" || r.reason === "potion_full") {
         if (typeof openInvSwap === "function") {
             openInvSwap(r.incoming || r.item, r.candidates || []);
         } else {

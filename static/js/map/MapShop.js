@@ -64,25 +64,30 @@ function _showShopPanel(r) {
         ?.addEventListener("click", leaveShop);
 }
 
+// ★ 연속 클릭 방지 — 가드가 없어서 같은 아이템(또는 다른 아이템)을
+//   응답 오기 전에 여러 번 누르면 중복 구매가 발사될 수 있었음. 진행 중엔
+//   상점 아이템 카드 전체를 클릭 불가로 막는다(개별 disabled 속성이 없는
+//   div라 pointer-events로 처리).
+let _shopBuyProcessing = false;
+
 async function buyShopItem(itemId, price) {
+    if (_shopBuyProcessing) return;
+    _shopBuyProcessing = true;
+    const items = document.querySelectorAll(".shop-item");
+    items.forEach(el => el.style.pointerEvents = "none");
     try {
         const r = await api("/shop/buy", { item_id: itemId, price });
-        if (!r.ok && r.reason === "special_full") {
-            if (typeof openInvSwap === "function") openInvSwap(itemId, r.candidates || []);
-            else toast("특수 아이템 칸이 가득 찼습니다.", "warn");
+        // ★ 포션도 특수템과 동일하게 "버릴 아이템 선택" UI를 받도록 통일
+        //   (예전엔 포션 가득 참은 그냥 재구매 불가 표시만 하고 끝났음).
+        if (!r.ok && (r.reason === "special_full" || r.reason === "potion_full")) {
+            if (typeof openInvSwap === "function") await openInvSwap(itemId, r.candidates || []);
+            else toast("가방이 가득 찼습니다.", "warn");
             return;
         }
         if (!r.ok) {
             const msg = r.error || "구매 실패";
             toast(msg, "error");
             logLine(`🛒 ${msg}`, "warn");
-            // 포션 가득 찬 경우 상점 버튼 시각적 표시
-            if (r.reason === "potion_full") {
-                document.querySelectorAll(`.shop-item[data-item-id="${itemId}"]`).forEach(el => {
-                    el.classList.add("cant-afford");
-                    el.title = "포션 슬롯 가득 참";
-                });
-            }
             return;
         }
         if (r.player) state.player = r.player;
@@ -107,6 +112,10 @@ async function buyShopItem(itemId, price) {
         }
     } catch (e) {
         console.error("[buyShopItem]", e);
+    } finally {
+        _shopBuyProcessing = false;
+        // _showShopPanel()로 이미 다시 그려졌을 수 있으므로 최신 노드 목록을 다시 조회
+        document.querySelectorAll(".shop-item").forEach(el => el.style.pointerEvents = "");
     }
 }
 

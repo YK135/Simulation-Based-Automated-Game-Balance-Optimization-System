@@ -48,91 +48,106 @@ function refreshPlayer() {
     // ── 버프/디버프는 UI_Battle.js의 refreshPlayerStatusList가 전투 중 처리 ──
 }
 
-/** 왼쪽 패널 아이템 렌더링 (포션 클릭 사용 가능, 특수 표시만) */
+/** 좌측 패널 "ITEMS" 버튼 표시 여부 + (팝업이 열려 있으면) 내용 갱신.
+ *  실제 목록/용량 렌더링은 refreshItemModal()로 옮김 — 예전엔 좁은 인라인
+ *  목록이 스크롤돼야 할 정도로 비좁다는 피드백이 있어서, 클릭해서 여는
+ *  팝업(#modal-item-inventory)으로 옮기고 여긴 버튼 진입점만 남김. */
 function refreshInventoryPanel(p) {
-    const panel = document.getElementById('player-inventory-panel');
+    const btn = document.getElementById('btn-open-items');
+    // 전투 중엔 액션 메뉴에서 아이템을 쓰므로 진입 버튼 자체를 숨김(기존 동작 유지)
+    if (btn) btn.style.display = state.inBattle ? 'none' : '';
 
-    // 전투 중에는 아이템 패널 숨김 (액션 메뉴에서 사용)
-    if (state.inBattle) {
-        if (panel) panel.style.display = 'none';
-        return;
-    }
-    if (panel) panel.style.display = '';
+    const modal = document.getElementById('modal-item-inventory');
+    if (modal && modal.classList.contains('active')) refreshItemModal(p);
+}
 
-    const potionEl  = document.getElementById('player-potion-list');
-    const specialEl = document.getElementById('player-special-list');
-    if (!potionEl && !specialEl) return;
-
+/** 아이템 팝업(#modal-item-inventory) 내용 렌더링 — 용량 표기 + n×2 그리드.
+ *  포션은 클릭 시 필드에서 즉시 사용(기존 인라인 목록의 usePotionFromPanel
+ *  그대로 재사용), 특수는 표시만(전투 중에만 사용 가능). */
+function refreshItemModal(p) {
     const inv     = (p && p.inventory) || {};
     const potions = inv.potions || [];
     const special = inv.special || [];
 
-    // ── 포션 목록 ──
-    if (potionEl) {
-        potionEl.innerHTML = '';
-        if (potions.length === 0) {
-            potionEl.innerHTML = '<div class="pip-empty">포션 없음</div>';
+    const potCapEl = document.getElementById('ii-potion-capacity');
+    if (potCapEl) {
+        const used = inv.potion_used ?? potions.reduce((sum, x) => sum + x.count, 0);
+        potCapEl.textContent = `${used}/${inv.potion_capacity ?? 6}`;
+    }
+    const specCapEl = document.getElementById('ii-special-capacity');
+    if (specCapEl) {
+        specCapEl.textContent = `${inv.special_used ?? special.length}/${inv.special_capacity ?? 3}`;
+    }
+
+    const makeCell = (name, { count, isSpecial, usable } = {}) => {
+        const cell = document.createElement('div');
+        cell.className = `ii-item${isSpecial ? ' ii-special' : ''}${usable ? ' usable' : ''}`;
+        cell.dataset.tooltipItem = name;
+        if (typeof renderIconWithFallback === 'function') {
+            cell.appendChild(renderIconWithFallback(
+                (typeof ITEM_ICONS !== 'undefined' ? ITEM_ICONS[name] : null) || { icon: '□' },
+                'item-icon'));
+        }
+        const nameSp = document.createElement('span');
+        nameSp.className = 'ii-item-name';
+        nameSp.textContent = name;
+        cell.appendChild(nameSp);
+        if (isSpecial) {
+            const badge = document.createElement('span');
+            badge.className = 'ii-item-badge';
+            badge.textContent = '★';
+            cell.appendChild(badge);
+            cell.title = ((typeof itemDesc === 'function' && itemDesc(name)) ? itemDesc(name) + ' — ' : '') + '필드에서 사용 불가 (전투 중 사용)';
         } else {
-            potions.forEach(({ name, count }) => {
-                const row = document.createElement('div');
-                // 전투 중 + 사망 상태에는 클릭 비활성
-                const usable = !state.inBattle && !(state.player && state.player.hp <= 0);
-                row.className = `pip-item${usable ? ' usable' : ''}`;
-                row.dataset.tooltipItem = name;
-                // 아이콘(이미지 우선 + 이모지 폴백) + 이름 + 수량
-                if (typeof renderIconWithFallback === 'function') {
-                    row.appendChild(renderIconWithFallback(
-                        (typeof ITEM_ICONS !== 'undefined' ? ITEM_ICONS[name] : null) || { icon: '□' },
-                        'item-icon'));
-                }
-                const nameSp = document.createElement('span');
-                nameSp.className = 'pip-item-name';
-                nameSp.textContent = name;
-                const countSp = document.createElement('span');
-                countSp.className = 'pip-item-count';
-                countSp.textContent = `×${count}`;
-                row.appendChild(nameSp);
-                row.appendChild(countSp);
-                if (usable) {
-                    row.onclick = () => usePotionFromPanel(name);
-                    row.title = ((typeof itemDesc === 'function' && itemDesc(name)) ? itemDesc(name) + ' — ' : '') + '클릭하여 사용';
-                } else {
-                    row.title = ((typeof itemDesc === 'function' && itemDesc(name)) ? itemDesc(name) + ' — ' : '') + '전투 중에는 액션 메뉴에서 사용하세요';
-                }
-                potionEl.appendChild(row);
-            });
+            const countSp = document.createElement('span');
+            countSp.className = 'ii-item-count';
+            countSp.textContent = `×${count}`;
+            cell.appendChild(countSp);
+            if (usable) {
+                cell.onclick = () => usePotionFromPanel(name);
+                cell.title = ((typeof itemDesc === 'function' && itemDesc(name)) ? itemDesc(name) + ' — ' : '') + '클릭하여 사용';
+            } else {
+                cell.title = ((typeof itemDesc === 'function' && itemDesc(name)) ? itemDesc(name) + ' — ' : '') + '전투 중에는 액션 메뉴에서 사용하세요';
+            }
+        }
+        return cell;
+    };
+
+    const potGrid = document.getElementById('ii-potion-grid');
+    if (potGrid) {
+        potGrid.innerHTML = '';
+        const usable = !state.inBattle && !(state.player && state.player.hp <= 0);
+        if (potions.length === 0) {
+            potGrid.innerHTML = '<div class="ii-empty">포션 없음</div>';
+        } else {
+            potions.forEach(({ name, count }) => potGrid.appendChild(makeCell(name, { count, usable })));
         }
     }
 
-    // ── 특수 아이템 (표시만, 클릭 비활성) ──
-    if (specialEl) {
-        specialEl.innerHTML = '';
+    const specGrid = document.getElementById('ii-special-grid');
+    if (specGrid) {
+        specGrid.innerHTML = '';
         if (special.length === 0) {
-            specialEl.innerHTML = '<div class="pip-empty">특수 없음</div>';
+            specGrid.innerHTML = '<div class="ii-empty">특수 없음</div>';
         } else {
-            special.forEach(name => {
-                const row = document.createElement('div');
-                row.className = 'pip-item pip-special';
-                row.dataset.tooltipItem = name;
-                row.title = ((typeof itemDesc === 'function' && itemDesc(name)) ? itemDesc(name) + ' — ' : '') + '필드에서 사용 불가 (전투 중 사용)';
-                if (typeof renderIconWithFallback === 'function') {
-                    row.appendChild(renderIconWithFallback(
-                        (typeof ITEM_ICONS !== 'undefined' ? ITEM_ICONS[name] : null) || { icon: '□' },
-                        'item-icon'));
-                }
-                const nameSp2 = document.createElement('span');
-                nameSp2.className = 'pip-item-name';
-                nameSp2.textContent = name;
-                const badgeSp = document.createElement('span');
-                badgeSp.className = 'pip-item-badge';
-                badgeSp.textContent = '★';
-                row.appendChild(nameSp2);
-                row.appendChild(badgeSp);
-                specialEl.appendChild(row);
-            });
+            special.forEach(name => specGrid.appendChild(makeCell(name, { isSpecial: true })));
         }
     }
 }
+
+function openItemModal() {
+    refreshItemModal(state.player);
+    document.getElementById('modal-item-inventory')?.classList.add('active');
+}
+
+function closeItemModal() {
+    document.getElementById('modal-item-inventory')?.classList.remove('active');
+}
+
+document.addEventListener('DOMContentLoaded', () => {
+    document.getElementById('btn-open-items')?.addEventListener('click', openItemModal);
+    document.getElementById('btn-close-items')?.addEventListener('click', closeItemModal);
+});
 
 /** 필드에서 포션 사용 */
 async function usePotionFromPanel(itemName) {

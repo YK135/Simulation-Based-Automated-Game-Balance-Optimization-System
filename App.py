@@ -6,7 +6,7 @@ App.py — Flask 진입점
   app/game.py      — new_game, status, skills, items, allocate_stat
   app/battle.py    — battle_state, battle_action
   app/explore.py   — explore  ← 노드맵 전환 시 이 파일만 수정
-  app/inventory.py — use_item, swap_special
+  app/inventory.py — use_item, swap
   app/rest.py      — rest
   app/ranking.py   — ranking, pioneers
 """

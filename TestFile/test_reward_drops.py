@@ -122,7 +122,7 @@ def main():
     check("순서: 재반영 → 중간보스 HP_L (안 덮임)", i_reapply < i_boss)
     check("순서: 모든 보상 → player 스냅샷 → DB 저장", i_boss < i_player < i_db)
     check("items_gained = 성공분만 (gained 리스트)",
-          'result["items_gained"]  = gained' in src)
+          'result["items_gained"]' in src and '= gained' in src)
     check("실패는 메시지로만 (놓쳤다)", "놓쳤다" in src)
 
     print("\n" + "=" * 52)

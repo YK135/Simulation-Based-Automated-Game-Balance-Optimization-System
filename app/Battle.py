@@ -273,18 +273,27 @@ def _finish_battle(gs: dict, battle, result: dict, winner: str) -> None:
         node_type = _get_current_node_type(gs)
         rw = calc_battle_rewards(_get_defeated_list(battle), node_type)
         gs["gold"] = gs.get("gold", 0) + rw["gold"]
-        gained = []   # 실제 획득 성공한 아이템만
+        gained = []      # 실제 획득 성공한 아이템만
+        overflow = []    # 칸이 꽉 차서 못 받은 아이템 — 프론트가 교체 선택창을 띄울 재료
         for it in rw["items"]:
             add_res = gs["inventory"].add(it)
             if add_res.get("ok"):
                 gained.append(it)
             else:
                 rw["messages"].append(f"가방이 가득 차 {it}을(를) 놓쳤다...")
+                # ★ 완전히 잃는 게 아니라 "일단 못 받음" — 프론트가 보상 요약창을
+                #   보여준 뒤 이 목록으로 교체 선택창을 띄워서 최종 결정은 플레이어가.
+                overflow.append({
+                    "item": it,
+                    "reason": add_res.get("reason"),
+                    "candidates": add_res.get("candidates", []),
+                })
         gs["items"] = gs["inventory"].to_flat_list()
-        result["gold_gained"]   = rw["gold"]
-        result["items_gained"]  = gained          # 성공분만 (실패는 메시지로만)
-        result["relics_gained"] = rw["relics"]    # 유물 자리 (현재 항상 [])
-        result["gold"]          = gs["gold"]
+        result["gold_gained"]       = rw["gold"]
+        result["items_gained"]      = gained          # 성공분만 (실패는 메시지로만)
+        result["relics_gained"]     = rw["relics"]    # 유물 자리 (현재 항상 [])
+        result["inventory_overflow"] = overflow
+        result["gold"]              = gs["gold"]
         # 보상 로그는 messages로만 표시 (gold_gained/items_gained는 데이터용)
         result["messages"].extend(rw["messages"])
 

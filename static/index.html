@@ -127,17 +127,10 @@
             <span id="player-gold">0 G</span>
         </div>
 
-        <!-- ── 아이템 패널 (포션/특수) ── -->
-        <div class="player-inventory-panel" id="player-inventory-panel">
-            <div class="pip-section">
-                <div class="pip-section-title">POTIONS</div>
-                <div id="player-potion-list" class="pip-item-list"></div>
-            </div>
-            <div class="pip-section">
-                <div class="pip-section-title special">SPECIAL</div>
-                <div id="player-special-list" class="pip-item-list"></div>
-            </div>
-        </div>
+        <!-- ── 아이템 팝업 열기 버튼 (예전엔 여기에 포션/특수 목록이 좁게
+             바로 박혀 있었음 — 용량 표시 + 넉넉한 그리드로 팝업(#modal-item-inventory)에
+             옮기고, 여긴 진입 버튼만 남김) ── -->
+        <button id="btn-open-items" class="btn btn-item-panel">📦 ITEMS</button>
 
         <!-- ── 버프 / 디버프 영역 (전투 중에만 채워짐) ── -->
         <div id="player-status" class="player-status">
@@ -513,25 +506,50 @@
     </div>
 </div>
 
-<!-- ★ 특수 아이템 인벤토리 가득 시 교체 모달 -->
+<!-- ★ 인벤토리(포션/특수 공용) 가득 시 교체 모달 -->
 <div id="modal-inv-swap" class="modal-bg">
     <div class="modal modal-inv-swap">
-        <h2>⚠ 특수 가방 가득 — 교체 선택</h2>
-        
+        <h2>⚠ 가방 가득 — 교체 선택</h2>
+
         <div class="iv-desc">
             새 아이템 <span id="iv-incoming" class="iv-incoming">??</span> 을(를) 얻으려면<br>
-            기존 특수 아이템 1개를 버려야 합니다.
+            기존 아이템 1개를 버려야 합니다.
         </div>
-        
+
         <div class="iv-section-label">버릴 아이템 선택</div>
         <div class="iv-candidates" id="iv-candidates">
             <!-- JS가 채움 -->
         </div>
-        
+
         <div class="iv-footer">
             <button id="iv-cancel" class="btn iv-btn-cancel">취소 (새 아이템 포기)</button>
             <button id="iv-confirm" class="btn primary iv-btn-confirm">▶ 교체</button>
         </div>
+    </div>
+</div>
+
+<!-- ★ 보유 아이템 팝업 (좌측 패널 "ITEMS" 버튼) — 용량 표시 + n×2 그리드 -->
+<div id="modal-item-inventory" class="modal-bg">
+    <div class="modal modal-item-inventory">
+        <h2>📦 INVENTORY</h2>
+
+        <div class="ii-section">
+            <div class="ii-section-title">
+                <span>POTIONS</span>
+                <span id="ii-potion-capacity" class="ii-capacity">0/6</span>
+            </div>
+            <div class="ii-grid" id="ii-potion-grid"><!-- JS가 채움 --></div>
+        </div>
+
+        <div class="ii-section">
+            <div class="ii-section-title">
+                <span>SPECIAL</span>
+                <span id="ii-special-capacity" class="ii-capacity">0/3</span>
+            </div>
+            <div class="ii-grid" id="ii-special-grid"><!-- JS가 채움 --></div>
+        </div>
+
+        <button id="btn-close-items" class="btn">닫기</button>
     </div>
 </div>
 

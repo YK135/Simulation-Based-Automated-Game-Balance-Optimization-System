@@ -1,11 +1,17 @@
 /* ═══════════════════════════════════════════════════════════
-   InventorySwap.js — 특수 인벤토리 교체 모달
+   InventorySwap.js — 인벤토리 교체 모달 (포션 + 특수 공용)
    ═══════════════════════════════════════════════════════════ */
 
-let ivIncomingItem = null;
-let ivSelectedDrop = null;
-let ivCandidates   = [];
+let ivIncomingItem  = null;
+let ivSelectedDrop  = null;
+let ivCandidates    = [];
+let ivResolvePending = null;   // openInvSwap()이 반환한 Promise의 resolve —
+                                // 전투 보상 흐름이 "이 모달이 닫힐 때까지" 기다릴 때 사용
+let _ivSwapProcessing = false; // 연속 클릭 방지
 
+/** 모달을 열고, 닫힐 때(확인 또는 취소) resolve되는 Promise를 반환한다.
+ *  상점/이벤트처럼 반환값을 안 쓰는 기존 호출부는 그냥 무시하면 되므로
+ *  하위 호환 — 전투 보상 흐름만 `await openInvSwap(...)`로 순서를 맞춘다. */
 function openInvSwap(incoming, candidates) {
     ivIncomingItem = incoming;
     ivSelectedDrop = null;
@@ -20,6 +26,8 @@ function openInvSwap(incoming, candidates) {
 
     const modal = document.getElementById('modal-inv-swap');
     if (modal) modal.classList.add('active');
+
+    return new Promise(resolve => { ivResolvePending = resolve; });
 }
 
 function renderInvCandidates() {
@@ -48,13 +56,16 @@ function renderInvCandidates() {
 
 function updateConfirmButton() {
     const btn = document.getElementById('iv-confirm');
-    if (btn) btn.disabled = !ivSelectedDrop;
+    if (btn) btn.disabled = !ivSelectedDrop || _ivSwapProcessing;
 }
 
 async function confirmInvSwap() {
+    if (_ivSwapProcessing) return;   // ★ 연속 클릭 방지 — 응답 오기 전 재클릭 차단
     if (!ivSelectedDrop || !ivIncomingItem) return;
+    _ivSwapProcessing = true;
+    updateConfirmButton();
     try {
-        const r = await api('/inventory/swap_special', {
+        const r = await api('/inventory/swap', {
             drop: ivSelectedDrop,
             new:  ivIncomingItem,
         });
@@ -66,6 +77,9 @@ async function confirmInvSwap() {
     } catch (e) {
         console.error('[confirmInvSwap]', e);
         toast('네트워크 오류', 'error');
+    } finally {
+        _ivSwapProcessing = false;
+        updateConfirmButton();
     }
 }
 
@@ -79,6 +93,11 @@ function closeInvSwap() {
     if (modal) modal.classList.remove('active');
     ivIncomingItem = null;
     ivSelectedDrop = null;
+    if (ivResolvePending) {
+        const resolve = ivResolvePending;
+        ivResolvePending = null;
+        resolve();
+    }
 }
 
 document.addEventListener('DOMContentLoaded', () => {

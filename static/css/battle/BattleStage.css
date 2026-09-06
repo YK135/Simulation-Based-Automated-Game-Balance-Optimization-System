@@ -101,3 +101,11 @@
     position: relative;
 }
 .battle-slot.slot-gap { /* 거리감 슬롯 — 비워둠 */ }
+
+/* ── 보스전 레이아웃 — 항상 솔로 전투라 슬롯 병합이 아니라 컬럼 비율만
+   바꾸면 됨. 안 쓰는 4/5번째 적 슬롯은 이미 display:none이라 grid 트랙을
+   소비하지 않으므로, 남는 3칸(플레이어/공백/적)이 자동으로 1:1:3이 됨.
+   static/js/battle/BattleTurn.js가 bs.is_boss일 때 이 클래스를 토글한다. ── */
+.battle-stage.is-boss {
+    grid-template-columns: 1fr 1fr 3fr;
+}

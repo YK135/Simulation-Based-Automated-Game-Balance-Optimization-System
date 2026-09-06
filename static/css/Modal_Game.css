@@ -369,6 +369,62 @@
     border-color: var(--border);
 }
 
+/* ── 보유 아이템 팝업 (좌측 패널 "ITEMS" 버튼) ── */
+.modal-item-inventory {
+    width: 420px;
+    max-width: 92vw;
+    max-height: 80vh;
+    overflow-y: auto;
+}
+.ii-section { margin-bottom: 18px; }
+.ii-section-title {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    font-size: 11px;
+    letter-spacing: 0.15em;
+    text-transform: uppercase;
+    color: var(--text-dim);
+    margin-bottom: 8px;
+    padding-bottom: 6px;
+    border-bottom: 1px dashed var(--border);
+}
+.ii-capacity {
+    color: var(--accent-gold);
+    font-weight: 700;
+    letter-spacing: 0.05em;
+}
+.ii-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 8px;
+}
+.ii-item {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 8px 10px;
+    background: var(--bg-darkest);
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    font-size: 12px;
+    color: var(--text-dim);
+}
+.ii-item.usable { cursor: pointer; color: var(--text-main); }
+.ii-item.usable:hover { border-color: var(--accent-gold); color: var(--accent-gold); }
+.ii-item.ii-special { border-color: rgba(216, 180, 106, 0.3); opacity: 0.85; }
+.ii-item-name { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ii-item-count { color: var(--accent-gold); font-weight: 700; }
+.ii-item-badge { color: var(--accent-gold); font-size: 10px; }
+.ii-empty {
+    grid-column: 1 / -1;
+    text-align: center;
+    font-size: 12px;
+    color: var(--text-dim);
+    opacity: 0.5;
+    padding: 10px 0;
+}
+
 /* 인벤토리 섹션 헤더 (탐험 모드) */
 .inv-section-header {
     color: var(--text-dim);
@@ -395,7 +451,16 @@
 /* ─────────────────────────────────────────────
    전투 보상 팝업 (#modal-reward) — RewardModal.js
    유물 선택 영역(#reward-relic-area)은 추후 확장용
+
+   ★ 공용 .modal-bg(Modal_Base.css)는 알파 0.85로 진해서, 이 모달만은 뒤에
+     남아있는 전투 화면이 흐릿하게라도 비치도록 알파를 낮추고 블러를 키움 —
+     승리 직후 화면이 완전히 검게 훅 꺼지는 느낌을 줄이기 위함. 다른
+     모달(새 게임/랭킹 등)은 배경을 확실히 가려야 하므로 공용 값 그대로 둠.
    ───────────────────────────────────────────── */
+#modal-reward.modal-bg {
+    background: rgba(5, 10, 13, 0.45);
+    backdrop-filter: blur(10px);
+}
 #modal-reward .modal {
     width: min(360px, 90%);
     text-align: center;

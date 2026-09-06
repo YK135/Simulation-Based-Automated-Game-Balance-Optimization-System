@@ -240,6 +240,11 @@ img.combatant-art {
     letter-spacing: 0.05em;
 }
 
+/* ── 아이템 팝업 열기 버튼 (스탯 표 바로 아래) ── */
+.btn-item-panel {
+    margin-top: 8px;
+}
+
 /* ── 아이템 패널 (포션/특수) ── */
 .player-inventory-panel {
     margin-top: 8px;

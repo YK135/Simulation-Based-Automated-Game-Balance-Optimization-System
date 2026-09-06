@@ -149,13 +149,15 @@ class Inventory:
 
         if slot == "potion":
             if len(self.potions) >= SLOT_LIMITS["potion"]:
-                # 포션은 가득 차면 그냥 거절 (방향성 문서 — 포션은 선택 없음)
+                # ★ 예전엔 포션은 가득 차면 그냥 거절(선택 없음)이었는데, 특수템과
+                #   일관되게 "버릴 아이템 선택" UI를 받도록 변경 — candidates 추가.
                 return {
                     "ok": False,
                     "reason": "potion_full",
                     "slot": "potion",
                     "incoming": item_name,
-                    "message": f"포션 가방이 가득 차서 {item_name}을(를) 받을 수 없습니다.",
+                    "candidates": list(self.potions),
+                    "message": "포션 가방이 가득 찼습니다. 버릴 아이템을 선택하세요.",
                 }
             self.potions.append(item_name)
             return {"ok": True, "slot": "potion", "item": item_name}
@@ -177,26 +179,36 @@ class Inventory:
         return {"ok": False, "reason": "unknown_slot", "slot": slot}
 
     # ─────────────────────────────────────────
-    # 특수 슬롯 교체 (특수 가득일 때 사용)
+    # 슬롯 교체 (포션/특수 공용 — 가득 찼을 때 사용)
     # ─────────────────────────────────────────
 
-    def swap_special(self, drop_item: str, new_item: str) -> dict:
+    def swap_item(self, drop_item: str, new_item: str) -> dict:
         """
-        특수 슬롯이 가득 찼을 때 호출.
-        drop_item을 제거하고 new_item 추가.
+        포션/특수 슬롯이 가득 찼을 때 호출. drop_item을 제거하고 new_item 추가.
+        new_item의 슬롯 종류(포션/특수)로 대상 버킷을 정하고, drop_item이
+        같은 종류가 아니면 거부한다(포션 칸이 꽉 찼는데 특수템을 버려서
+        자리를 만드는 식의 뒤섞임 방지).
         """
-        if drop_item not in self.special:
+        slot = get_slot(new_item)
+        if slot == "potion":
+            bucket = self.potions
+        elif slot == "special":
+            bucket = self.special
+        else:
+            return {"ok": False, "reason": "unknown_slot",
+                    "message": f"{new_item}은(는) 알 수 없는 종류입니다."}
+
+        if get_slot(drop_item) != slot:
+            return {"ok": False, "reason": "slot_mismatch",
+                    "message": f"{drop_item}과(와) {new_item}은(는) 종류가 달라 교체할 수 없습니다."}
+
+        if drop_item not in bucket:
             return {"ok": False, "reason": "drop_not_found",
                     "message": f"버릴 아이템 {drop_item}이(가) 인벤토리에 없습니다."}
 
-        slot = get_slot(new_item)
-        if slot != "special":
-            return {"ok": False, "reason": "slot_mismatch",
-                    "message": f"{new_item}은(는) 특수 아이템이 아닙니다."}
-
-        self.special.remove(drop_item)
-        self.special.append(new_item)
-        return {"ok": True, "dropped": drop_item, "added": new_item}
+        bucket.remove(drop_item)
+        bucket.append(new_item)
+        return {"ok": True, "dropped": drop_item, "added": new_item, "slot": slot}
 
     # ─────────────────────────────────────────
     # 사용 (제거)

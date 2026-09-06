@@ -2,8 +2,8 @@
 app/inventory.py — 인벤토리 Blueprint
 ─────────────────────────────────────────────
 엔드포인트:
-  POST /api/use_item                — 필드에서 아이템 사용
-  POST /api/inventory/swap_special  — 특수 슬롯 교체
+  POST /api/use_item        — 필드에서 아이템 사용
+  POST /api/inventory/swap  — 슬롯 교체 (포션/특수 공용, 가득 찼을 때)
 """
 from __future__ import annotations
 
@@ -92,10 +92,10 @@ def use_item():
     return jsonify({"ok": False, "error": "사용할 수 없는 아이템입니다."})
 
 
-@inventory_bp.route("/api/inventory/swap_special", methods=["POST"])
-def inventory_swap_special():
+@inventory_bp.route("/api/inventory/swap", methods=["POST"])
+def inventory_swap():
     """
-    특수 슬롯 가득 시: 기존 아이템 1개 버리고 새 아이템 추가.
+    포션/특수 슬롯 가득 시: 기존 아이템 1개 버리고 새 아이템 추가.
     요청: { "drop": "bomb", "new": "fire_bottle" }
     """
     gs = _get_session()
@@ -110,7 +110,7 @@ def inventory_swap_special():
         return jsonify({"ok": False, "error": "drop과 new를 모두 지정해야 합니다."}), 400
 
     inv    = gs["inventory"]
-    result = inv.swap_special(drop_item, new_item)
+    result = inv.swap_item(drop_item, new_item)
 
     if not result["ok"]:
         return jsonify({"ok": False, "error": result.get("message", "교체 실패")}), 400
