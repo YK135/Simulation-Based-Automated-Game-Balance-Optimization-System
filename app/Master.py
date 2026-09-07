@@ -7,7 +7,8 @@ MASTER_MODE 설정일 때만 이 블루프린트를 등록한다 — RENDER 환�
 
 엔드포인트:
   GET  /api/master/status         — 활성화 여부 + 선택 가능한 몬스터 목록
-  POST /api/master/level_up       — 강제 레벨업 1회
+  POST /api/master/level_up       — { "levels": 3 } 강제 레벨업 N회 (기본 1)
+  POST /api/master/full_heal      — HP/MP 100% 회복
   POST /api/master/battle/boss    — { "boss": "mid" | "final" } 보스 즉시 전투
   POST /api/master/battle/monster — { "monster_type": "고블린", "grade": "상" }
                                      지정 몬스터 즉시 전투
@@ -33,6 +34,9 @@ _MONSTER_TYPES = [
 # app/Map.py의 _GRADE_TO_KEY와 동일한 매핑
 _GRADE_TO_KEY = {"하": "easy", "중": "normal", "상": "hard"}
 
+# 한 번 호출로 올릴 수 있는 레벨 수 상한 (실수로 큰 값을 보내는 것 방지)
+_MAX_LEVELS_PER_CALL = 50
+
 
 @master_bp.route("/api/master/status", methods=["GET"])
 def master_status():
@@ -47,9 +51,33 @@ def master_level_up():
     if gs.get("battle"):
         return jsonify({"ok": False, "error": "전투 중에는 사용할 수 없습니다."}), 400
 
+    data   = request.get_json() or {}
+    levels = data.get("levels", 1)
+    try:
+        levels = int(levels)
+    except (TypeError, ValueError):
+        return jsonify({"ok": False, "error": "levels는 숫자여야 합니다."}), 400
+    if not (1 <= levels <= _MAX_LEVELS_PER_CALL):
+        return jsonify({"ok": False, "error": f"levels는 1~{_MAX_LEVELS_PER_CALL} 사이여야 합니다."}), 400
+
     player = gs["player"]
-    LV_.Lv_up(player)
+    for _ in range(levels):
+        LV_.Lv_up(player)
     gs["hook"].check_level_up()
+    return jsonify({"ok": True, "player": _player_dict(player, gs["inventory"])})
+
+
+@master_bp.route("/api/master/full_heal", methods=["POST"])
+def master_full_heal():
+    gs = _get_session()
+    if not gs:
+        return jsonify({"ok": False, "error": "게임 세션이 없습니다."}), 404
+    if gs.get("battle"):
+        return jsonify({"ok": False, "error": "전투 중에는 사용할 수 없습니다."}), 400
+
+    player = gs["player"]
+    player.hp = player.maxhp
+    player.mp = player.maxmp
     return jsonify({"ok": True, "player": _player_dict(player, gs["inventory"])})
 
 

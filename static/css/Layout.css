@@ -280,7 +280,8 @@ body {
     cursor: grabbing;
 }
 .master-panel button,
-.master-panel select {
+.master-panel select,
+.master-panel input {
     background: var(--bg-panel-2);
     border: 1px solid var(--border);
     color: var(--text-main);
@@ -289,11 +290,15 @@ body {
     font-size: 11px;
     cursor: pointer;
 }
+.master-panel input {
+    cursor: text;
+}
 .master-panel button:hover:not(:disabled) {
     border-color: var(--hp-red);
 }
 .master-panel button:disabled,
-.master-panel select:disabled {
+.master-panel select:disabled,
+.master-panel input:disabled {
     opacity: 0.4;
     cursor: not-allowed;
 }
@@ -302,3 +307,8 @@ body {
     gap: 6px;
 }
 .master-panel-row select { flex: 1; min-width: 0; }
+.master-panel-row input[type="number"] {
+    width: 56px;
+    flex: none;
+}
+.master-panel-row button { flex: 1; min-width: 0; }

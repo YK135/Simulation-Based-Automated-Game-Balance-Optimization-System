@@ -678,7 +678,11 @@
 <!-- 마스터 모드 (로컬 전용 디버그 패널) — 서버가 MASTER_MODE일 때만 JS가 표시함 -->
 <div id="master-panel" class="master-panel" hidden>
     <div id="master-panel-title" class="master-panel-title">🛠 MASTER MODE</div>
-    <button id="master-btn-levelup" type="button">레벨업 +1</button>
+    <div class="master-panel-row">
+        <input id="master-levels-input" type="number" min="1" max="50" value="1" />
+        <button id="master-btn-levelup" type="button">레벨업</button>
+    </div>
+    <button id="master-btn-fullheal" type="button">HP/MP 풀회복</button>
     <button id="master-btn-midboss" type="button">중간보스전</button>
     <button id="master-btn-finalboss" type="button">최종보스전</button>
     <div class="master-panel-row">

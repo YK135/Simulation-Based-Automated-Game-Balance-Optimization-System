@@ -82,22 +82,41 @@ function _initMasterDrag() {
 function refreshMasterPanel() {
     if (!_masterModeEnabled) return;
     const disabled = !!state.inBattle || _masterActionProcessing;
-    document.querySelectorAll('#master-panel button, #master-panel select').forEach(el => {
+    document.querySelectorAll('#master-panel button, #master-panel select, #master-panel input').forEach(el => {
         el.disabled = disabled;
     });
 }
 
 async function _masterLevelUp() {
     if (state.inBattle || _masterActionProcessing) return;
+    const levelsInput = document.getElementById('master-levels-input');
+    const levels = Math.max(1, parseInt(levelsInput?.value, 10) || 1);
+
     _masterActionProcessing = true;
     refreshMasterPanel();
     try {
-        const r = await api('/master/level_up', {});
+        const r = await api('/master/level_up', { levels });
         if (!r.ok) { toast(r.error || '레벨업 실패', 'error'); return; }
         state.player = r.player;
         if (typeof refreshPlayer === 'function') refreshPlayer();
         if (typeof checkPendingPoints === 'function') checkPendingPoints();
         toast(`Lv.${r.player.lv}로 레벨업!`, 'info');
+    } finally {
+        _masterActionProcessing = false;
+        refreshMasterPanel();
+    }
+}
+
+async function _masterFullHeal() {
+    if (state.inBattle || _masterActionProcessing) return;
+    _masterActionProcessing = true;
+    refreshMasterPanel();
+    try {
+        const r = await api('/master/full_heal', {});
+        if (!r.ok) { toast(r.error || 'HP/MP 회복 실패', 'error'); return; }
+        state.player = r.player;
+        if (typeof refreshPlayer === 'function') refreshPlayer();
+        toast('HP/MP 풀회복!', 'info');
     } finally {
         _masterActionProcessing = false;
         refreshMasterPanel();
@@ -156,6 +175,9 @@ document.addEventListener('DOMContentLoaded', () => {
 
     const btnLevelUp = document.getElementById('master-btn-levelup');
     if (btnLevelUp) btnLevelUp.onclick = _masterLevelUp;
+
+    const btnFullHeal = document.getElementById('master-btn-fullheal');
+    if (btnFullHeal) btnFullHeal.onclick = _masterFullHeal;
 
     const btnMid = document.getElementById('master-btn-midboss');
     if (btnMid) btnMid.onclick = () => _masterStartBoss('mid');

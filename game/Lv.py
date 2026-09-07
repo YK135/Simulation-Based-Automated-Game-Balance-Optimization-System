@@ -352,19 +352,14 @@ class LV_:
     def Lv_up(player) -> None:
         """
         레벨업 처리:
-          - MP는 기존 비율 유지
-          - HP는 일부 회복
+          - HP/MP는 오른 최대치만큼 그대로 회복
           - 직업별 성장치 적용
           - 스킬 해금
           - 필요 경험치(maxexp) 증가
         """
         _initialize_skills_for_existing_level(player)
 
-        # 1) 레벨업 전 비율 저장
-        mp_ratio = (player.mp / player.maxmp) if getattr(player, "maxmp", 0) > 0 else 1.0
-        hp_ratio = (player.hp / player.maxhp) if getattr(player, "maxhp", 0) > 0 else 1.0
-
-        # 2) 이전 스탯 저장
+        # 1) 이전 스탯 저장
         before = {
             "maxhp": player.maxhp,
             "maxmp": player.maxmp,
@@ -387,15 +382,10 @@ class LV_:
         # 3) 성장 적용 (전투 스탯 70%)
         LV_.apply_growth(player)
 
-        # 4) HP / MP 회복
-        # HP: 기존 비율 유지 + 레벨업 보너스 회복
-        bonus_heal = max(20, int(before["maxhp"] * 0.15))
-        player.hp = int(player.maxhp * hp_ratio) + bonus_heal
-        player.hp = min(player.hp, player.maxhp)
-
-        # MP: 기존 비율 유지
-        player.mp = int(round(player.maxmp * mp_ratio))
-        player.mp = min(player.mp, player.maxmp)
+        # 4) HP / MP 회복 — 오른 최대치만큼 그대로 회복
+        #    (예: maxhp 150→170, 현재hp 100 → 오른 20만큼 더해 120)
+        player.hp = min(player.hp + (player.maxhp - before["maxhp"]), player.maxhp)
+        player.mp = min(player.mp + (player.maxmp - before["maxmp"]), player.maxmp)
 
         # 5) 경험치 차감 및 maxexp 증가
         player.exp -= player.maxexp
@@ -428,8 +418,8 @@ class LV_:
         }
 
         print(f"\n📈 {player.name} 레벨업! (Lv.{old_lv} → Lv.{player.lv})")
-        print(f"   HP 회복: {player.hp}/{player.maxhp}")
-        print(f"   MP 회복: {int(mp_ratio * 100)}% 유지 → {player.mp}/{player.maxmp}")
+        print(f"   HP: {player.hp}/{player.maxhp}")
+        print(f"   MP: {player.mp}/{player.maxmp}")
 
         for stat_key in before:
             b = _safe_round_stat(before[stat_key])
