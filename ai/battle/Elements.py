@@ -3,7 +3,11 @@ from __future__ import annotations
 
 from random import randint
 
-from .Entity import StatusEffect
+from .Entity import Debuff, StatusEffect
+from .EliteKit import (
+    ICE_SLIME_BREAK_SPARM_AMOUNT, ICE_SLIME_BREAK_TURNS,
+    LIGHTNING_SLIME_OVERLOAD_SPD_AMOUNT, LIGHTNING_SLIME_OVERLOAD_SPD_TURNS,
+)
 
 REACTIONS = {
     ("ice",       "fire"):      "melt",       # 단방향: ice→fire만 융해 발동 (fire→ice는 무반응)
@@ -64,6 +68,40 @@ def _restore_innate_element(defender, messages: list) -> None:
         messages.append(f"{defender.name}의 고유 원소가 다시 타오른다! ({innate})")
 
 
+def _elite_charge_slime_overload(defender, messages: list) -> None:
+    """엘리트 화염/번개 슬라임이 상극 원소(과부하 반응)를 맞으면 열기/전하 스택 초기화.
+    번개 슬라임은 추가로 1턴 SPD -20%."""
+    if not getattr(defender, "elite_leader", False):
+        return
+    et = getattr(defender, "enemy_type", "")
+    if et not in ("화염 슬라임", "번개 슬라임"):
+        return
+    defender.elite_pattern_turn = 0
+    messages.append(f"{defender.name}의 스택이 초기화되었다!")
+    if et == "번개 슬라임":
+        defender.apply_debuff(Debuff(
+            stat="spd", amount=LIGHTNING_SLIME_OVERLOAD_SPD_AMOUNT,
+            turns=LIGHTNING_SLIME_OVERLOAD_SPD_TURNS, name="과부하"))
+
+
+def _elite_ice_slime_break(defender, messages: list) -> None:
+    """엘리트 빙결 슬라임의 파쇄 — 갑옷을 2턴간 해제하고 SPARM -20%.
+    이미 해제 상태면(elite_phase==1) 같은 턴 중복 파쇄를 무시한다."""
+    if not getattr(defender, "elite_leader", False):
+        return
+    if getattr(defender, "enemy_type", "") != "빙결 슬라임":
+        return
+    if getattr(defender, "elite_phase", 0) != 0:
+        return
+    defender.elite_phase = 1
+    defender.elite_pattern_turn = ICE_SLIME_BREAK_TURNS
+    defender.physical_resist = 1.0
+    defender.apply_debuff(Debuff(
+        stat="sparm", amount=ICE_SLIME_BREAK_SPARM_AMOUNT,
+        turns=ICE_SLIME_BREAK_TURNS, name="파쇄"))
+    messages.append(f"{defender.name}의 빙결 갑옷이 깨졌다! 방어력이 약해졌다!")
+
+
 def is_element_immune(defender, attack_element: str) -> bool:
     """defender가 attack_element에 면역인지. physical/무원소는 면역 없음."""
     if not attack_element or attack_element == "physical":
@@ -104,6 +142,7 @@ def apply_element_and_react(
             messages.append(f"{eff['label']} 발동! +{bonus} 추가 데미지")
             messages.append(f"{defender.name}의 원소 큐가 초기화되었다.")
             _restore_innate_element(defender, messages)   # 원소 슬라임 고유 원소 복구
+            _elite_ice_slime_break(defender, messages)     # 엘리트 빙결 슬라임: 갑옷 파쇄
             return base_damage + bonus
         return base_damage
 
@@ -147,6 +186,7 @@ def apply_element_and_react(
                     if gained > 0:
                         messages.append(f"[마법사 패시브] 원소 반응 → MP +{gained}")
                 _restore_innate_element(defender, messages)   # 원소 슬라임 고유 원소 복구
+                _elite_charge_slime_overload(defender, messages)  # 엘리트 화염/번개 슬라임: 스택 초기화
             else:
                 defender.element_queue = [attack_element]
                 messages.append(f"{defender.name}에게 {attack_element} 원소가 부착되었다.")

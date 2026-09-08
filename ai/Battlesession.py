@@ -29,6 +29,7 @@ from ai.battle_session.ATB_Flow       import ATBFlowMixin
 from ai.battle_session.Rewards        import RewardsMixin
 from ai.battle_session.Player_Actions import PlayerActionsMixin
 from ai.battle_session.Enemy_Actions  import EnemyActionsMixin
+from ai.battle_session.Elite_Actions  import EliteActionsMixin
 from ai.battle_session.State          import StateMixin
 from ai.battle_session.Battle_Log     import BattleLogMixin
 
@@ -39,6 +40,7 @@ class BattleSession(
     RewardsMixin,
     PlayerActionsMixin,
     EnemyActionsMixin,
+    EliteActionsMixin,
     StateMixin,
     BattleLogMixin,
 ):

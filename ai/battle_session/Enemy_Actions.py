@@ -8,6 +8,9 @@ from ai.battle import (
     apply_element_and_react, Buff, DamageCalc,
     execute_skill, SKILL_META, TurnLog,
 )
+from ai.battle.EliteKit import (
+    ASSASSIN_MARK_BONUS, ICE_SLIME_ARMOR_REDUCTION,
+)
 
 
 class EnemyActionsMixin:
@@ -80,7 +83,15 @@ class EnemyActionsMixin:
         #    사제도 동일하게 거쳐야 함 (Codex 지적 반영).
         if getattr(enemy, "enemy_type", "") == "사제":
             self._priest_action(enemy, msgs)
+        elif getattr(enemy, "elite_leader", False) and enemy.enemy_type == "골렘":
+            # 골렘 3단계 고정 사이클(수비태세→충전예고→강화공격)은 확률 기반
+            # EnemyAI를 거치지 않는 전용 분기.
+            self._elite_golem_action(enemy, msgs)
         else:
+            # ── 엘리트 사전 처리 (버프/스택/즉시효과) — 결정 전에 실행 ──
+            if getattr(enemy, "elite_leader", False):
+                self._elite_pre_action(enemy, msgs)
+
             # ── 일반 몬스터 행동 (기존 로직) ──
             chapter = (getattr(self, "battle_meta", {}) or {}).get("chapter", 1)
             action = self._enemy_ai(enemy, self.player, chapter=chapter)
@@ -111,6 +122,9 @@ class EnemyActionsMixin:
                     tanker_msg = self.player.passive_on_hit_received("physical")
                     if tanker_msg:
                         msgs.append(tanker_msg)
+
+                    if getattr(enemy, "elite_leader", False) and enemy.enemy_type == "박쥐":
+                        self._elite_bat_lifesteal(enemy, dmg, msgs)
                 self.logs.append(TurnLog(
                     turn=self.turn,
                     actor="enemy",
@@ -139,6 +153,13 @@ class EnemyActionsMixin:
                     ))
                 else:
                     if dmg > 0:
+                        is_elite = getattr(enemy, "elite_leader", False)
+                        is_assassin_finisher = (is_elite and enemy.enemy_type == "암살자"
+                                                 and action.detail == "급소찌르기1")
+                        if is_assassin_finisher and self._has_assassin_mark():
+                            dmg = int(dmg * (1 + ASSASSIN_MARK_BONUS))
+                            msgs.append("🎯 암살 표식 — 급소찌르기 피해 증가!")
+
                         dmg = self._apply_dmg_shielded(self.player, dmg, msgs)
                         msgs.append(f"{enemy.name} → {action.detail} | {dmg} 데미지")
                         msgs.append(f"{self.player.name} HP: {max(0, int(self.player.hp))}")
@@ -149,6 +170,11 @@ class EnemyActionsMixin:
                         tanker_msg = self.player.passive_on_hit_received(skill_type)
                         if tanker_msg:
                             msgs.append(tanker_msg)
+
+                        if is_elite and enemy.enemy_type == "박쥐":
+                            self._elite_bat_lifesteal(enemy, dmg, msgs)
+                        if is_assassin_finisher and dmg == 0:
+                            self._clear_assassin_mark(msgs)
                     elif debuff_name:
                         msgs.append(f"{enemy.name} → {action.detail} 사용!")
 
@@ -183,6 +209,16 @@ class EnemyActionsMixin:
         enemy.tick_debuffs()
         self.player.tick_debuffs()
 
+        # ── 엘리트 빙결 슬라임: 파쇄로 해제된 빙결 갑옷 복구 카운트다운 ──
+        # (반응형 패턴이라 사전/전용 분기 없이 여기서만 처리)
+        if (getattr(enemy, "elite_leader", False) and enemy.enemy_type == "빙결 슬라임"
+                and enemy.elite_phase == 1):
+            enemy.elite_pattern_turn -= 1
+            if enemy.elite_pattern_turn <= 0:
+                enemy.elite_phase = 0
+                enemy.physical_resist = 1.0 - ICE_SLIME_ARMOR_REDUCTION
+                msgs.append(f"{enemy.name}의 빙결 갑옷이 복구되었다!")
+
 
     # ─────────────────────────────────────────────
     # 사제 전용 행동 (서포터형)
@@ -195,6 +231,10 @@ class EnemyActionsMixin:
           3) 그 외 → 홀리볼트 (마법 공격)
           4) MP 부족 → 기본 물리 공격
         """
+        # ── 엘리트 부활 의식 (최우선 — 정상 우선순위보다 앞섬) ──
+        if self._priest_elite_revival_check(priest, msgs):
+            return
+
         # 자기 제외 살아있는 아군
         allies = [e for e in self.enemies if e is not priest and e.hp > 0]
 

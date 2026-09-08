@@ -266,6 +266,17 @@ MONSTER_SKILL_META = {
         "mp": 12, "type": "shield",
         "shield_mult": 0.15
     },
+    # 엘리트 골렘(고대 수호 골렘) 전용 — 몬스터만 시전, 플레이어는 배울 수 없음.
+    # 몬스터판 몸통박치기2(arm_mult 1.30, hp_mult 0.028)의 1.3배.
+    "몸통박치기_강화": {
+        "mp": 0, "type": "tank_attack",
+        "arm_mult": 1.69, "hp_mult": 0.0364
+    },
+    # 엘리트 흡혈 박쥐 전용 — 3번째 행동마다 예고 후 사용, 대미지 없이 SPD만 약화.
+    "초음파비명": {
+        "mp": 0, "type": "debuff",
+        "debuff_stat": "spd", "debuff_amount": (0.20, 0.20), "debuff_turns": (2, 2)
+    },
 }
 
 

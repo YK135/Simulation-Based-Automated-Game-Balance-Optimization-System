@@ -23,6 +23,7 @@ from .Skills import SKILL_META, MONSTER_SKILL_META, execute_skill, execute_singl
 from .Items import ITEM_META, use_item
 from .Engine import TurnLog, BattleResult, BattleEngine, _escape_chance
 from .MonsterKit import MONSTER_KITS, get_monster_kit
+from .EliteKit import elite_forced_action
 
 __all__ = [
     "EntitySnapshot", "Debuff", "Buff", "StatusEffect",
@@ -35,4 +36,5 @@ __all__ = [
     "ITEM_META", "use_item",
     "TurnLog", "BattleResult", "BattleEngine", "_escape_chance",
     "MONSTER_KITS", "get_monster_kit",
+    "elite_forced_action",
 ]

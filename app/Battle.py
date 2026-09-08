@@ -187,12 +187,16 @@ def _enemy_exp(e, player_maxexp: int) -> int:
 
 def _get_defeated_list(battle) -> list:
     """처치 몬스터 목록: defeated_origins 우선 (원본 Unit — 정확값),
-    비어 있으면 battle.enemies로 폴백. (경험치/보상 공용)"""
+    비어 있으면 battle.enemies로 폴백. (경험치/보상 공용)
+
+    엘리트 분열/부활 개체는 reward_eligible=False로 마킹되어 있으면
+    보상 대상에서 제외한다 (전부 제외되는 예외 상황 대비 폴백 유지)."""
     defeated = [o for o in getattr(battle, "defeated_origins", []) if o is not None]
     if not defeated:
         enemies = list(getattr(battle, "enemies", []) or [])
         # 승리 시점이므로 전부 처치됐다고 간주 (hp 기준 필터는 안전용)
-        defeated = [e for e in enemies if getattr(e, "hp", 0) <= 0] or enemies
+        dead = [e for e in enemies if getattr(e, "hp", 0) <= 0]
+        defeated = [e for e in dead if getattr(e, "reward_eligible", True)] or dead or enemies
     return defeated
 
 

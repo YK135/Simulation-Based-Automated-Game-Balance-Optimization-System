@@ -88,6 +88,16 @@ class PlayerActionsMixin:
             if getattr(target, "shield", 0.0) <= 0:
                 msgs.append("🛡 실드가 깨졌다!")
         self._update_golem_groggy(target, is_basic_attack, msgs)
+
+        if target.hp <= 0:
+            if (getattr(target, "elite_leader", False)
+                    and getattr(target, "enemy_type", "") == "슬라임"):
+                self._split_slime(target, msgs)
+            elif (getattr(target, "elite_leader", False)
+                    and getattr(target, "enemy_type", "") == "사제"
+                    and getattr(target, "elite_phase", 0) != 0):
+                msgs.append(f"{target.name}이(가) 쓰러져 부활 의식이 중단되었다!")
+
         return hp_damage
 
     def _update_golem_groggy(self, target, is_basic_attack: bool, msgs: list) -> None:
@@ -107,6 +117,12 @@ class PlayerActionsMixin:
             target.apply_debuff(Debuff(stat="arm", amount=0.5, turns=2, name="그로기"))
             target.apply_debuff(Debuff(stat="sparm", amount=0.5, turns=2, name="그로기"))
             msgs.append(f"🔨 {target.name} 그로기! 방어력이 50% 감소했다!")
+
+            # 엘리트 골렘: 충전예고 단계(elite_phase=1)에서 그로기 발생 시
+            # 예정된 강화 공격을 취소하고 수비태세부터 재시작.
+            if getattr(target, "elite_leader", False) and getattr(target, "elite_phase", 0) == 1:
+                target.elite_phase = 0
+                msgs.append(f"{target.name}의 강화 공격이 취소되었다!")
 
     def _exec_multi_hit_skill(self, skill_name: str, meta: dict, target, msgs: list,
                               dice_info) -> str:

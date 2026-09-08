@@ -6,6 +6,7 @@ Auto_AI.py
 from __future__ import annotations
 from ai.battle import Action, EntitySnapshot, SKILL_META, MONSTER_SKILL_META, get_monster_kit
 from ai.battle.Elements import is_element_immune
+from ai.battle.EliteKit import elite_forced_action
 
 ATTACK_TYPES = {"physical", "magical", "multi_hit", "tank_attack", "counter"}
 SUPPORT_TYPES = {"buff", "heal", "shield", "debuff"}
@@ -400,6 +401,10 @@ class EnemyAI:
 
     def decide(self, attacker: EntitySnapshot, defender: EntitySnapshot,
                enemy_count: int = 1, chapter: int = 1) -> Action:
+        if getattr(attacker, "elite_leader", False):
+            forced = elite_forced_action(attacker, defender, chapter)
+            if forced is not None:
+                return forced
         kit = get_monster_kit(getattr(attacker, "enemy_type", ""), chapter)
         if kit is not None:
             return self._decide_with_kit(attacker, kit)

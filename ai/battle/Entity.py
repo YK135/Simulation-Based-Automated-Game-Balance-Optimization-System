@@ -107,6 +107,18 @@ class EntitySnapshot:
     # 종족 식별자 (UI 표시 등에 활용)
     enemy_type: str = ""
 
+    # ── 엘리트 몬스터 패턴 (ai/battle/EliteKit.py 참고) ──
+    # elite_phase / elite_pattern_turn은 몬스터마다 의미가 다르게 쓰인다
+    # (예: 골렘 0/1/2=수비태세/충전예고/공격, 빙결슬라임 0/1=갑옷활성/해제중,
+    #  박쥐·화염·번개슬라임의 elite_pattern_turn=행동 스택 카운터).
+    is_elite: bool = False
+    elite_leader: bool = False
+    elite_phase: int = 0
+    elite_pattern_turn: int = 0
+    elite_pattern_used: bool = False   # 전투당 1회 한정 능력(분노/추진력/부활/분열) 사용 여부
+    is_summoned: bool = False          # 분열로 생성된 개체
+    reward_eligible: bool = True       # False면 처치해도 경험치/보상 제외
+
     # ── 직업 식별자 (플레이어 전용) ──
     # 직업별 패시브 발동에 사용:
     #   "전사":   적 공격(일반공격/공격형 스킬) 3회마다 maxhp 10% 회복
@@ -359,6 +371,8 @@ class EntitySnapshot:
             first_attack_bonus=getattr(enemy, "first_attack_bonus", 1.0),
             enemy_type=getattr(enemy, "enemy_type", ""),
             attack_element=getattr(enemy, "attack_element", ""),
+            is_elite=getattr(enemy, "is_elite", False),
+            elite_leader=getattr(enemy, "elite_leader", False),
         )
         # 원소 슬라임 등: 전투 시작 시 초기 원소 큐 설정
         init_q = getattr(enemy, "init_element_queue", [])
