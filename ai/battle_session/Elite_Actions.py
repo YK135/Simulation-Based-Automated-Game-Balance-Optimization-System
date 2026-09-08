@@ -21,6 +21,19 @@ from ai.battle.EliteKit import (
 class EliteActionsMixin:
     """BattleSession에 엘리트 몬스터 패턴 기능을 제공하는 mixin."""
 
+    def _check_elite_death(self, target: EntitySnapshot, msgs: list) -> None:
+        """엘리트 리더가 방금 hp<=0이 됐을 때의 후처리(분열/부활취소).
+        직접 피해(_apply_dmg_shielded)와 상태이상 DoT 사망(Battlesession의
+        원소 상태이상 틱 처리) 양쪽 사망 경로에서 모두 호출해야 한다 —
+        한쪽에서만 호출하면 화상/출혈로 죽은 증식 슬라임이 분열하지 않는다."""
+        if target.hp > 0 or not getattr(target, "elite_leader", False):
+            return
+        et = getattr(target, "enemy_type", "")
+        if et == "슬라임":
+            self._split_slime(target, msgs)
+        elif et == "사제" and getattr(target, "elite_phase", 0) != 0:
+            msgs.append(f"{target.name}이(가) 쓰러져 부활 의식이 중단되었다!")
+
     # ═══════════════════════════════════════════════════════
     # 사전 처리 (버프/스택/즉시효과) — 골렘/사제 제외한 엘리트 리더가
     # 정상 결정(EnemyAI.decide) 전에 거친다.
@@ -60,9 +73,15 @@ class EliteActionsMixin:
             msgs.append(f"{enemy.name}이(가) 분노하여 방어를 포기했다!")
 
     # ── 흡혈 박쥐 ──
+    # elite_phase: 0=평시, 1=이번 행동에 막 예고됨(elite_forced_action이 watch로
+    # 소비하며 2로 전환), 2=다음 행동에 초음파비명 발동 대기.
+    # 예고(phase 0→1)와 실제 발동(phase 2)이 반드시 서로 다른 행동에서
+    # 일어나도록 elite_forced_action이 전환을 전담한다 — 여기서 바로
+    # 1을 세팅하고 같은 행동에서 EnemyAI.decide()가 곧장 소비해버리면
+    # "예고 후 다음 행동에 발동"이 아니라 예고와 동시에 발동해버린다.
     def _elite_bat_pre(self, enemy: EntitySnapshot, msgs: list) -> None:
-        if enemy.elite_phase == 1:
-            return  # 이번 행동은 예고된 비명이 강제됨 (EliteKit.elite_forced_action)
+        if enemy.elite_phase != 0:
+            return  # 예고/발동 대기 중 — elite_forced_action이 처리
         enemy.elite_pattern_turn += 1
         if enemy.elite_pattern_turn >= BAT_SCREAM_INTERVAL:
             enemy.elite_pattern_turn = 0
@@ -80,10 +99,10 @@ class EliteActionsMixin:
         if gained > 0:
             msgs.append(f"{enemy.name}이(가) 피해를 흡수해 HP를 회복했다. (+{gained})")
 
-    # ── 그림자 암살자 ──
+    # ── 그림자 암살자 ── (박쥐와 동일한 phase 0/1/2 규약 — elite_forced_action 참고)
     def _elite_assassin_pre(self, enemy: EntitySnapshot, msgs: list) -> None:
-        if enemy.elite_phase == 1:
-            return  # 이번 행동은 급소찌르기가 강제됨
+        if enemy.elite_phase != 0:
+            return  # 예고/발동 대기 중 — elite_forced_action이 처리
         enemy.elite_pattern_turn += 1
         if enemy.elite_pattern_turn >= ASSASSIN_MARK_INTERVAL:
             enemy.elite_pattern_turn = 0
@@ -209,7 +228,11 @@ class EliteActionsMixin:
                 return False
             target = dead_allies[0]
             target.hp = target.maxhp * PRIEST_REVIVE_HP_RATIO
-            target.reward_eligible = False
+            # reward_eligible은 건드리지 않는다 — 보상은 전투 종료 시 최종
+            # 상태 기준으로 딱 한 번만 계산되므로(_get_defeated_list), 여기서
+            # False로 마킹하면 "추가 보상 방지"가 아니라 이 동료를 처치한
+            # 정당한 보상까지 통째로 사라진다. 애초에 이중 지급 위험 자체가
+            # 없으므로(재처치해도 계산은 여전히 1회) 별도 처리 불필요.
             priest.elite_pattern_used = True
             priest.elite_phase = PRIEST_PHASE_IDLE
             msgs.append(f"{priest.name}의 부활 의식이 완성되어 {target.name}이(가) 되살아났다!")

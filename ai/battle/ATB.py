@@ -5,7 +5,6 @@ from __future__ import annotations
 
 class ATBSystem:
     THRESHOLD = 100
-    SPD_MULTIPLIER: float = 1.0
 
     def __init__(self, spd_multiplier: float = 1.0):
         self.player_pt: float = 0.0
@@ -31,10 +30,6 @@ class ATBSystem:
             self.enemy_pt = 0.0
 
         return actors
-
-    def reset(self):
-        self.player_pt = 0.0
-        self.enemy_pt = 0.0
 
 
 # ────────────────────────────────────────────

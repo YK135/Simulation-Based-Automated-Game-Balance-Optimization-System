@@ -90,7 +90,7 @@ def test_malicious_names_stay_inside_player_dir():
 
 def test_normal_names_still_readable():
     print("\n[정상적인 이름 — 회귀 방지: 여전히 읽기 좋은 파일명]")
-    from ai.LOG_Manager import LogManager, PLAYER_DIR
+    from ai.LOG_Manager import LogManager
 
     lm = LogManager()
     for name in ["홍길동", "Hero123", "용사_A"]:

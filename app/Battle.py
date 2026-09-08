@@ -43,39 +43,6 @@ def _get_current_map_layer(gs: dict) -> int:
         return 0
 
 
-def _unit_to_snap(unit) -> "EntitySnapshot":
-    """
-    _SnapUnit 또는 Unit → EntitySnapshot 변환.
-    BattleSession이 EntitySnapshot을 요구할 때 사용.
-    이미 EntitySnapshot이면 그대로 반환.
-    """
-    from ai.battle import EntitySnapshot as ES
-    if isinstance(unit, ES):
-        return unit
-    snap = ES(
-        name   = unit.name,
-        hp     = unit.hp,     maxhp  = unit.hp,
-        mp     = getattr(unit, "mp", 0),
-        maxmp  = getattr(unit, "mp", 0),
-        stg    = unit.stg,    arm    = unit.arm,
-        sparm  = unit.sparm,  sp     = getattr(unit, "sp", 0),
-        luc    = unit.luc,    lv     = unit.lv,
-        spd    = getattr(unit, "spd", 10.0),
-        physical_resist = getattr(unit, "physical_resist", 1.0),
-        magical_resist  = getattr(unit, "magical_resist",  1.0),
-        dodge_bonus     = getattr(unit, "dodge_bonus", 0.0),
-        first_strike    = getattr(unit, "first_strike", False),
-        first_attack_bonus = getattr(unit, "first_attack_bonus", 1.0),
-        enemy_type      = getattr(unit, "enemy_type", unit.name),
-        attack_element  = getattr(unit, "attack_element", ""),
-    )
-    # 원소 초기 큐 보존 (원소 슬라임 유실 방지)
-    _init_q = getattr(unit, "init_element_queue", None) or getattr(unit, "element_queue", [])
-    if _init_q:
-        snap.element_queue = list(_init_q)
-    return snap
-
-
 def _start_battle(gs: dict, enemy, is_boss: bool = False) -> dict:
     """단일 전투 BattleSession 생성 후 초기 상태 반환."""
     from ai.battle import EntitySnapshot

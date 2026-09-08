@@ -195,6 +195,13 @@ def _make_elite_encounter(hook, chapter: int = 1, layer: int = 1):
     leader_unit.is_elite = True
     leader_unit.elite_leader = True
 
+    if leader_type == "빙결 슬라임":
+        # "전투 시작 시 빙결 갑옷을 가진다" — 받는 물리 피해 추가 15% 감소를
+        # 이 몬스터의 원래 physical_resist 위에 상대적으로 곱한다(고정값
+        # 대입 아님 — 슬라임 종류마다 기본 저항이 달라서 절대값을 쓰면 틀어짐).
+        from ai.battle.EliteKit import ICE_SLIME_ARMOR_REDUCTION
+        leader_unit.physical_resist = getattr(leader_unit, "physical_resist", 1.0) * (1 - ICE_SLIME_ARMOR_REDUCTION)
+
     enemies = [leader_unit]
     grades  = ["상"]
 

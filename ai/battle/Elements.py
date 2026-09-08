@@ -5,7 +5,7 @@ from random import randint
 
 from .Entity import Debuff, StatusEffect
 from .EliteKit import (
-    ICE_SLIME_BREAK_SPARM_AMOUNT, ICE_SLIME_BREAK_TURNS,
+    ICE_SLIME_ARMOR_REDUCTION, ICE_SLIME_BREAK_SPARM_AMOUNT, ICE_SLIME_BREAK_TURNS,
     LIGHTNING_SLIME_OVERLOAD_SPD_AMOUNT, LIGHTNING_SLIME_OVERLOAD_SPD_TURNS,
 )
 
@@ -95,7 +95,10 @@ def _elite_ice_slime_break(defender, messages: list) -> None:
         return
     defender.elite_phase = 1
     defender.elite_pattern_turn = ICE_SLIME_BREAK_TURNS
-    defender.physical_resist = 1.0
+    # 갑옷 활성 상태(스폰 시 physical_resist *= 0.85)에서 그 배율을 되돌려
+    # 원래 저항으로 복귀 — 1.0으로 고정하면 이 슬라임의 원래 저항이
+    # 1.0이 아닐 때(예: 빙결 슬라임 기본 0.80) 틀린 값이 된다.
+    defender.physical_resist = defender.physical_resist / (1 - ICE_SLIME_ARMOR_REDUCTION)
     defender.apply_debuff(Debuff(
         stat="sparm", amount=ICE_SLIME_BREAK_SPARM_AMOUNT,
         turns=ICE_SLIME_BREAK_TURNS, name="파쇄"))

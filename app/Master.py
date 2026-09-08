@@ -149,12 +149,20 @@ def master_battle_elite():
     if gs.get("battle"):
         return jsonify({"ok": False, "error": "전투 중에는 사용할 수 없습니다."}), 400
 
-    from .Map import _make_elite_encounter
+    from .Map import _make_elite_encounter, _apply_stat_scale, _early_game_multi_scale, ELITE_STAT_SCALE
 
     hook    = gs["hook"]
     chapter = gs.get("chapter", 1)
     layer   = gs.get("battle_map_layer") or 1
     enemies, _grades = _make_elite_encounter(hook, chapter=chapter, layer=layer)
+
+    # 실제 노드맵 엘리트 스폰(app/Map.py choose_node)과 동일한 다대일 보정 —
+    # BattleSession은 더 이상 자체적으로 이 보정을 하지 않으므로 여기서
+    # 반드시 한 번 적용해야 실제 맵 엘리트전과 강함이 같아진다.
+    if len(enemies) > 1:
+        scale = ELITE_STAT_SCALE.get(len(enemies), ELITE_STAT_SCALE[2])
+        scale *= _early_game_multi_scale(gs["player"].lv)
+        _apply_stat_scale(enemies, scale)
 
     gs["battle_node_type"] = "elite"
     gs["pending_node_id"]  = None

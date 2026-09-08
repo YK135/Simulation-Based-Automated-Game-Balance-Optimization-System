@@ -26,15 +26,15 @@ for p in (_HERE, os.path.join(_HERE, "ai"), os.path.join(_HERE, "game"),
 
 try:
     from ai.battle.Battle_Engine import (
-        EntitySnapshot, StatusEffect, Debuff, Buff,
+        EntitySnapshot, StatusEffect,
         execute_skill, use_item, apply_element_and_react,
-        _apply_damage_with_shield, SKILL_META, ITEM_META, REACTIONS,
+        _apply_damage_with_shield, SKILL_META,
     )
 except ModuleNotFoundError:
     from ai.battle.Battle_Engine import (
-        EntitySnapshot, StatusEffect, Debuff, Buff,
+        EntitySnapshot, StatusEffect,
         execute_skill, use_item, apply_element_and_react,
-        _apply_damage_with_shield, SKILL_META, ITEM_META, REACTIONS,
+        _apply_damage_with_shield, SKILL_META,
     )
 
 

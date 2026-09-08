@@ -6,9 +6,12 @@ test_elite_patterns.py — 엘리트 몬스터 패턴 회귀 테스트
 
 검증 대상 (9종 엘리트 패턴 + 공통 인프라):
   일반 노드(elite_leader=False)에서는 패턴 미발동, 증식 슬라임 1회 한정
-  분열 + 보상 제외, 골렘 3단계 사이클 + 그로기 인터럽트, 암살자 표식,
-  화염/번개 슬라임 스택+과부하 리셋, 빙결 슬라임 파쇄, 사제 부활(1회 한정,
-  재분열/재부활 없음), 박쥐 흡혈+비명, 고블린 버프/분노, 전투 정상 종료.
+  분열(직접피해+DoT 사망 양쪽 경로) + 보상 제외, 골렘 3단계 사이클 +
+  그로기 인터럽트(충전예고 메시지 출력 전/후 둘 다), 암살자 표식(예고와
+  발동이 서로 다른 행동), 화염/번개 슬라임 스택+과부하 리셋, 빙결 슬라임
+  파쇄(원래 저항 기준 상대 복원), 사제 부활(1회 한정, 재분열/재부활 없음,
+  보상은 유지), 박쥐 흡혈+비명(예고와 발동이 서로 다른 행동), 고블린
+  버프/분노, 다대일 스탯 이중 보정 없음, 전투 정상 종료.
 """
 import sys, os
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -132,19 +135,42 @@ def test_golem_cycle():
 
 
 def test_golem_groggy_interrupt():
+    """골렘의 실제 위협 구간은 '충전예고 메시지가 출력된 직후'(phase가 이미
+    STRIKE(2)로 넘어간 상태)다 — phase==1에서만 그로기가 걸리면, 플레이어가
+    정작 경고 메시지를 보고 반응하는 시점엔 이미 취소 불가능하다(Codex
+    발견). 두 번째 골렘 행동(충전예고 출력, phase→2)까지 진행한 뒤
+    인터럽트가 걸리는지가 핵심 검증."""
     player = mk_player()
     golem = mk_elite("골렘", hp=100000, stg=10)
     session = BattleSession(player, enemy=golem, items=[])
-    session._elite_golem_action(golem, [])  # phase 0->1 (충전예고)
-    check("충전예고 진입", golem.elite_phase == 1)
+    session._elite_golem_action(golem, [])  # phase 0->1 (수비태세 종료)
+    session._elite_golem_action(golem, [])  # phase 1->2 (충전예고 메시지 출력)
+    check("충전예고 메시지 출력 후 phase=2(강타 대기)", golem.elite_phase == 2,
+          f"phase={golem.elite_phase}")
 
     msgs = []
     session._apply_dmg_shielded(golem, 10, msgs, is_basic_attack=True)
     session._apply_dmg_shielded(golem, 10, msgs, is_basic_attack=True)
-    check("충전예고 중 기본공격 2연속 적중 → 그로기 발생", golem.physical_hit_streak == 0)
+    check("충전예고 출력 후(phase=2)에도 기본공격 2연속 적중 → 그로기 발생",
+          golem.physical_hit_streak == 0)
     check("그로기로 강화공격 취소, phase가 0으로 리셋", golem.elite_phase == 0,
           f"phase={golem.elite_phase}")
     check("그로기 메시지 출력", any("그로기" in m for m in msgs), msgs)
+
+
+def test_golem_groggy_interrupt_before_telegraph_message():
+    """phase==1(수비태세 직후, 아직 충전예고 메시지는 안 나온 상태)에서도
+    그로기가 걸려야 한다 — 더 이른 시점의 인터럽트도 여전히 유효해야 함."""
+    player = mk_player()
+    golem = mk_elite("골렘", hp=100000, stg=10)
+    session = BattleSession(player, enemy=golem, items=[])
+    session._elite_golem_action(golem, [])  # phase 0->1
+    check("수비태세 직후 phase=1", golem.elite_phase == 1)
+
+    msgs = []
+    session._apply_dmg_shielded(golem, 10, msgs, is_basic_attack=True)
+    session._apply_dmg_shielded(golem, 10, msgs, is_basic_attack=True)
+    check("phase=1에서도 그로기로 취소됨", golem.elite_phase == 0, f"phase={golem.elite_phase}")
 
 
 # ═══════════════════════════════════════════════════════
@@ -152,21 +178,34 @@ def test_golem_groggy_interrupt():
 # ═══════════════════════════════════════════════════════
 
 def test_assassin_mark_cycle():
+    """예고(표식 부여)와 실제 급소찌르기 발동이 서로 다른 행동에서 일어나야
+    한다(Codex 발견 — 예전엔 같은 행동에서 즉시 발동해 플레이어가 대응할
+    틈이 없었음). 3번째 행동 = 표식 부여 + 이번 행동은 watch로 소비,
+    4번째 행동에야 비로소 급소찌르기가 강제되는지 확인."""
     player = mk_player()
     assassin = mk_elite("암살자", hp=100000, stg=10)
     session = BattleSession(player, enemy=assassin, items=[])
+    from ai.battle import elite_forced_action
 
     check("암살자 마크 없음 초기", not session._has_assassin_mark())
     for _ in range(3):
         msgs = []
         session._elite_pre_action(assassin, msgs)
     check("3번째 행동에서 표식 부여", session._has_assassin_mark())
-    check("표식 부여 후 elite_phase=1(다음 행동 급소찌르기 강제)", assassin.elite_phase == 1)
+    check("표식 부여 직후 elite_phase=1(아직 발동 아님)", assassin.elite_phase == 1)
 
-    from ai.battle import elite_forced_action
-    forced = elite_forced_action(assassin, player, chapter=2)
-    check("표식 다음 행동은 급소찌르기1 강제",
-          forced is not None and forced.action_type == "skill" and forced.detail == "급소찌르기1")
+    # 3번째 행동 그 자체는 급소찌르기가 아니라 관망(watch)이어야 함 —
+    # 같은 행동에서 바로 발동하면 플레이어가 대응할 틈이 없다.
+    forced_same_action = elite_forced_action(assassin, player, chapter=2)
+    check("표식을 부여한 바로 그 행동은 급소찌르기가 아님(watch)",
+          forced_same_action is not None and forced_same_action.action_type == "watch")
+    check("watch 소비 후 elite_phase=2(다음 행동에 발동 대기)", assassin.elite_phase == 2)
+
+    # 다음 행동에서야 비로소 급소찌르기 강제
+    forced_next_action = elite_forced_action(assassin, player, chapter=2)
+    check("표식 부여 다음 행동에야 급소찌르기1 강제",
+          forced_next_action is not None and forced_next_action.action_type == "skill"
+          and forced_next_action.detail == "급소찌르기1")
     check("강제 발동 후 elite_phase가 0으로 리셋", assassin.elite_phase == 0)
 
 
@@ -223,16 +262,31 @@ def test_fire_slime_burst_forced():
           forced is not None and forced.action_type == "skill" and "파이어볼" in forced.detail)
 
 
-def test_ice_slime_shatter_breaks_armor():
+def test_ice_slime_armor_spawn_and_shatter_restore():
+    """빙결 슬라임의 기본 physical_resist는 몬스터마다 다르다(0.80 등,
+    절대 1.0이 아님) — 파쇄/복구가 항상 절대값 1.0/0.85를 대입하면
+    원래 저항이 1.0이 아닌 몬스터에서 틀린 값이 된다(Codex 발견).
+    스폰 시 -15%를 상대적으로 곱하고, 파쇄/복구도 그 배율을 상대적으로
+    되돌리고/재적용해야 원래 저항이 정확히 복원된다."""
     from ai.battle import apply_element_and_react
+    from ai.battle.EliteKit import ICE_SLIME_ARMOR_REDUCTION
+
+    pristine = 0.80   # game/Enemy_Class.py Make_IceSlime의 실제 기본값과 동일
     player = mk_player()
     slime = mk_elite("빙결 슬라임", hp=100000, stg=10)
     slime.element_queue = ["ice"]
-    slime.physical_resist = 0.85
+
+    # 스폰 시점 적용 (app/Map.py._make_elite_encounter가 실제로 하는 것과 동일)
+    slime.physical_resist = pristine * (1 - ICE_SLIME_ARMOR_REDUCTION)
+    armored_value = slime.physical_resist
+    check("스폰 시 갑옷 활성 저항 = 원래 저항 × 0.85",
+          abs(armored_value - pristine * 0.85) < 1e-9, f"value={armored_value}")
+
     msgs = []
     apply_element_and_react(player, slime, "physical", 100, msgs)
-    check("물리 공격으로 파쇄 발생 시 빙결 갑옷 해제(physical_resist=1.0)",
-          slime.physical_resist == 1.0, msgs)
+    check("파쇄 시 원래(고유) 저항으로 정확히 복귀 — 1.0이 아니라 0.80",
+          abs(slime.physical_resist - pristine) < 1e-9,
+          f"resist={slime.physical_resist} (기대: {pristine})")
     check("파쇄 시 elite_phase=1(해제 상태)", slime.elite_phase == 1)
     check("파쇄 시 SPARM 디버프 부여", any(d.stat == "sparm" and d.name == "파쇄" for d in slime.debuffs))
 
@@ -242,6 +296,12 @@ def test_ice_slime_shatter_breaks_armor():
     apply_element_and_react(player, slime, "physical", 100, msgs)
     check("이미 해제 상태에서 중복 파쇄는 무시(디버프 중복 적용 안 됨)",
           len(slime.debuffs) == debuff_count_before and slime.physical_resist == resist_before)
+
+    # 복구 — Enemy_Actions.py의 tail tick 코드와 동일한 상대 곱셈 로직 재현
+    slime.physical_resist = slime.physical_resist * (1 - ICE_SLIME_ARMOR_REDUCTION)
+    check("복구 후 갑옷 활성 저항이 스폰 시점과 정확히 같음",
+          abs(slime.physical_resist - armored_value) < 1e-9,
+          f"restored={slime.physical_resist} expected={armored_value}")
 
 
 # ═══════════════════════════════════════════════════════
@@ -265,7 +325,11 @@ def test_priest_revival_once_only():
     handled2 = session._priest_elite_revival_check(priest, msgs2)
     check("다음 행동에 부활 발동", handled2 is True)
     check("동료가 최대HP 25%로 부활", escort.hp == escort.maxhp * 0.25, f"hp={escort.hp}")
-    check("부활한 동료는 보상 제외", escort.reward_eligible is False)
+    # 보상은 전투 종료 시 최종 상태 기준으로 딱 한 번만 계산되므로(이중 지급
+    # 위험 자체가 없음) 부활했다고 reward_eligible을 꺼트리면 안 됨 — 그러면
+    # 이 동료를 처치한 정당한 보상까지 통째로 사라진다(Codex 발견).
+    check("부활한 동료도 여전히 보상 대상(reward_eligible 유지)",
+          getattr(escort, "reward_eligible", True) is True)
     check("사제 부활 능력 1회 소진(elite_pattern_used)", priest.elite_pattern_used is True)
 
     # 재사망 후 재부활 시도 — 이미 사용했으므로 무시되어야 함
@@ -308,10 +372,18 @@ def test_bat_lifesteal_and_scream():
         msgs = []
         session._elite_bat_pre(bat, msgs)
     check("3번째 행동에서 비명 예고", bat.elite_phase == 1)
+
     from ai.battle import elite_forced_action
-    forced = elite_forced_action(bat, player, chapter=1)
-    check("예고 다음 행동은 초음파비명 강제",
-          forced is not None and forced.detail == "초음파비명")
+    # 예고를 낸 바로 그 행동은 비명이 아니라 watch로 소비돼야 함
+    # (같은 행동에서 바로 발동하면 플레이어가 대응할 틈이 없다 — Codex 발견)
+    forced_same_action = elite_forced_action(bat, player, chapter=1)
+    check("예고를 낸 행동 자체는 초음파비명이 아님(watch)",
+          forced_same_action is not None and forced_same_action.action_type == "watch")
+    check("watch 소비 후 elite_phase=2(다음 행동에 발동 대기)", bat.elite_phase == 2)
+
+    forced_next_action = elite_forced_action(bat, player, chapter=1)
+    check("예고 다음 행동에야 초음파비명 강제",
+          forced_next_action is not None and forced_next_action.detail == "초음파비명")
 
 
 def test_bat_no_lifesteal_when_shielded_or_dodged():
@@ -341,6 +413,42 @@ def test_goblin_start_buff_and_rage():
     session._elite_goblin_pre(goblin, [])
     rage_buffs = [b for b in goblin.buffs if b.name == "분노"]
     check("분노는 전투당 1회만", len(rage_buffs) == 1, f"count={len(rage_buffs)}")
+
+
+# ═══════════════════════════════════════════════════════
+# 공통 인프라 — 다대일 이중 보정 / DoT 사망 분열
+# ═══════════════════════════════════════════════════════
+
+def test_no_double_multi_enemy_scaling():
+    """다대일 스탯 보정은 app/Map.py(_apply_stat_scale)가 스폰 시점에
+    외부에서 한 번만 해야 한다 — BattleSession이 자체적으로 또 깎으면
+    90%×90%=81%처럼 이중 적용된다(Codex 발견, 실측: HP/STG 100 → 90 → 81).
+    BattleSession은 넘어온 스탯을 그대로 신뢰해야 한다."""
+    player = mk_player()
+    e1 = mk_elite("고블린", hp=100, stg=100, elite_leader=False)
+    e2 = mk_elite("박쥐", hp=100, stg=100, elite_leader=False)
+    session = BattleSession(player, enemies=[e1, e2], items=[])
+    check("BattleSession은 다대일 전투에서 hp를 추가로 깎지 않음",
+          session.enemies[0].hp == 100, f"hp={session.enemies[0].hp}")
+    check("BattleSession은 다대일 전투에서 stg를 추가로 깎지 않음",
+          session.enemies[0].stg == 100, f"stg={session.enemies[0].stg}")
+
+
+def test_dot_death_triggers_split():
+    """화상/출혈 같은 상태이상 DoT로 죽는 경로(Battlesession._step_core의
+    원소 상태이상 틱 처리)는 직접 피해 경로(_apply_dmg_shielded)와 별개
+    코드 경로라 분열 훅이 따로 호출돼야 한다 — 누락되면 화상으로 죽은
+    증식 슬라임이 분열하지 않는다(Codex 발견)."""
+    from ai.battle import StatusEffect
+    player = mk_player()
+    slime = mk_elite("슬라임", hp=50, stg=1, spd=1.0)
+    session = BattleSession(player, enemy=slime, items=[])
+    slime = session.enemies[0]
+    slime.apply_status_effect(StatusEffect(effect_type="ignite", turns=3, name="fire", dot_rate=2.0))
+    session.action_queue = [("enemy", 0)]   # 이번 행동이 슬라임 차례가 되도록 강제
+    result = session.step("auto")
+    check("화상 DoT로 죽어도 분열이 걸림", len(session.enemies) == 3,
+          f"len={len(session.enemies)} messages={result.get('messages')}")
 
 
 # ═══════════════════════════════════════════════════════
@@ -374,17 +482,20 @@ def main():
         test_defeated_list_excludes_summoned()
         test_golem_cycle()
         test_golem_groggy_interrupt()
+        test_golem_groggy_interrupt_before_telegraph_message()
         test_assassin_mark_cycle()
         test_assassin_mark_cleared_by_full_shield()
         test_fire_slime_overload_resets_stack()
         test_lightning_slime_overload_resets_stack_and_slows()
         test_fire_slime_burst_forced()
-        test_ice_slime_shatter_breaks_armor()
+        test_ice_slime_armor_spawn_and_shatter_restore()
         test_priest_revival_once_only()
         test_priest_death_cancels_ritual()
         test_bat_lifesteal_and_scream()
         test_bat_no_lifesteal_when_shielded_or_dodged()
         test_goblin_start_buff_and_rage()
+        test_no_double_multi_enemy_scaling()
+        test_dot_death_triggers_split()
         test_battle_ends_normally_with_split()
     except Exception as ex:
         import traceback

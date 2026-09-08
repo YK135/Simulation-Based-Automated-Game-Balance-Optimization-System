@@ -2,7 +2,7 @@
 """montecarlo.py — 직업×레벨×전투타입 승률표 (BattleSession 실전 시뮬)"""
 import sys, io, os, json, time, contextlib
 from random import choice, seed
-from collections import Counter, defaultdict
+from collections import defaultdict
 
 sys.path.insert(0, '.')
 from ai.Battlesession import BattleSession

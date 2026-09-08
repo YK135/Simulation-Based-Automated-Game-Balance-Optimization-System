@@ -59,24 +59,9 @@ class EnemyActionsMixin:
             is_crit=crit,
         ))
 
-    def _enemy_action(self, msgs: list):
-        """
-        다대일: 살아있는 모든 적이 SPD 내림차순으로 한 번씩 행동.
-        각 적이 행동할 때마다 플레이어 사망 체크 — 죽으면 즉시 종료.
-        """
-        # SPD 내림차순 정렬 (빠른 적 먼저)
-        alive = sorted(
-            self._alive_enemies(),
-            key=lambda e: e.effective_spd(),
-            reverse=True
-        )
-        for e in alive:
-            if self.player.hp <= 0:
-                break  # 플레이어 사망 시 남은 적 행동 스킵
-            self._single_enemy_action(e, msgs)
-
     def _single_enemy_action(self, enemy, msgs: list):
-        """단일 적의 1회 행동 처리. 기존 _enemy_action 로직을 적 1마리 단위로 분리."""
+        """단일 적의 1회 행동 처리. ATB 큐가 적 1마리씩 액터 단위로 넘겨준다
+        (다대일이어도 한 번에 한 마리) — Battlesession._step_core 참고."""
         # ── 사제 전용 행동 (다른 아군 회복/버프) ──
         # enemy_type이 "사제"면 별도 로직 사용. 일반 EnemyAI 안 거침.
         # ⚠ return 제거 — 메서드 끝의 tick 처리(buff/debuff 1턴 감소)를
@@ -190,7 +175,10 @@ class EnemyActionsMixin:
                     ))
 
             elif action.action_type == "watch":
-                msgs.append(f"{enemy.name}이(가) 기회를 엿보고 있다...")
+                if action.detail != "elite_telegraph":
+                    # elite_telegraph는 _elite_*_pre()가 이미 예고 메시지를
+                    # 출력했으므로 여기서 또 "기회를 엿보고 있다"를 덧붙이지 않는다.
+                    msgs.append(f"{enemy.name}이(가) 기회를 엿보고 있다...")
                 self.logs.append(TurnLog(
                     turn=self.turn,
                     actor="enemy",
@@ -216,7 +204,11 @@ class EnemyActionsMixin:
             enemy.elite_pattern_turn -= 1
             if enemy.elite_pattern_turn <= 0:
                 enemy.elite_phase = 0
-                enemy.physical_resist = 1.0 - ICE_SLIME_ARMOR_REDUCTION
+                # 파쇄로 되돌려놓은 원래 저항(Elements._elite_ice_slime_break가
+                # / (1-ICE_SLIME_ARMOR_REDUCTION)로 복원한 값) 위에 다시 곱해
+                # 갑옷 활성 상태로 — 1.0 기준 고정값이면 원래 저항이 1.0이
+                # 아닌 몬스터(빙결 슬라임 기본 0.80 등)에서 틀린 값이 된다.
+                enemy.physical_resist = enemy.physical_resist * (1 - ICE_SLIME_ARMOR_REDUCTION)
                 msgs.append(f"{enemy.name}의 빙결 갑옷이 복구되었다!")
 
 

@@ -87,24 +87,12 @@ class BattleSession(
         else:
             raise ValueError("BattleSession은 enemy 또는 enemies 중 하나를 받아야 합니다")
 
-        # ── ★ 다중 몹 스탯 배율 (#2) ──
-        # 다대일 전투 시 적 스탯을 약화 (도전성 + 공정성).
-        # 1대1: 100%, 1대2: 90%, 1대3: 80%
-        # 적용 스탯: HP/STG/SP/ARM/SPARM (SPD 제외 — ATB 행동 횟수에 영향 X)
-        # 보스 전투는 제외 (단일 전투이므로 자동으로 100%).
-        if len(self.enemies) >= 2 and not is_boss:
-            mult = {2: 0.9, 3: 0.8}.get(len(self.enemies), 0.8)
-            for e in self.enemies:
-                # HP 비율 유지 (현재 HP도 비례 감소)
-                hp_ratio = e.hp / e.maxhp if e.maxhp > 0 else 1.0
-                e.maxhp = int(e.maxhp * mult)   # 정수화 — 몬스터 HP 소수점 버그 방지
-                e.hp = int(e.maxhp * hp_ratio)
-                # 공격/방어 스탯 약화
-                e.stg = e.stg * mult
-                e.sp = e.sp * mult
-                e.arm = e.arm * mult
-                e.sparm = e.sparm * mult
-                # SPD는 변경 안 함 — ATB 누적/행동 횟수 동일 유지
+        # 다대일 스탯 보정은 app/Map.py의 _apply_stat_scale()이 스폰 시점에
+        # 외부에서 한 번만 적용한다(STAT_SCALE/ELITE_STAT_SCALE). 예전엔 여기서
+        # 또 한 번 90%/80%를 곱해 결과적으로 81%/64%까지 이중 적용되고
+        # 있었다 — BattleSession은 넘어온 스탯을 그대로 신뢰하고 다시 건드리지
+        # 않는다. 이 함수를 호출하는 모든 경로(app/Map.py, app/Master.py)가
+        # 다대일 전투를 시작하기 전에 필요하면 _apply_stat_scale()을 직접 호출해야 함.
 
         # ── 원본 적 객체 보존 (★ 신규) ──
         # self.enemies[i] (EntitySnapshot) ↔ self._origins[i] (Unit/_SnapUnit)
@@ -388,6 +376,7 @@ class BattleSession(
                 self.action_queue.pop(0)
                 self._cleanup_dead_from_queue()
                 msgs.append(f"🔥 {enemy.name}이(가) 점화 데미지로 쓰러졌다!")
+                self._check_elite_death(enemy, msgs)   # 분열/부활취소 — 직접피해 경로와 동일하게 처리
                 if not self._alive_enemies():
                     self.done = True
                     self.winner = "player"

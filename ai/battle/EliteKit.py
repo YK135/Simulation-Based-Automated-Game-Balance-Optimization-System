@@ -66,17 +66,32 @@ def elite_forced_action(attacker, defender, chapter: int = 1):
     박쥐(비명 예고 소진)/암살자(표식 부여 다음 행동)/화염·번개 슬라임
     (스택 3 도달)만 여기서 다루고, 골렘/사제는 전용 분기(Elite_Actions.py)가
     자체 처리하므로 이 함수를 거치지 않는다.
+
+    박쥐/암살자는 "예고 → 다음 행동에 발동"을 실제로 서로 다른 두 행동에
+    걸치도록 elite_phase를 1(막 예고됨, 이번 행동은 관망)→2(다음 행동에
+    발동)로 여기서 전환한다. Elite_Actions.py의 _elite_*_pre()가 예고
+    시점(phase 0→1)만 세팅하고, 발동 여부 판단/전환은 전부 여기서 한다 —
+    한 함수 안에서 phase를 세팅하고 같은 행동에서 바로 소비하면 예고와
+    발동이 동시에 일어나버리기 때문에 반드시 이렇게 나눠야 한다.
     """
     et = getattr(attacker, "enemy_type", "")
 
     if et == "박쥐":
-        if getattr(attacker, "elite_phase", 0) == 1:
+        phase = getattr(attacker, "elite_phase", 0)
+        if phase == 1:
+            attacker.elite_phase = 2
+            return Action("watch", "elite_telegraph")
+        if phase == 2:
             attacker.elite_phase = 0
             return Action("skill", "초음파비명")
         return None
 
     if et == "암살자":
-        if getattr(attacker, "elite_phase", 0) == 1:
+        phase = getattr(attacker, "elite_phase", 0)
+        if phase == 1:
+            attacker.elite_phase = 2
+            return Action("watch", "elite_telegraph")
+        if phase == 2:
             attacker.elite_phase = 0
             return Action("skill", "급소찌르기1")
         return None

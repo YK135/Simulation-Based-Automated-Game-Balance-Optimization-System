@@ -9,7 +9,6 @@ from ai.battle.Elements import is_element_immune
 from ai.battle.EliteKit import elite_forced_action
 
 ATTACK_TYPES = {"physical", "magical", "multi_hit", "tank_attack", "counter"}
-SUPPORT_TYPES = {"buff", "heal", "shield", "debuff"}
 
 
 def _enemy_has_debuff(defender: EntitySnapshot, stat: str) -> bool:
