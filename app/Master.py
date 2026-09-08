@@ -12,6 +12,8 @@ MASTER_MODE 설정일 때만 이 블루프린트를 등록한다 — RENDER 환�
   POST /api/master/battle/boss    — { "boss": "mid" | "final" } 보스 즉시 전투
   POST /api/master/battle/monster — { "monster_type": "고블린", "grade": "상" }
                                      지정 몬스터 즉시 전투
+  POST /api/master/battle/elite   — 현재 챕터 엘리트 풀에서 랜덤 리더(+동료)
+                                     즉시 전투
 """
 from __future__ import annotations
 
@@ -21,7 +23,7 @@ from game.Lv import LV_
 from game.Enemy_Class import Make_MidBoss, Make_FinalBoss
 
 from .Shared import _get_session, _player_dict
-from .Battle import _start_battle
+from .Battle import _start_battle, _start_battle_multi
 
 master_bp = Blueprint("master", __name__)
 
@@ -135,5 +137,35 @@ def master_battle_monster():
     return jsonify({
         "ok": True,
         "enemy": {"name": enemy.name, "hp": enemy.hp},
+        "battle_state": state,
+    })
+
+
+@master_bp.route("/api/master/battle/elite", methods=["POST"])
+def master_battle_elite():
+    gs = _get_session()
+    if not gs:
+        return jsonify({"ok": False, "error": "게임 세션이 없습니다."}), 404
+    if gs.get("battle"):
+        return jsonify({"ok": False, "error": "전투 중에는 사용할 수 없습니다."}), 400
+
+    from .Map import _make_elite_encounter
+
+    hook    = gs["hook"]
+    chapter = gs.get("chapter", 1)
+    layer   = gs.get("battle_map_layer") or 1
+    enemies, _grades = _make_elite_encounter(hook, chapter=chapter, layer=layer)
+
+    gs["battle_node_type"] = "elite"
+    gs["pending_node_id"]  = None
+
+    if len(enemies) == 1:
+        state = _start_battle(gs, enemies[0], is_boss=False)
+    else:
+        state = _start_battle_multi(gs, enemies, is_boss=False)
+
+    return jsonify({
+        "ok": True,
+        "enemy": {"name": enemies[0].name, "hp": enemies[0].hp},
         "battle_state": state,
     })

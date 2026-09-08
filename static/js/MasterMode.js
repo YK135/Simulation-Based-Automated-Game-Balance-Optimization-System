@@ -149,6 +149,21 @@ async function _masterStartBoss(which) {
     }
 }
 
+async function _masterStartElite() {
+    if (state.inBattle || _masterActionProcessing) return;
+    _masterActionProcessing = true;
+    refreshMasterPanel();
+    try {
+        const r = await api('/master/battle/elite', {});
+        if (!r.ok) { toast(r.error || '전투 시작 실패', 'error'); return; }
+        logLine(`⚔ 엘리트 ${r.enemy?.name || '몬스터'}이(가) 나타났다!`, 'crit');
+        _masterEnterBattle(r);
+    } finally {
+        _masterActionProcessing = false;
+        refreshMasterPanel();
+    }
+}
+
 async function _masterStartMonsterBattle() {
     if (state.inBattle || _masterActionProcessing) return;
     const sel = document.getElementById('master-monster-select');
@@ -184,6 +199,9 @@ document.addEventListener('DOMContentLoaded', () => {
 
     const btnFinal = document.getElementById('master-btn-finalboss');
     if (btnFinal) btnFinal.onclick = () => _masterStartBoss('final');
+
+    const btnElite = document.getElementById('master-btn-elite');
+    if (btnElite) btnElite.onclick = _masterStartElite;
 
     const btnMonster = document.getElementById('master-btn-monster');
     if (btnMonster) btnMonster.onclick = _masterStartMonsterBattle;
