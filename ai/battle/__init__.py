@@ -2,9 +2,10 @@
 Battle 패키지 — 전투 시스템 (Battle_Engine.py 분리본)
 
 의존성 계층:
-  Entity / ATB / Actions  (의존 없음)
+  Entity / ATB / Actions / EliteKit (→ Actions만)  (의존 없음/최소)
   Elements / Damage       → Entity
-  Skills                  → Entity, Damage, Elements
+  Elements                → EliteKit (엘리트 원소 반응 후처리)
+  Skills                  → Entity, Damage, Elements, EliteKit
   Items                   → Entity, Elements
   Engine                  → 전부
 """

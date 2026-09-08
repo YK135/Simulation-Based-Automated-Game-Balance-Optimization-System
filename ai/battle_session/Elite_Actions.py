@@ -178,7 +178,6 @@ class EliteActionsMixin:
                 is_summoned=True,
                 reward_eligible=False,
             )
-            child._slot_index = len(self.enemies)
             self.enemies.append(child)
             self.enemy_atbs.append(0.0)
             self._origins.append(None)

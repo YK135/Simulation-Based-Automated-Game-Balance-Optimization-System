@@ -106,10 +106,6 @@ class BattleSession(
                 e.sparm = e.sparm * mult
                 # SPD는 변경 안 함 — ATB 누적/행동 횟수 동일 유지
 
-        # 각 적에게 인덱스 부여 (UI 슬롯 매핑용: 0=슬롯3, 1=슬롯4, 2=슬롯5)
-        for i, e in enumerate(self.enemies):
-            e._slot_index = i
- 
         # ── 원본 적 객체 보존 (★ 신규) ──
         # self.enemies[i] (EntitySnapshot) ↔ self._origins[i] (Unit/_SnapUnit)
         # 길이는 self.enemies와 동일해야 함. 부족하면 None으로 패딩.

@@ -52,11 +52,10 @@ ASSASSIN_MARK_TURNS = 2
 ASSASSIN_MARK_BONUS = 0.25
 ASSASSIN_RETREAT_HP_THRESHOLD = 0.30
 
-# ── 타락한 고위 사제 ──
+# ── 타락한 고위 사제 (2단계: 평시 → 준비 → 발동 후 평시로 복귀) ──
 PRIEST_REVIVE_HP_RATIO = 0.25
 PRIEST_PHASE_IDLE = 0
 PRIEST_PHASE_PREPARING = 1
-PRIEST_PHASE_RESOLVE = 2
 
 
 def elite_forced_action(attacker, defender, chapter: int = 1):

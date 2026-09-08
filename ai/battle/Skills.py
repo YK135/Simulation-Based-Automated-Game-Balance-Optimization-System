@@ -6,6 +6,7 @@ from random import randint, random, uniform
 from .Entity import EntitySnapshot, Debuff, Buff
 from .Damage import DamageCalc
 from .Elements import apply_element_and_react
+from .EliteKit import BAT_SCREAM_SPD_AMOUNT, BAT_SCREAM_TURNS
 
 SKILL_META = {
     "약화1": {
@@ -275,7 +276,9 @@ MONSTER_SKILL_META = {
     # 엘리트 흡혈 박쥐 전용 — 3번째 행동마다 예고 후 사용, 대미지 없이 SPD만 약화.
     "초음파비명": {
         "mp": 0, "type": "debuff",
-        "debuff_stat": "spd", "debuff_amount": (0.20, 0.20), "debuff_turns": (2, 2)
+        "debuff_stat": "spd",
+        "debuff_amount": (BAT_SCREAM_SPD_AMOUNT, BAT_SCREAM_SPD_AMOUNT),
+        "debuff_turns": (BAT_SCREAM_TURNS, BAT_SCREAM_TURNS),
     },
 }
 
