@@ -309,7 +309,6 @@ def _initialize_skills_for_existing_level(player) -> None:
 # ─────────────────────────────────────────────
 class LV_:
     #EXP_GROWTH_RATE = 1.18  # 레벨업 후 필요 경험치 증가율
-    GROWTH_RATIO = 0.7          # ★ 자동 성장 비율 (70%)
     POINTS_PER_LEVEL = 3        # ★ 레벨업당 선택 포인트
 
     def __init__(self, ply):

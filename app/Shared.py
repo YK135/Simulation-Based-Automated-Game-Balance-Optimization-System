@@ -26,7 +26,7 @@ import threading
 import time
 from typing import Optional
 
-from flask import session
+from flask import session, request
 
 from game.Inventory import Inventory
 from ai.battle import EntitySnapshot
@@ -38,6 +38,21 @@ from core.ErrorLog import log_error
 # 전역 세션 저장소 (워커별 인메모리 — 1차 캐시)
 # ─────────────────────────────────────────────
 GAME_SESSIONS: dict = {}
+
+
+def _get_json_body() -> dict:
+    """요청 바디를 JSON dict로 안전하게 파싱한다 — dict가 아닌 JSON(배열,
+    숫자, 문자열, bool)이나 빈/잘못된 바디는 전부 빈 dict로 취급한다.
+    ★ 예전엔 각 라우트가 직접 `request.get_json() or {}`를 썼는데, `or {}`는
+      falsy 값(None, 빈 문자열 등)만 걸러낼 뿐 `[1,2,3]`이나 `42`처럼
+      truthy한 non-dict JSON은 그대로 통과시켰다 — 그 값에 .get()/.items()를
+      호출하는 순간 500(AttributeError)이 났다(정상적인 잘못된 입력에 대해
+      400이 아니라 서버 오류로 응답한 셈)."""
+    try:
+        body = request.get_json(silent=True)
+    except Exception:
+        body = None
+    return body if isinstance(body, dict) else {}
 
 
 # ─────────────────────────────────────────────
@@ -85,12 +100,19 @@ _SESSION_MAX_IDLE_SECONDS = 3600       # 1시간 미접속 시 메모리에서�
 _SESSION_PRUNE_INTERVAL_SECONDS = 300  # 5분에 한 번만 전수 스캔(매 요청 스캔은 낭비)
 
 _session_last_seen: dict[str, float] = {}
+_last_seen_guard = threading.Lock()   # _session_last_seen 전용 — 아래 참고
 _last_prune_at = 0.0
 _prune_guard = threading.Lock()
 
 
 def _touch_session(uid: str) -> None:
-    _session_last_seen[uid] = time.monotonic()
+    # ★ 락 없이 매 요청마다 이 dict에 새 키를 추가할 수 있었는데, 그 상태로
+    #   _prune_idle_sessions()가 같은 dict를 순회 중이면(다른 스레드) 파이썬이
+    #   "dictionary changed size during iteration"으로 죽을 수 있었다 — 값
+    #   갱신(기존 키)만이면 GIL 덕에 괜찮지만, 새 uid의 첫 접속(신규 키 삽입)은
+    #   딕셔너리 크기를 바꾸는 경우라 안전하지 않았다.
+    with _last_seen_guard:
+        _session_last_seen[uid] = time.monotonic()
 
 
 def _prune_idle_sessions() -> None:
@@ -105,11 +127,20 @@ def _prune_idle_sessions() -> None:
             return
         _last_prune_at = now
         cutoff = now - _SESSION_MAX_IDLE_SECONDS
-        stale = [uid for uid, ts in _session_last_seen.items() if ts < cutoff]
+        with _last_seen_guard:
+            stale = [uid for uid, ts in _session_last_seen.items() if ts < cutoff]
+            for uid in stale:
+                _session_last_seen.pop(uid, None)
         for uid in stale:
             GAME_SESSIONS.pop(uid, None)
-            _session_last_seen.pop(uid, None)
-            _user_locks.pop(uid, None)
+            # ★ _user_locks는 _get_user_lock()의 체크-후-생성 패턴이
+            #   _user_locks_guard로만 안전을 보장한다 — 여기서 그 락 없이
+            #   pop()하면, 정리 직후 같은 uid로 새 요청이 들어와 새 락 객체를
+            #   만드는 사이 "그 uid의 요청을 하나씩만 처리"라는 보장이 잠깐
+            #   깨질 수 있었다(요청 A가 옛 락을 쥔 채 아직 처리 중인데, 요청
+            #   C가 방금 지워진 항목을 보고 새 락을 만들어 A와 동시에 진행).
+            with _user_locks_guard:
+                _user_locks.pop(uid, None)
     finally:
         _prune_guard.release()
 
@@ -141,6 +172,11 @@ def _snapshot_dict(gs: dict) -> dict:
         #   battle(BattleSession)과 같은 급의 트레이드오프: Redis까지 완전히
         #   사라진 뒤 DB로만 복구하는 극단적 상황에서만 대기 티켓이 유실된다.
         "pending_swaps":    gs.get("pending_swaps", []),
+        # ★ 이게 빠져있으면 워커 재시작이나 유휴 세션 방출(1시간) 후 같은
+        #   pending_node_id로 복구됐을 때 "이 휴식 노드 이미 썼음" 표시가
+        #   사라져서, 같은 휴식 노드에서 수련 보상을 다시 받을 수 있었다
+        #   (app/Rest.py 참고).
+        "rest_used_node_id": gs.get("rest_used_node_id"),
     }
 
 
@@ -182,6 +218,7 @@ def _gs_from_snapshot(uid: str, snap: dict) -> Optional[dict]:
         "battle_node_type": snap.get("battle_node_type"),
         "battle_map_layer": snap.get("battle_map_layer"),
         "pending_swaps":    snap.get("pending_swaps", []),
+        "rest_used_node_id": snap.get("rest_used_node_id"),
     }
 
 

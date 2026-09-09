@@ -17,12 +17,12 @@ MASTER_MODE 설정일 때만 이 블루프린트를 등록한다 — RENDER 환�
 """
 from __future__ import annotations
 
-from flask import Blueprint, jsonify, request
+from flask import Blueprint, jsonify
 
 from game.Lv import LV_
 from game.Enemy_Class import Make_MidBoss, Make_FinalBoss
 
-from .Shared import _get_session, _player_dict
+from .Shared import _get_session, _player_dict, _get_json_body
 from .Battle import _start_battle, _start_battle_multi
 
 master_bp = Blueprint("master", __name__)
@@ -53,7 +53,7 @@ def master_level_up():
     if gs.get("battle"):
         return jsonify({"ok": False, "error": "전투 중에는 사용할 수 없습니다."}), 400
 
-    data   = request.get_json() or {}
+    data   = _get_json_body()
     levels = data.get("levels", 1)
     try:
         levels = int(levels)
@@ -91,7 +91,7 @@ def master_battle_boss():
     if gs.get("battle"):
         return jsonify({"ok": False, "error": "전투 중에는 사용할 수 없습니다."}), 400
 
-    data  = request.get_json() or {}
+    data  = _get_json_body()
     which = data.get("boss")
     if which not in ("mid", "final"):
         return jsonify({"ok": False, "error": "boss는 'mid' 또는 'final'이어야 합니다."}), 400
@@ -118,7 +118,7 @@ def master_battle_monster():
     if gs.get("battle"):
         return jsonify({"ok": False, "error": "전투 중에는 사용할 수 없습니다."}), 400
 
-    data         = request.get_json() or {}
+    data         = _get_json_body()
     monster_type = data.get("monster_type")
     grade        = data.get("grade", "중")
     if monster_type not in _MONSTER_TYPES:

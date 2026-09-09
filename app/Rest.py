@@ -8,11 +8,11 @@ from __future__ import annotations
 
 from random import random
 
-from flask import Blueprint, jsonify, request
+from flask import Blueprint, jsonify
 
 from game.Lv import LV_
 
-from .Shared import _get_session, _player_dict
+from .Shared import _get_session, _player_dict, _get_json_body
 
 rest_bp = Blueprint("rest", __name__)
 
@@ -53,7 +53,7 @@ def rest():
         return jsonify({"ok": False, "error": "이미 이 휴식을 사용했습니다.",
                         "reason": "rest_already_used"}), 400
 
-    data   = request.get_json() or {}
+    data   = _get_json_body()
     choice = data.get("choice", "")
     player = gs["player"]
 

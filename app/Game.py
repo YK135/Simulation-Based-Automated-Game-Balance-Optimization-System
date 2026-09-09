@@ -13,7 +13,7 @@ from __future__ import annotations
 
 import uuid
 
-from flask import Blueprint, jsonify, request, session
+from flask import Blueprint, jsonify, session
 
 from game.Player_Class import create_player_by_job
 from game.Inventory    import Inventory
@@ -21,7 +21,7 @@ from game.Lv           import Allocate_Stat_Points
 from ai.battle  import SKILL_META
 from core.Balance_Hook import BalanceHook
 
-from .Shared import GAME_SESSIONS, _get_session, _player_dict
+from .Shared import GAME_SESSIONS, _get_session, _player_dict, _get_json_body
 
 game_bp = Blueprint("game", __name__)
 
@@ -36,7 +36,7 @@ def new_game():
     from DB import get_session as db_session
     from DB.Models import User
 
-    data = request.get_json() or {}
+    data = _get_json_body()
     name = data.get("name", "용사").strip() or "용사"
     job  = data.get("job",  "전사")
 
@@ -68,7 +68,21 @@ def new_game():
     uid = session["user_id"]
 
     if old_uid and old_uid != uid:
-        GAME_SESSIONS.pop(old_uid, None)
+        old_gs = GAME_SESSIONS.pop(old_uid, None)
+        # ★ 이전 세션이 진행 중이던(클리어/패배로 이미 종료 처리되지 않은)
+        #   런을 남겨둔 채 "새 게임"을 눌러 갈아탄 경우, 그 Run DB 레코드는
+        #   result가 영원히 None(진행 중)으로 남아 런 통계 쿼리에서 계속
+        #   "안 끝난 런"으로 잡혔다 — 새 세션으로 넘어가는 시점에 abandon으로
+        #   닫는다. 이미 clear/dead로 끝난 런(run_finished=True)은 건드리지
+        #   않는다. old_gs는 메모리(GAME_SESSIONS)에 남아있을 때만 확인
+        #   가능한 최선 노력(best-effort) — 워커 재시작 사이에 놓친 경우는
+        #   기존에도 정리되지 않던 갭이라 새로 악화시키는 건 아니다.
+        if old_gs and old_gs.get("run_id") and not old_gs.get("run_finished"):
+            try:
+                from app.Map import _finish_run
+                _finish_run(old_gs, "abandon")
+            except Exception as e:
+                print(f"[DB] Run abandon-close failed: {e}")
 
     player = create_player_by_job(name, job)
 
@@ -105,6 +119,7 @@ def new_game():
         "chapter":          None,
         "map_turn":         0,
         "pending_node_id":  None,
+        "pending_node_choice_id": None,
         "run_id":           None,
         "gold":             100,    # 시작 골드
     }
@@ -187,7 +202,7 @@ def allocate_stat():
     if not gs:
         return jsonify({"ok": False, "error": "게임 세션이 없습니다."}), 404
 
-    data       = request.get_json() or {}
+    data       = _get_json_body()
     allocation = data.get("allocation", {})
 
     if not isinstance(allocation, dict):

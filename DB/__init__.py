@@ -1,5 +1,6 @@
 from __future__ import annotations
 import os
+import re
 from contextlib import contextmanager
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker, declarative_base
@@ -41,7 +42,16 @@ def init_db():
     # 모델을 import 해야 Base.metadata에 등록됨
     from DB import Models  # noqa: F401
     Base.metadata.create_all(bind=engine)
-    print(f"[DB] Initialized → {DATABASE_URL}")
+    print(f"[DB] Initialized → {_masked_db_url()}")
+
+
+def _masked_db_url() -> str:
+    """부팅 로그에 남길 DATABASE_URL — 계정/비밀번호는 가린다.
+    ★ postgresql://user:password@host:5432/db 형태를 그대로 찍고 있었는데,
+      Render 등에서 발급하는 URL은 실제 DB 접속 비밀번호를 포함한다 —
+      서버 로그(대부분 접근 통제가 느슨한 별도 콘솔)에 평문으로 남는 건
+      비밀키를 로그에 남기는 것과 같은 급의 노출이다."""
+    return re.sub(r"://([^:/@]+)(:[^@/]*)?@", r"://\1:***@", DATABASE_URL)
 
 
 # ─────────────────────────────────────────────

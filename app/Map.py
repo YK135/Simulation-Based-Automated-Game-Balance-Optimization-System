@@ -20,14 +20,14 @@ from __future__ import annotations
 
 from random import choices as rand_choices, randint, choice
 
-from flask import Blueprint, jsonify, request
+from flask import Blueprint, jsonify
 
 from game.Map      import FloorMap, NORMAL_LAYERS
 from game.Enemy_Class import (
     Make_MidBoss, Make_FinalBoss,
 )
 
-from app.Shared  import _get_session, _player_dict, _register_pending_swap
+from app.Shared  import _get_session, _player_dict, _register_pending_swap, _get_json_body
 from app.Battle  import _start_battle, _start_battle_multi
 
 map_bp = Blueprint("map", __name__)
@@ -252,8 +252,15 @@ def _event_item_found(gs: dict) -> dict:
 # ─────────────────────────────────────────────
 
 def _log_node_choice(gs: dict, node, battle_result: str = None,
-                     battle_turns: int = None, extra: dict = None) -> None:
-    """노드 선택을 DB에 기록."""
+                     battle_turns: int = None, extra: dict = None) -> int | None:
+    """노드 선택을 DB에 기록. 생성된 행의 id를 반환(없으면 None).
+
+    ★ battle/elite/boss 노드는 이 함수가 호출되는 시점(전투 시작 직후)엔
+      아직 승패/턴 수를 모른다 — battle_result/battle_turns는 항상 기본값
+      None으로 기록됐다. 반환된 id를 gs["pending_node_choice_id"]에 저장해
+      두면, app/Battle.py의 _finish_battle()이 전투가 실제로 끝난 뒤 그 id로
+      같은 행을 찾아 결과를 채워 넣을 수 있다(아래 _update_node_choice_result
+      참고)."""
     try:
         from DB import get_session as db_session
         from DB.Models import NodeChoice
@@ -261,7 +268,7 @@ def _log_node_choice(gs: dict, node, battle_result: str = None,
 
         run_id = gs.get("run_id")
         if not run_id:
-            return
+            return None
 
         player = gs["player"]
         with db_session() as db:
@@ -278,8 +285,30 @@ def _log_node_choice(gs: dict, node, battle_result: str = None,
                 extra_data     = _json.dumps(extra or {}, ensure_ascii=False),
             )
             db.add(nc)
+            db.flush()
+            return nc.id
     except Exception as e:
         print(f"[DB] NodeChoice log failed: {e}")
+        return None
+
+
+def _update_node_choice_result(node_choice_id: int, battle_result: str, battle_turns: int) -> None:
+    """전투 종료 후 해당 NodeChoice 행의 battle_result/battle_turns를 채운다.
+    app/Battle.py의 _finish_battle()에서 호출 — 실패해도 게임 진행에는
+    영향 없어야 하므로 다른 DB 로깅 헬퍼들과 동일하게 조용히 실패한다."""
+    if not node_choice_id:
+        return
+    try:
+        from DB import get_session as db_session
+        from DB.Models import NodeChoice
+
+        with db_session() as db:
+            nc = db.query(NodeChoice).filter(NodeChoice.id == node_choice_id).first()
+            if nc:
+                nc.battle_result = battle_result
+                nc.battle_turns  = battle_turns
+    except Exception as e:
+        print(f"[DB] NodeChoice result update failed: {e}")
 
 
 def _create_run(gs: dict, chapter: int) -> None:
@@ -303,6 +332,7 @@ def _create_run(gs: dict, chapter: int) -> None:
             db.add(run)
             db.flush()
             gs["run_id"] = run.id
+            gs["run_finished"] = False   # 새 런 시작 — 이전 런의 종료 표시 초기화
             print(f"[DB] Run created: id={run.id}, chapter={chapter}")
     except Exception as e:
         print(f"[DB] Run creation failed: {e}")
@@ -326,6 +356,12 @@ def _finish_run(gs: dict, result: str) -> None:
                 run.player_lv_end = player.lv
                 run.total_nodes   = gs.get("map_turn", 0)
                 run.boss_cleared  = (result == "clear")
+        # ★ gs["run_id"]는 여기서 지우지 않는다 — 새 런 시작(_create_run)이
+        #   그 값을 덮어쓰는 게 기존 설계다. 대신 "이미 종료 처리됨" 표시만
+        #   남겨서, 게임을 그만두고 "새 게임"을 눌렀을 때(app/Game.py의
+        #   new_game()) 이미 clear/dead로 끝난 런을 abandon으로 잘못
+        #   덮어쓰지 않게 한다 — 아래 참고.
+        gs["run_finished"] = True
     except Exception as e:
         print(f"[DB] Run finish failed: {e}")
 
@@ -337,18 +373,33 @@ def _finish_run(gs: dict, result: str) -> None:
 @map_bp.route("/api/map/generate", methods=["POST"])
 def map_generate():
     """
-    챕터 맵 생성.
+    챕터 맵 생성 — 최초 챕터 1 시작 전용.
     요청: { "chapter": 1 }
+
+    ★ 예전엔 기존 맵/전투/챕터 상태를 전혀 확인하지 않아서, 이미 챕터 1을
+      진행 중(또는 챕터 2에 있음)이어도 이 API를 다시 호출하면 챕터 1 맵을
+      새로 덮어써 진행 상황을 날리거나(맵/런 초기화), 심지어 전투 도중에도
+      맵 자체를 바꿔치기할 수 있었다 — 사실상 진행 우회/데이터 손실 경로.
+      프런트의 유일한 호출부(UI_Map.js의 initMap(chapter=1), Actions.js의
+      newGame()에서 딱 한 번 호출)도 항상 chapter=1의 "새 게임 시작"만
+      의도하므로, 여기서는 그 한 가지 경우만 허용한다 — 챕터 2 진입은
+      /api/map/next_chapter(클리어 여부를 확인하는 전용 라우트)의 몫이다.
     """
     gs = _get_session()
     if not gs:
         return jsonify({"ok": False, "error": "게임 세션이 없습니다."}), 404
 
-    data    = request.get_json() or {}
+    if gs.get("battle"):
+        return jsonify({"ok": False, "error": "전투 중에는 맵을 생성할 수 없습니다."}), 400
+
+    if gs.get("map"):
+        return jsonify({"ok": False, "error": "이미 진행 중인 맵이 있습니다."}), 400
+
+    data    = _get_json_body()
     chapter = int(data.get("chapter", 1))
 
-    if chapter not in (1, 2):
-        return jsonify({"ok": False, "error": f"잘못된 챕터: {chapter}"}), 400
+    if chapter != 1:
+        return jsonify({"ok": False, "error": "챕터 1만 이 API로 시작할 수 있습니다."}), 400
 
     fmap = FloorMap.generate(chapter)
     gs["map"]      = fmap.to_dict()    # 직렬화해서 저장
@@ -407,7 +458,7 @@ def map_choose():
     if not gs.get("map"):
         return jsonify({"ok": False, "error": "맵이 없습니다. /api/map/generate 먼저 호출하세요."}), 400
 
-    data    = request.get_json() or {}
+    data    = _get_json_body()
     node_id = data.get("node_id", "").strip()
     if not node_id:
         return jsonify({"ok": False, "error": "node_id가 필요합니다."}), 400
@@ -433,7 +484,7 @@ def map_choose():
         if is_boss:
             boss = _get_boss(chapter, player.lv)
             state = _start_battle(gs, boss, is_boss=True)
-            _log_node_choice(gs, node)
+            gs["pending_node_choice_id"] = _log_node_choice(gs, node)
             _save_map(gs, fmap)
             return jsonify({
                 "ok": True, "event": node_type,
@@ -472,7 +523,7 @@ def map_choose():
             state = _start_battle_multi(gs, enemies)
 
         # 로그 기록
-        _log_node_choice(gs, node, extra={
+        gs["pending_node_choice_id"] = _log_node_choice(gs, node, extra={
             "node_type":   node_type,
             "enemy_count": n_enemies,
             "grades":      grades,
@@ -700,7 +751,7 @@ def shop_buy():
     if not gs:
         return jsonify({"ok": False, "error": "게임 세션이 없습니다."}), 404
 
-    data    = request.get_json() or {}
+    data    = _get_json_body()
     item_id = data.get("item_id", "")
     gold    = gs.get("gold", 0)
 

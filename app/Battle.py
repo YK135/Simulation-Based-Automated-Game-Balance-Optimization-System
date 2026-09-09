@@ -12,7 +12,7 @@ app/battle.py — 전투 Blueprint
 """
 from __future__ import annotations
 
-from flask import Blueprint, jsonify, request
+from flask import Blueprint, jsonify
 
 from game.Lv        import LV_
 from game.Inventory import Inventory
@@ -25,6 +25,7 @@ from .Shared import (
     _player_dict,
     _save_battle_to_db,
     _register_pending_swap,
+    _get_json_body,
 )
 
 battle_bp = Blueprint("battle", __name__)
@@ -112,6 +113,10 @@ def _start_battle_multi(gs: dict, enemies: list, is_boss: bool = False) -> dict:
 
 # 다대일 경험치 배율 (스탯 90%/80% 감소와 별개로 exp도 감소)
 _MULTI_EXP_MULT = {1: 1.00, 2: 0.90, 3: 0.75}
+
+# NodeChoice.battle_result 컬럼 값 변환 — DB/Models.py의 컬럼 주석이 명시한
+# 'win'|'lose'|'escape' 어휘에 맞춰 winner("player"/"enemy"/"escaped")를 옮긴다.
+_NC_RESULT_MAP = {"player": "win", "enemy": "lose", "escaped": "escape"}
 
 # 등급/난이도 → maxexp 비율 (Enemy_Class.exp_reward와 동일 기준)
 _EXP_RATIO_BY_GRADE = {"상": 0.80, "중": 0.55, "하": 0.45}
@@ -344,6 +349,24 @@ def _finish_battle(gs: dict, battle, result: dict, winner: str) -> None:
     gs.pop("battle_node_type", None)   # 전투 종료 — 노드 타입 캐시 초기화
     gs.pop("battle_map_layer", None)   # 전투 종료 — 배틀 배경 층 캐시 초기화
 
+    # ★ 예전엔 NodeChoice.battle_result/battle_turns가 항상 기본값(None)으로만
+    #   기록됐다 — app/Map.py의 _log_node_choice()가 전투 "시작" 시점에
+    #   호출돼서 그땐 승패/턴 수를 아직 모른다. 전투 시작 시 저장해 둔 행
+    #   id(gs["pending_node_choice_id"])로 지금(전투가 실제로 끝난 시점) 같은
+    #   행을 찾아 채워 넣는다 — 승/패/도망 전부 기록(분석 데이터 완결성).
+    #   DB/Models.py의 NodeChoice.battle_result 컬럼 주석이 명시한 값
+    #   ('win'|'lose'|'escape')에 맞춰 winner("player"/"enemy"/"escaped")를
+    #   변환한다 — 그대로 저장하면 분석 쿼리가 컬럼 주석과 실제 값이 달라
+    #   헷갈린다.
+    node_choice_id = gs.pop("pending_node_choice_id", None)
+    if node_choice_id:
+        try:
+            from app.Map import _update_node_choice_result
+            _update_node_choice_result(
+                node_choice_id, _NC_RESULT_MAP.get(winner, winner), battle.turn)
+        except Exception as e:
+            print(f"[Map] NodeChoice result update failed: {e}")
+
     # 노드맵 사용 중이면 승리 시에만 노드 완료 (패배/도망은 노드 유지)
     if winner == "player" and gs.get("pending_node_id") and gs.get("map"):
         try:
@@ -356,11 +379,22 @@ def _finish_battle(gs: dict, battle, result: dict, winner: str) -> None:
             gs["pending_node_id"] = None
 
             if fmap.completed:
-                # 런 종료 처리
+                # 런 종료 처리 — 이 분기는 winner=="player"가 이미 확정된
+                # 상태(위 if문 조건)라 결과는 항상 "clear"뿐이다.
                 from app.Map import _finish_run
-                _finish_run(gs, "clear" if winner == "player" else "dead")
+                _finish_run(gs, "clear")
         except Exception as e:
             print(f"[Map] node complete failed: {e}")
+    elif winner == "enemy" and gs.get("run_id"):
+        # ★ 예전엔 _finish_run이 위 winner=="player" 분기 안에서만 호출돼서,
+        #   실제 패배는 Run.result가 영원히 None(= "진행 중")으로 DB에 남았다
+        #   (플레이어는 map.py의 player_hp_ratio<=0 가드로 더 이상 맵을 진행할
+        #   수 없는데도, 그 런 레코드만 안 닫힌 채 방치 — 런 완주율/분석
+        #   쿼리가 실제로 끝난 런을 계속 "미완료"로 집계하게 됨). 패배 시엔
+        #   노드맵 진행 여부(pending_node_id/map)와 무관하게 항상 이 런을
+        #   "dead"로 닫는다 — _finish_run 자체가 run_id 없으면 조용히 no-op.
+        from app.Map import _finish_run
+        _finish_run(gs, "dead")
 
 
 # ─────────────────────────────────────────────
@@ -383,7 +417,7 @@ def battle_action():
     if not gs:
         return jsonify({"ok": False, "error": "게임 세션이 없습니다."}), 404
 
-    data   = request.get_json() or {}
+    data   = _get_json_body()
     action = data.get("action", "").strip()
     if not action:
         return jsonify({"ok": False, "error": "action이 필요합니다."}), 400

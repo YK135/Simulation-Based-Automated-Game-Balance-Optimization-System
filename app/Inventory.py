@@ -7,12 +7,15 @@ app/inventory.py — 인벤토리 Blueprint
 """
 from __future__ import annotations
 
-from flask import Blueprint, jsonify, request
+from flask import Blueprint, jsonify
 
 from ai.battle.Battle_Engine  import ITEM_META
 from game.Inventory import get_slot
 
-from .Shared import _get_session, _player_dict, _pop_pending_swap, _restore_pending_swap
+from .Shared import (
+    _get_session, _player_dict, _pop_pending_swap, _restore_pending_swap,
+    _get_json_body,
+)
 
 inventory_bp = Blueprint("inventory", __name__)
 
@@ -29,7 +32,7 @@ def use_item():
     if gs["battle"] is not None:
         return jsonify({"ok": False, "error": "전투 중에는 전투 아이템 API를 사용하세요."})
 
-    data      = request.get_json() or {}
+    data      = _get_json_body()
     item_name = data.get("item", "")
     player    = gs["player"]
 
@@ -113,7 +116,7 @@ def inventory_swap():
     if not gs:
         return jsonify({"ok": False, "error": "게임 세션이 없습니다."}), 404
 
-    data      = request.get_json() or {}
+    data      = _get_json_body()
     ticket_id = data.get("ticket_id", "")
     drops     = data.get("drops")
     if drops is None:
@@ -194,7 +197,7 @@ def inventory_swap_cancel():
     if not gs:
         return jsonify({"ok": False, "error": "게임 세션이 없습니다."}), 404
 
-    data = request.get_json() or {}
+    data = _get_json_body()
     ticket_id = data.get("ticket_id", "")
     _pop_pending_swap(gs, ticket_id)   # 없으면(이미 처리/소멸) 조용히 무시 — 취소는 항상 성공
     return jsonify({"ok": True})

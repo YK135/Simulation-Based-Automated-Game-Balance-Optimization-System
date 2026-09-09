@@ -96,18 +96,6 @@ class Inventory:
         """빈 인벤토리"""
         return cls()
 
-    @classmethod
-    def starting_set(cls) -> "Inventory":
-        """게임 시작 기본 인벤토리 (포션 6개)"""
-        inv = cls()
-        inv.potions = [
-            "HP_S_potion", "HP_S_potion",
-            "HP_M_potion",
-            "MP_S_potion", "MP_S_potion",
-            "MP_M_potion",
-        ]
-        return inv
-
     # ─────────────────────────────────────────
     # 직렬화 (DB/JSON 저장용)
     # ─────────────────────────────────────────
@@ -269,15 +257,6 @@ class Inventory:
     def count(self, item_name: str) -> int:
         """특정 아이템 보유 수"""
         return self.potions.count(item_name) + self.special.count(item_name)
-
-    def total_count(self) -> int:
-        return len(self.potions) + len(self.special)
-
-    def is_potion_full(self) -> bool:
-        return len(self.potions) >= SLOT_LIMITS["potion"]
-
-    def is_special_full(self) -> bool:
-        return len(self.special) >= SLOT_LIMITS["special"]
 
     # ─────────────────────────────────────────
     # 응답용 dict (UI 표시)

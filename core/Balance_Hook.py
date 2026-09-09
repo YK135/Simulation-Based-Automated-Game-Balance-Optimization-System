@@ -10,6 +10,7 @@ Balance_Hook.py
 """
 
 import os
+import queue
 import threading
 import subprocess
 import platform
@@ -32,12 +33,52 @@ ROOT_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 # 파일 기반 IPC 경로
 PIPE_FILE = "/tmp/ai_monitor_pipe.txt"
 
-# ★ 프로세스 전체에서 동시에 도는 몬스터 밸런스 시뮬레이션 스레드 수 상한.
+class _BoundedDaemonPool:
+    """워커 스레드를 고정 개수(daemon=True)만 미리 띄워두고 큐로 작업을
+    나눠주는 아주 작은 스레드 풀 — stdlib concurrent.futures.ThreadPoolExecutor
+    대신 직접 구현한다.
+    ★ ThreadPoolExecutor는 워커 스레드를 non-daemon으로 만든다 — 그 결과
+      프로세스가 끝날 때(gunicorn이 워커에 SIGTERM을 보내는 배포 재시작 등)
+      concurrent.futures가 등록해 둔 atexit 훅이 큐에 남아있던 작업이 전부
+      끝날 때까지 인터프리터 종료 자체를 붙잡는다(라이브러리가 "제출된 작업을
+      조용히 버리지 않는다"는 의도로 설계한 동작이지만, 여기선 원치 않는
+      부작용이다). 이 모듈은 원래부터 명시적으로 daemon=True 스레드를 써서
+      "밸런스 시뮬레이션 때문에 게임 서버 종료가 늦어지는 일은 없다"를
+      전제로 하고 있었다(_start_background_sim() 참고) — 그 성질을 그대로
+      유지하기 위해 직접 만든다."""
+
+    def __init__(self, max_workers: int):
+        self._queue: "queue.Queue" = queue.Queue()
+        for i in range(max_workers):
+            t = threading.Thread(
+                target=self._worker_loop, daemon=True,
+                name=f"balance-sim-{i}",
+            )
+            t.start()
+
+    def _worker_loop(self):
+        while True:
+            fn = self._queue.get()
+            try:
+                fn()
+            except Exception:
+                pass   # 제출되는 콜러블(_run) 자신이 이미 예외를 처리한다
+
+    def submit(self, fn) -> None:
+        self._queue.put(fn)
+
+
+# ★ 프로세스 전체에서 몬스터 밸런스 시뮬레이션에 쓰는 스레드 풀.
 #   BalanceHook 인스턴스별이 아니라 워커 프로세스 전체 기준 — 여러 유저가
-#   동시에 새 몬스터를 처음 만나거나, 같은 유저가 "새 게임"을 빠르게 반복해
-#   취소 안 되는 옛 스레드가 쌓여도 실제로 동시에 도는 무거운 시뮬레이션
-#   (반복당 300~500회 전투 × 최대 20회 이진탐색)은 이 수를 넘지 않는다.
-_SIM_SLOTS = threading.Semaphore(4)
+#   동시에 새 몬스터를 처음 만나거나, 같은 유저가 "새 게임"을 빠르게 반복해도
+#   실제로 생성되는 OS 스레드 수 자체가 4를 넘지 않는다.
+#   ★ 예전엔 threading.Semaphore(4)로 "동시 실행" 개수만 제한하고 스레드
+#     "생성"은 매번 threading.Thread(...).start()로 무제한 허용했다 — 세마포어
+#     슬롯이 다 찬 동안에도 요청이 들어올 때마다 새 스레드 객체가 만들어져
+#     세마포어 획득 대기 상태로 쌓였다(각 스레드가 실제 OS 스택 메모리를 문
+#     상태로). 이 풀은 작업을 "생성"이 아니라 "제출(submit)"하므로, 초과분은
+#     스레드가 아니라 큐에 쌓인 가벼운 콜러블로 대기한다.
+_SIM_EXECUTOR = _BoundedDaemonPool(max_workers=4)
 
 
 def _player_to_snap(player, item_list: list) -> EntitySnapshot:
@@ -145,40 +186,6 @@ class BalanceHook:
         "사제":     Make_Priest,
     }
 
-    # ── [구 탐험/테스트용] 레벨대별 등장 가능 몬스터 풀 ──
-    #    ⚠ 메인 노드맵 전투에서는 app/Map.py의 CHAPTER_TIER_POOL(챕터+노드 구간 기준)을 사용.
-    #    이 레벨 기반 풀은 none_Explore(구 탐험)/콘솔 테스트 호환용으로만 유지한다.
-    # 레벨대별 등장 가능 몬스터 풀
-    # Phase 1 디자인: 단계적 컨텐츠 도입.
-    # 등장 조건: player.lv >= min_lv 인 몬스터들 중 랜덤 선택.
-    _ENEMY_POOL = [
-        {"type": "고블린",  "min_lv": 1},
-        {"type": "박쥐",    "min_lv": 1},
-        {"type": "슬라임",  "min_lv": 3},
-        {"type": "화염 슬라임", "min_lv": 4},
-        {"type": "빙결 슬라임", "min_lv": 4},
-        {"type": "번개 슬라임", "min_lv": 4},
-        {"type": "골렘",    "min_lv": 5},
-        {"type": "유령",    "min_lv": 6},
-        {"type": "암살자",  "min_lv": 8},
-        {"type": "사제",    "min_lv": 9},
-    ]
-
-    def _available_enemy_types(self) -> list:
-        """현재 플레이어 레벨에서 등장 가능한 몬스터 종류 리스트.
-        ⚠ [구 탐험/테스트용] 메인 노드맵은 CHAPTER_TIER_POOL 사용."""
-        return [e["type"] for e in self._ENEMY_POOL
-                if self.player.lv >= e["min_lv"]]
-
-    def pick_random_enemy_type(self) -> str:
-        """레벨대별 풀에서 랜덤 선택.
-        ⚠ 메인 노드맵(app/Map.py)에서는 사용 금지 — 몬스터 출현의 단일 기준은
-          app/Map.py의 CHAPTER_TIER_POOL(챕터+노드 구간 기반)이다.
-          이 메서드는 구 탐험 모드(none_Explore)/콘솔 테스트 호환용으로만 유지."""
-        from random import choice
-        pool = self._available_enemy_types()
-        return choice(pool) if pool else "고블린"
-
     def _make_fallback(self, enemy_type: str) -> EntitySnapshot:
         """
         시뮬 완료 전 폴백용 몬스터.
@@ -230,8 +237,8 @@ class BalanceHook:
         self._monster_cache = {}
         self._cache_lock    = threading.Lock()
 
-        # 백그라운드 시뮬 스레드 추적
-        self._sim_threads = {}   # {enemy_type: Thread}
+        # 백그라운드 시뮬 작업 추적
+        self._sim_threads = {}   # {enemy_type: True} — _SIM_EXECUTOR에 제출됐음을 표시(멤버십 전용)
         self._sim_ready   = {}   # {enemy_type: threading.Event}
 
         # ★ 레벨업(on_level_up)은 _sim_threads/_sim_ready를 비우고 새로 시작만
@@ -274,27 +281,24 @@ class BalanceHook:
 
         def _run():
             try:
-                # ★ 동시에 도는 시뮬레이션 스레드 수를 프로세스 전체(모든
-                #   BalanceHook 인스턴스 합산)에서 제한 — 새 게임을 빠르게
-                #   반복하면(각자 자기 스레드 2개를 새로 띄우는) 취소가 안 되는
-                #   무거운 시뮬레이션(반복당 300~500회 전투 × 최대 20회 이진
-                #   탐색)이 무한정 쌓여 동시 실행될 수 있었다. 슬롯이 다 찼으면
-                #   여기서 대기 — 다른 유저의 요청 처리 자체를 막지는 않는다
-                #   (이 락은 개별 BalanceHook 스레드 안에서만 걸림).
-                with _SIM_SLOTS:
-                    p_snap  = _player_to_snap(self.player, self.item_list)
-                    factory = MonsterFactory(p_snap, enemy_type)
+                # ★ 프로세스 전체 공유 풀(_SIM_EXECUTOR, max_workers=4)이 동시
+                #   실행 개수뿐 아니라 실제 OS 스레드 생성 자체를 제한한다 —
+                #   새 게임을 빠르게 반복해도(각자 자기 작업 2개를 제출하는)
+                #   초과분은 스레드가 아니라 풀의 내부 큐에 가벼운 콜러블로
+                #   쌓인다.
+                p_snap  = _player_to_snap(self.player, self.item_list)
+                factory = MonsterFactory(p_snap, enemy_type)
 
-                    # 모니터 창: 딱 한 번만 열기
-                    with self._cache_lock:
-                        if self.verbose and not self._monitor_opened:
-                            self._monitor_opened = _open_monitor()
+                # 모니터 창: 딱 한 번만 열기
+                with self._cache_lock:
+                    if self.verbose and not self._monitor_opened:
+                        self._monitor_opened = _open_monitor()
 
-                    # generate_all에 모니터 콜백 전달
-                    monsters = factory.generate_all(
-                        verbose=False,
-                        monitor=self,   # self를 넘겨서 _monitor_write 사용
-                    )
+                # generate_all에 모니터 콜백 전달
+                monsters = factory.generate_all(
+                    verbose=False,
+                    monitor=self,   # self를 넘겨서 _monitor_write 사용
+                )
 
                 with self._cache_lock:
                     # ★ 이 스레드가 시작된 뒤 레벨업으로 세대가 바뀌었으면
@@ -330,9 +334,11 @@ class BalanceHook:
                 if all_done:
                     self._monitor_done()
 
-        t = threading.Thread(target=_run, daemon=True)
-        self._sim_threads[enemy_type] = t
-        t.start()
+        # _sim_threads는 "이 enemy_type 작업이 이미 제출/진행 중인지"만
+        # 표시하는 멤버십 집합으로 쓰인다(Thread/Future 객체 자체를 다시
+        # join/취소하는 곳이 코드 어디에도 없다) — 그래서 값은 True만으로 충분.
+        _SIM_EXECUTOR.submit(_run)
+        self._sim_threads[enemy_type] = True
 
     def _get_cached_monsters(self, enemy_type: str):
         """
