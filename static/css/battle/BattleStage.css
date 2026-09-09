@@ -9,6 +9,18 @@
     padding: 14px;
     margin-bottom: 12px;
     min-height: 280px;
+    /* ★ .battle-zone은 .center-col(Layout.css, display:flex 세로)의 자식이지만
+       .panel 클래스가 없어서 Layout.css의 ".center-col > .panel:first-child"
+       규칙(flex:1 등)을 못 받는다 — 그래서 flex 아이템 기본값(flex-shrink:1)이
+       그대로 적용돼, .battle-stage의 min-height를 383px로 올린 뒤 뷰포트가
+       빠듯하면 .center-col이 이 박스를 그 아래(min-height:280px)까지 찌그러뜨릴
+       수 있었다. .battle-stage 자신의 min-height는 안 줄어드니 그 차이만큼
+       테두리를 뚫고 흘러넘친 것 — 실측/스크린샷으로 확인된 버그. 이 박스는
+       내용(헤더+맵/배틀 콘텐츠)보다 작아지면 안 되므로 축소 자체를 막는다.
+       공간이 정말 부족한 경우의 대응은 .center-col의 overflow-y:auto가
+       담당(아래 Layout.css) — 이 박스를 잘라내는 방식(overflow:hidden)은
+       쓰지 않는다. */
+    flex-shrink: 0;
 }
 .battle-header {
     display: flex; justify-content: space-between; align-items: center;
