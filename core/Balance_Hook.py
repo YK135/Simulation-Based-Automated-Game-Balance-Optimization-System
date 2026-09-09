@@ -32,6 +32,13 @@ ROOT_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 # 파일 기반 IPC 경로
 PIPE_FILE = "/tmp/ai_monitor_pipe.txt"
 
+# ★ 프로세스 전체에서 동시에 도는 몬스터 밸런스 시뮬레이션 스레드 수 상한.
+#   BalanceHook 인스턴스별이 아니라 워커 프로세스 전체 기준 — 여러 유저가
+#   동시에 새 몬스터를 처음 만나거나, 같은 유저가 "새 게임"을 빠르게 반복해
+#   취소 안 되는 옛 스레드가 쌓여도 실제로 동시에 도는 무거운 시뮬레이션
+#   (반복당 300~500회 전투 × 최대 20회 이진탐색)은 이 수를 넘지 않는다.
+_SIM_SLOTS = threading.Semaphore(4)
+
 
 def _player_to_snap(player, item_list: list) -> EntitySnapshot:
     skills = []
@@ -227,6 +234,15 @@ class BalanceHook:
         self._sim_threads = {}   # {enemy_type: Thread}
         self._sim_ready   = {}   # {enemy_type: threading.Event}
 
+        # ★ 레벨업(on_level_up)은 _sim_threads/_sim_ready를 비우고 새로 시작만
+        #   할 뿐, 이미 돌고 있던 이전 스레드는 취소/join하지 않는다(파이썬
+        #   스레드는 강제 종료가 안 됨) — 그 스레드가 나중에 끝나면 이미 지난
+        #   레벨 기준으로 생성한 몬스터를 새 캐시에 그대로 덮어쓸 수 있었다.
+        #   세대 번호로 막는다: 스레드가 시작될 때 자기 세대를 기억해두고,
+        #   완료 시점에 현재 세대와 다르면(그 사이 레벨업이 있었으면) 결과를
+        #   버린다.
+        self._sim_generation = 0
+
         self._last_sim_result = None
         self._last_difficulty = "normal"
         self._last_lv         = player.lv
@@ -254,29 +270,43 @@ class BalanceHook:
 
         event = threading.Event()
         self._sim_ready[enemy_type] = event
+        gen = self._sim_generation   # 이 스레드가 속한 "세대" — 완료 시점에 비교
 
         def _run():
             try:
-                p_snap  = _player_to_snap(self.player, self.item_list)
-                factory = MonsterFactory(p_snap, enemy_type)
+                # ★ 동시에 도는 시뮬레이션 스레드 수를 프로세스 전체(모든
+                #   BalanceHook 인스턴스 합산)에서 제한 — 새 게임을 빠르게
+                #   반복하면(각자 자기 스레드 2개를 새로 띄우는) 취소가 안 되는
+                #   무거운 시뮬레이션(반복당 300~500회 전투 × 최대 20회 이진
+                #   탐색)이 무한정 쌓여 동시 실행될 수 있었다. 슬롯이 다 찼으면
+                #   여기서 대기 — 다른 유저의 요청 처리 자체를 막지는 않는다
+                #   (이 락은 개별 BalanceHook 스레드 안에서만 걸림).
+                with _SIM_SLOTS:
+                    p_snap  = _player_to_snap(self.player, self.item_list)
+                    factory = MonsterFactory(p_snap, enemy_type)
 
-                # 모니터 창: 딱 한 번만 열기
+                    # 모니터 창: 딱 한 번만 열기
+                    with self._cache_lock:
+                        if self.verbose and not self._monitor_opened:
+                            self._monitor_opened = _open_monitor()
+
+                    # generate_all에 모니터 콜백 전달
+                    monsters = factory.generate_all(
+                        verbose=False,
+                        monitor=self,   # self를 넘겨서 _monitor_write 사용
+                    )
+
                 with self._cache_lock:
-                    if self.verbose and not self._monitor_opened:
-                        self._monitor_opened = _open_monitor()
-
-                # generate_all에 모니터 콜백 전달
-                monsters = factory.generate_all(
-                    verbose=False,
-                    monitor=self,   # self를 넘겨서 _monitor_write 사용
-                )
-
-                with self._cache_lock:
-                    self._monster_cache[enemy_type] = monsters
-                    self._last_lv = self.player.lv
+                    # ★ 이 스레드가 시작된 뒤 레벨업으로 세대가 바뀌었으면
+                    #   (on_level_up이 캐시를 비우고 새 스레드를 이미 띄운
+                    #   뒤일 수 있음) 지금 와서 옛 레벨 기준 결과로 캐시를
+                    #   덮어쓰지 않는다 — 조용히 버림.
+                    if gen == self._sim_generation:
+                        self._monster_cache[enemy_type] = monsters
+                        self._last_lv = self.player.lv
 
                 # 그래프 저장 (옵션)
-                if self._viz:
+                if self._viz and gen == self._sim_generation:
                     try:
                         self._viz.win_rate_bar(monsters, self.player.name)
                         self._viz.stat_radar(
@@ -438,6 +468,9 @@ class BalanceHook:
 
         with self._cache_lock:
             self._monster_cache.clear()
+            # ★ 세대를 올려서 이 시점에 이미 돌고 있던(취소 불가능한) 이전
+            #   스레드들이 나중에 끝나도 옛 레벨 결과로 캐시를 못 덮어쓰게 한다.
+            self._sim_generation += 1
         self._sim_threads.clear()
         self._sim_ready.clear()
         self._last_lv = self.player.lv

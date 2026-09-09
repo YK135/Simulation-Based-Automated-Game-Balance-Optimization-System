@@ -11,7 +11,7 @@ from flask import Blueprint, jsonify, request
 
 from ai.battle.Battle_Engine  import ITEM_META
 
-from .Shared import _get_session, _player_dict
+from .Shared import _get_session, _player_dict, _pop_pending_swap, _register_pending_swap
 
 inventory_bp = Blueprint("inventory", __name__)
 
@@ -96,6 +96,14 @@ def inventory_swap():
     """
     포션/특수 슬롯 가득 시: 기존 아이템 1개 버리고 새 아이템 추가.
     요청: { "drop": "bomb", "new": "fire_bottle" }
+
+    ★ new는 "서버가 실제로 발급 대기 중인 아이템"이어야 한다 — 예전엔 클라이
+      언트가 보낸 new를 그대로 믿고 인벤토리에 넣어서, 상점/이벤트/전투보상
+      경로를 거치지 않은 임의의 아이템을 이 API 직접 호출만으로 얻을 수
+      있었다(상점 구매 건은 결제도 없이 얻는 것까지 가능했음). gs["pending_
+      swaps"]에 등록된 티켓과 정확히 일치하는 항목만 소모한다 — 상점 구매
+      (source="shop")였던 티켓은 슬롯이 가득 찼던 시점엔 아직 결제 전이었으
+      므로 여기서 실제로 결제한다.
     """
     gs = _get_session()
     if not gs:
@@ -108,18 +116,40 @@ def inventory_swap():
     if not drop_item or not new_item:
         return jsonify({"ok": False, "error": "drop과 new를 모두 지정해야 합니다."}), 400
 
+    ticket = _pop_pending_swap(gs, new_item)
+    if ticket is None:
+        return jsonify({"ok": False, "error": "교체로 받을 수 있는 아이템이 아닙니다.",
+                        "reason": "no_pending_swap"}), 400
+
+    price = ticket.get("price", 0)
+    if ticket.get("source") == "shop" and price:
+        gold = gs.get("gold", 0)
+        if gold < price:
+            # 티켓은 아직 유효하니 되돌려 놓는다 — 골드가 부족해졌다고
+            # 대기 중이던 구매 자체를 잃을 이유는 없음.
+            _register_pending_swap(gs, new_item, source="shop", price=price)
+            return jsonify({"ok": False, "error": f"골드가 부족합니다. (보유: {gold}G)"}), 400
+        gs["gold"] = gold - price
+
     inv    = gs["inventory"]
     result = inv.swap_item(drop_item, new_item)
 
     if not result["ok"]:
+        # 스왑 자체가 실패(drop_item 없음 등)했으면 결제/티켓을 원상복구.
+        if ticket.get("source") == "shop" and price:
+            gs["gold"] = gs.get("gold", 0) + price
+        _register_pending_swap(gs, new_item, source=ticket.get("source", "reward"), price=price)
         return jsonify({"ok": False, "error": result.get("message", "교체 실패")}), 400
 
     gs["items"] = inv.to_flat_list()
 
-    return jsonify({
+    resp = {
         "ok":      True,
         "dropped": result["dropped"],
         "added":   result["added"],
         "message": f"{result['dropped']}을(를) 버리고 {result['added']}을(를) 획득!",
         "player":  _player_dict(gs["player"], inv),
-    })
+    }
+    if ticket.get("source") == "shop":
+        resp["gold"] = gs.get("gold", 0)
+    return jsonify(resp)

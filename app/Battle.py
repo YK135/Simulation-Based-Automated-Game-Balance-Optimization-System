@@ -24,6 +24,7 @@ from .Shared import (
     _player_to_snap,
     _player_dict,
     _save_battle_to_db,
+    _register_pending_swap,
 )
 
 battle_bp = Blueprint("battle", __name__)
@@ -254,6 +255,9 @@ def _finish_battle(gs: dict, battle, result: dict, winner: str) -> None:
                 rw["messages"].append(f"가방이 가득 차 {it}을(를) 놓쳤다...")
                 # ★ 완전히 잃는 게 아니라 "일단 못 받음" — 프론트가 보상 요약창을
                 #   보여준 뒤 이 목록으로 교체 선택창을 띄워서 최종 결정은 플레이어가.
+                #   /api/inventory/swap이 "실제로 서버가 발급한 대기 아이템"인지
+                #   확인할 수 있도록 티켓으로 등록(가격 없음 — 이미 승리로 획득한 보상).
+                _register_pending_swap(gs, it, source="reward")
                 overflow.append({
                     "item": it,
                     "reason": add_res.get("reason"),

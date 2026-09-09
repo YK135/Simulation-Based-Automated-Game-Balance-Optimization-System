@@ -27,7 +27,7 @@ from game.Enemy_Class import (
     Make_MidBoss, Make_FinalBoss,
 )
 
-from app.Shared  import _get_session, _player_dict
+from app.Shared  import _get_session, _player_dict, _register_pending_swap
 from app.Battle  import _start_battle, _start_battle_multi
 
 map_bp = Blueprint("map", __name__)
@@ -237,6 +237,7 @@ def _event_item_found(gs: dict) -> dict:
         return {**base, "message": f"[아이템 발견] {gained}을(를) 발견했다!",
                 "item": gained}
     elif result.get("reason") == "special_full":
+        _register_pending_swap(gs, gained, source="event")
         return {**base, "event": "item_full",
                 "incoming":   gained,
                 "candidates": result["candidates"],
@@ -546,7 +547,12 @@ def map_node_complete():
     """
     노드 처리 완료 후 호출 (휴식 선택/상점 구매 완료 등).
     전투 완료는 battle_action에서 자동 처리.
-    요청: { "node_id": "3_1" }
+
+    ★ node_id는 요청 바디로 받지 않는다 — 예전엔 클라이언트가 보낸 node_id를
+      그대로 신뢰해서(서버의 pending_node_id보다 우선 사용), 아무 노드
+      ID나(보스 노드 포함) 보내서 실제로 밟지 않은 노드를 완료 처리하고
+      다음 노드를 미리 열어버릴 수 있었다. 항상 서버가 /api/map/choose에서
+      직접 검증하고 기록해 둔 pending_node_id만 사용한다.
     """
     gs = _get_session()
     if not gs:
@@ -555,13 +561,13 @@ def map_node_complete():
     if not gs.get("map"):
         return jsonify({"ok": False, "error": "맵이 없습니다. /api/map/generate 먼저 호출하세요."}), 400
 
-    data    = request.get_json() or {}
-    node_id = data.get("node_id") or gs.get("pending_node_id", "")
+    node_id = gs.get("pending_node_id", "")
     if not node_id:
-        return jsonify({"ok": False, "error": "node_id가 필요합니다."}), 400
+        return jsonify({"ok": False, "error": "완료할 노드가 없습니다."}), 400
 
     fmap = FloorMap.from_dict(gs["map"])
-    fmap.mark_visited(node_id)
+    if not fmap.mark_visited(node_id):
+        return jsonify({"ok": False, "error": "이미 처리됐거나 선택할 수 없는 노드입니다."}), 400
     _save_map(gs, fmap)
 
     if fmap.completed:
@@ -591,10 +597,17 @@ def map_node_complete():
 
 @map_bp.route("/api/map/next_chapter", methods=["POST"])
 def map_next_chapter():
-    """챕터 1 클리어 후 챕터 2 맵 생성."""
+    """챕터 1 클리어 후 챕터 2 맵 생성.
+
+    ★ 예전엔 현재 챕터 맵을 실제로 클리어했는지 확인하지 않아서, 이 API를
+      직접 호출하면 챕터 1을 한 노드도 안 밟고 바로 챕터 2로 건너뛸 수
+      있었다(보스도 안 잡고 진행). 현재 맵의 completed 플래그를 확인한다."""
     gs = _get_session()
     if not gs:
         return jsonify({"ok": False, "error": "게임 세션이 없습니다."}), 404
+
+    if not gs.get("map") or not gs["map"].get("completed"):
+        return jsonify({"ok": False, "error": "현재 챕터를 먼저 클리어해야 합니다."}), 400
 
     next_ch = gs.get("chapter", 1) + 1
     if next_ch not in (1, 2):
@@ -704,12 +717,17 @@ def shop_buy():
     if not result.get("ok"):
         reason = result.get("reason", "")
         if reason == "special_full":
+            # ★ 아직 결제 전(gold 차감 안 함) — 스왑 확정 시점에 결제한다.
+            #   그때 /api/inventory/swap이 이 티켓을 확인해야만 처리되므로
+            #   결제 없이 임의의 아이템을 얻는 경로가 되지 않는다.
+            _register_pending_swap(gs, item_id, source="shop", price=price)
             return jsonify({"ok": False, "error": "특수 아이템 칸이 가득 찼습니다.",
                            "reason": "special_full", "candidates": result.get("candidates", [])}), 400
         if reason == "potion_full":
+            _register_pending_swap(gs, item_id, source="shop", price=price)
             return jsonify({"ok": False,
                            "error": "포션 슬롯이 가득 찼습니다. 기존 포션을 사용한 뒤 구매하세요.",
-                           "reason": "potion_full"}), 400
+                           "reason": "potion_full", "candidates": result.get("candidates", [])}), 400
         return jsonify({"ok": False, "error": result.get("message", "인벤토리 가득 참")}), 400
 
     gs["gold"]  = gold - price

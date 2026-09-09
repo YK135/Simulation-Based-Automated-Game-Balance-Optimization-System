@@ -301,9 +301,7 @@ class Visualizer:
         ax.grid(color=COLORS["grid"], linewidth=0.8)
 
         # 실제 수치를 꼭짓점 근처에 표시
-        for i, (angle, pv, ev, pr, er) in enumerate(
-            zip(angles[:-1], p_norm, e_norm, p_vals_raw, e_vals_raw)
-        ):
+        for angle, pv, ev, pr, er in zip(angles[:-1], p_norm, e_norm, p_vals_raw, e_vals_raw):
             offset = 0.15
             ax.text(angle, max(pv, ev) + offset,
                     f"P:{int(pr)} / E:{int(er)}",

@@ -16,7 +16,7 @@ Enemy_Class.py
   최종 보스: 동일 원칙 + 저항 50%
 """
 from __future__ import annotations
-from random import random, choice
+from random import random
 
 
 class Unit:
@@ -395,35 +395,6 @@ def Make_Priest(player_lv: int, grade: str) -> Unit:
         enemy_type = "사제",
     )
     return _apply_grade(unit, grade)
-
-def Make_Random_Monster(player_lv: int) -> Unit:
-    """
-    [구 콘솔/테스트용] 랜덤 몬스터 + 랜덤 등급 — 레벨대별 풀.
-    ⚠ 메인 노드맵에서는 사용하지 않음. 실제 게임의 몬스터 출현은
-      app/Map.py의 CHAPTER_TIER_POOL(챕터+노드 구간 기준)이 단일 기준.
-      Lv1+:  고블린, 박쥐
-      Lv3+:  + 슬라임
-      Lv5+:  + 골렘
-      Lv7+:  + 유령
-      Lv8+:  + 암살자
-      Lv9+:  + 사제          ← 신규
-    등급: 하40% / 중45% / 상15%
-
-    Balance_Hook의 _ENEMY_POOL과 동일한 규칙 — 콘솔/웹 풀 일치.
-    """
-    roll = random()
-    if   roll < 0.40: grade = "하"
-    elif roll < 0.85: grade = "중"
-    else:             grade = "상"
-
-    pool = [Make_Goblin, Make_Bat]
-    if player_lv >= 3:  pool.append(Make_Slime)
-    if player_lv >= 4:  pool.extend([Make_FireSlime, Make_IceSlime, Make_LightningSlime])
-    if player_lv >= 5:  pool.append(Make_Golem)
-    if player_lv >= 6:  pool.append(Make_Ghost)
-    if player_lv >= 6:  pool.append(Make_Assassin)
-    if player_lv >= 8:  pool.append(Make_Priest)
-    return choice(pool)(player_lv, grade)
 
 def Make_MidBoss(player_lv: int) -> Unit:
     # TODO(밸런스): MC 실측상 중간보스는 Lv15 근처 권장 (Lv10 승률: 마법사 62.8%,

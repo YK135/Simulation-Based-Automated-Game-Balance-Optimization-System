@@ -270,11 +270,17 @@ class FloorMap:
 
         return True, node, ""
 
-    def mark_visited(self, node_id: str) -> None:
-        """노드 완료 처리 → 다음 노드 활성화."""
+    def mark_visited(self, node_id: str) -> bool:
+        """노드 완료 처리 → 다음 노드 활성화.
+
+        ★ 예전엔 node.available을 확인하지 않아서, 아직 선택되지 않았거나
+          이미 지나온 노드(보스 노드 포함)도 node_id만 알면(또는 추측하면)
+          완료 처리할 수 있었다 — 노드 진행 규칙을 서버 API 직접 호출로
+          우회할 수 있는 경로였음. available인 노드만 처리하도록 가드.
+        반환: 실제로 처리했으면 True, 대상이 아니라 무시했으면 False."""
         node = self.nodes.get(node_id)
-        if not node:
-            return
+        if not node or not node.available or node.visited:
+            return False
 
         node.visited   = True
         node.available = False
@@ -288,7 +294,7 @@ class FloorMap:
 
         if node.node_type == "boss":
             self.completed = True
-            return
+            return True
 
         # 다음 노드 활성화
         for next_id in node.next_ids:
@@ -302,6 +308,8 @@ class FloorMap:
             for n in self.nodes.values():
                 if n.branch == opposite and not n.visited:
                     n.available = False
+
+        return True
 
     # ── 직렬화 ────────────────────────────────
 

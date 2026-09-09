@@ -71,6 +71,10 @@ async function confirmInvSwap() {
         });
         if (!r.ok) { toast(r.error || '교체 실패', 'error'); return; }
         state.player = r.player;
+        // ★ 상점 구매가 가득 찬 인벤토리 때문에 미뤄졌던 경우, 결제는 이
+        //   스왑 확정 시점에 서버에서 이뤄진다(app/Inventory.py 참고) — 응답에
+        //   gold가 실려오면 화면 골드도 같이 갱신해야 실제 차감이 반영된다.
+        if (r.gold !== undefined) state.gold = r.gold;
         if (typeof refreshPlayer === 'function') refreshPlayer();
         toast(r.message || '교체 완료', 'ok');
         closeInvSwap();

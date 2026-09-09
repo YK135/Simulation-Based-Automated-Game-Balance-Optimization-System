@@ -15,7 +15,7 @@ for _sub in ["game", "ai", "core", "interface"]:
     if _p not in sys.path:
         sys.path.insert(0, _p)
 
-from flask import Flask, send_from_directory, session, request, jsonify
+from flask import Flask, send_from_directory, session, request, jsonify, g
 from DB import init_db
 from core.ErrorLog import log_error
 
@@ -26,7 +26,7 @@ from .Inventory import inventory_bp
 from .Rest      import rest_bp
 from .Ranking   import ranking_bp
 from .Map       import map_bp
-from .Shared    import GAME_SESSIONS, _persist_session
+from .Shared    import GAME_SESSIONS, _persist_session, _get_user_lock, USER_LOCK_TIMEOUT_SECONDS
 
 # ── 마스터 모드(로컬 전용 디버그) ──
 # RENDER 환경변수가 있으면(Render 자동 주입 — 배포 환경 감지) MASTER_MODE를
@@ -101,6 +101,37 @@ def create_app() -> Flask:
     @app.route("/")
     def index():
         return send_from_directory(static_dir, "index.html")
+
+    # ── 사용자별 요청 직렬화 ──────────────────────────────────
+    # GAME_SESSIONS[uid] 안의 player/battle/inventory/map은 여러 스레드
+    # (--threads 8)가 같은 유저의 요청을 동시에 처리하면 경쟁 상태가 생기는
+    # 가변 객체다(예: 전투 행동 중복 실행, 수련 경험치 중복 지급, 동시 구매).
+    # 프론트의 중복 클릭 방지(state.battleProcessing 등)는 같은 브라우저의
+    # "정상적인 빠른 클릭"만 막을 뿐 API 직접 호출이나 여러 탭까지는 못 막으
+    # 므로, 같은 uid의 요청은 서버에서 한 번에 하나씩만 처리되도록 직렬화한다.
+    # GET(상태 조회 전용, 아무것도 안 바꿈)은 잠글 필요가 없어 제외.
+    @app.before_request
+    def _acquire_user_lock():
+        g._user_lock = None
+        if request.method == "GET":
+            return None
+        uid = session.get("user_id")
+        if not uid:
+            return None
+        lock = _get_user_lock(uid)
+        if not lock.acquire(timeout=USER_LOCK_TIMEOUT_SECONDS):
+            # 극단적으로만 발생(직전 요청이 예외 없이 응답을 영영 안 끝내는 경우) —
+            # 그래도 무한 대기 대신 명확한 오류로 응답한다.
+            return jsonify({"ok": False, "error": "요청 처리 중입니다. 잠시 후 다시 시도하세요.",
+                            "reason": "locked"}), 423
+        g._user_lock = lock
+        return None
+
+    @app.teardown_request
+    def _release_user_lock(exc=None):
+        lock = getattr(g, "_user_lock", None)
+        if lock is not None:
+            lock.release()
 
     # 세션 영속화 — 요청마다 현재 워커 메모리에 있는 세션을 Redis+DB에
     # write-through. 라우트마다 저장 호출을 흩뿌리지 않기 위한 전역 훅.

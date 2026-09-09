@@ -21,6 +21,8 @@ app/shared.py — 공용 상태 + 헬퍼
 from __future__ import annotations
 
 import json
+import threading
+import time
 from typing import Optional
 
 from flask import session
@@ -35,6 +37,80 @@ from core.ErrorLog import log_error
 # 전역 세션 저장소 (워커별 인메모리 — 1차 캐시)
 # ─────────────────────────────────────────────
 GAME_SESSIONS: dict = {}
+
+
+# ─────────────────────────────────────────────
+# 사용자별 요청 락 (동시 요청 직렬화)
+# ─────────────────────────────────────────────
+# gunicorn --threads 8로 뜨는데, GAME_SESSIONS[uid] 안의 player/battle/
+# inventory/map은 요청 사이에 공유되는 가변 객체라 아무 잠금도 없었다 —
+# 같은 유저가(중복 클릭, 여러 탭, 또는 API 직접 호출) 동시에 두 요청을
+# 보내면 battle.step() 중복 실행, 수련 경험치 중복 지급, 상점에서 같은
+# 골드로 동시 구매 같은 경쟁 상태가 그대로 발생할 수 있었다. app/__init__.py
+# 의 before_request/teardown_request가 이 락으로 "같은 유저의 요청은 한
+# 번에 하나씩"만 처리되게 감싼다 — 다른 유저끼리는 서로 막지 않는다.
+_user_locks: dict[str, threading.Lock] = {}
+_user_locks_guard = threading.Lock()
+
+# 락을 오래 못 얻으면(직전 요청이 예외 없이 영원히 안 끝나는 등 극단적 상황)
+# 무한정 대기하지 않고 에러로 빠르게 응답한다 — 정상 요청은 전투 계산 포함
+# 수십 ms~수백 ms 안에 끝나므로 이 값이면 충분히 여유 있다.
+USER_LOCK_TIMEOUT_SECONDS = 8.0
+
+
+def _get_user_lock(uid: str) -> threading.Lock:
+    lock = _user_locks.get(uid)
+    if lock is not None:
+        return lock
+    with _user_locks_guard:
+        lock = _user_locks.get(uid)
+        if lock is None:
+            lock = threading.Lock()
+            _user_locks[uid] = lock
+        return lock
+
+
+# ─────────────────────────────────────────────
+# 세션 유휴 정리 (인메모리 캐시 무한 증가 방지)
+# ─────────────────────────────────────────────
+# GAME_SESSIONS는 TTL/최대 크기가 없어서, 서버가 오래 떠 있을수록 한 번이라도
+# 접속했던 모든 게스트의 player/BalanceHook 객체가 워커 메모리에 영구히
+# 쌓였다. player/inventory/map 등은 매 요청마다 Redis+DB로 write-through
+# 되므로(_persist_session), 메모리 캐시에서만 방출해도 다음 요청이 오면
+# _get_session()이 Redis→DB 순으로 그대로 복구한다 — 워커 재시작과 동일한
+# battle=None 트레이드오프(이미 문서화된 설계)를 오래 유휴한 세션에도
+# 적용하는 것뿐, 데이터 유실은 아니다.
+_SESSION_MAX_IDLE_SECONDS = 3600       # 1시간 미접속 시 메모리에서만 방출
+_SESSION_PRUNE_INTERVAL_SECONDS = 300  # 5분에 한 번만 전수 스캔(매 요청 스캔은 낭비)
+
+_session_last_seen: dict[str, float] = {}
+_last_prune_at = 0.0
+_prune_guard = threading.Lock()
+
+
+def _touch_session(uid: str) -> None:
+    _session_last_seen[uid] = time.monotonic()
+
+
+def _prune_idle_sessions() -> None:
+    global _last_prune_at
+    now = time.monotonic()
+    if now - _last_prune_at < _SESSION_PRUNE_INTERVAL_SECONDS:
+        return
+    if not _prune_guard.acquire(blocking=False):
+        return  # 다른 스레드가 이미 정리 중
+    try:
+        if now - _last_prune_at < _SESSION_PRUNE_INTERVAL_SECONDS:
+            return
+        _last_prune_at = now
+        cutoff = now - _SESSION_MAX_IDLE_SECONDS
+        stale = [uid for uid, ts in _session_last_seen.items() if ts < cutoff]
+        for uid in stale:
+            GAME_SESSIONS.pop(uid, None)
+            _session_last_seen.pop(uid, None)
+            _user_locks.pop(uid, None)
+    finally:
+        _prune_guard.release()
 
 
 # ─────────────────────────────────────────────
@@ -196,6 +272,33 @@ def _persist_session(uid: str, gs: dict) -> None:
 
 
 # ─────────────────────────────────────────────
+# 인벤토리 교체 대기 티켓 (pending_swaps)
+# ─────────────────────────────────────────────
+# 포션/특수 슬롯이 가득 차서 즉시 못 받은 아이템(상점 구매/이벤트 발견/전투
+# 보상)은 클라이언트에 "버릴 아이템을 골라라" 모달을 띄우고, 확정되면
+# POST /api/inventory/swap로 {drop, new}를 보낸다. 예전엔 new(획득할 아이템)를
+# 클라이언트가 보낸 문자열 그대로 믿고 인벤토리에 넣었다 — 즉 서버가 실제로
+# 발급한 적 없는 아이템 id를 new에 넣어 보내면 그대로 생성돼 들어갔다.
+# 여기서 "서버가 실제로 발급 대기 중인 아이템"만 티켓으로 등록해두고,
+# /api/inventory/swap은 요청의 new가 이 목록에 있는 것과 정확히 일치할 때만
+# 처리한다(1개 소모). 상점 구매(source="shop")는 슬롯이 가득 찬 시점엔 아직
+# 결제 전이므로 price를 함께 기록해 스왑이 실제로 확정되는 순간 결제한다.
+def _register_pending_swap(gs: dict, item: str, source: str, price: int = 0) -> None:
+    gs.setdefault("pending_swaps", []).append(
+        {"item": item, "source": source, "price": price}
+    )
+
+
+def _pop_pending_swap(gs: dict, item: str) -> Optional[dict]:
+    """item과 일치하는 대기 티켓 1개를 꺼내 제거. 없으면 None."""
+    pending = gs.get("pending_swaps") or []
+    for i, ticket in enumerate(pending):
+        if ticket.get("item") == item:
+            return pending.pop(i)
+    return None
+
+
+# ─────────────────────────────────────────────
 # 세션 헬퍼
 # ─────────────────────────────────────────────
 
@@ -206,8 +309,11 @@ def _get_session() -> Optional[dict]:
     if not uid:
         return None
 
+    _prune_idle_sessions()   # 매 호출마다 스캔하진 않음 — 내부에서 주기 제한
+
     gs = GAME_SESSIONS.get(uid)
     if gs is not None:
+        _touch_session(uid)
         return gs
 
     snap = redis_get(f"session:{uid}")
@@ -215,11 +321,13 @@ def _get_session() -> Optional[dict]:
         gs = _gs_from_snapshot(uid, snap)
         if gs:
             GAME_SESSIONS[uid] = gs
+            _touch_session(uid)
             return gs
 
     gs = _load_session_from_db(uid)
     if gs:
         GAME_SESSIONS[uid] = gs
+        _touch_session(uid)
         redis_set(f"session:{uid}", _snapshot_dict(gs))
         return gs
 
