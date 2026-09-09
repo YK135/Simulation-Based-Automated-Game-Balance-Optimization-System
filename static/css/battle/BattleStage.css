@@ -7,7 +7,13 @@
     border: 1px solid var(--border);
     border-radius: 4px;
     padding: 14px;
-    margin-bottom: 12px;
+    /* ★ margin-bottom을 여기서 따로 주지 않는다 — .center-col(Layout.css)이
+       이미 flex gap:12px로 형제 패널(BATTLE LOG) 사이 간격을 준다. 예전엔
+       이 margin-bottom:12px가 그 gap 위에 또 더해져서 실제 간격이 24px로
+       두 배였다(사용자가 좁혀달라고 요청한 부분) — 제거해서 gap 12px만
+       남긴다.
+       ※ 이 박스가 flex 컨테이너 안에서 찌그러들지 않는 이유는 아래
+       flex-shrink:0 참고. */
     min-height: 280px;
     /* ★ .battle-zone은 .center-col(Layout.css, display:flex 세로)의 자식이지만
        .panel 클래스가 없어서 Layout.css의 ".center-col > .panel:first-child"
