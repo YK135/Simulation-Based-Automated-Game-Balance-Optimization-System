@@ -175,7 +175,7 @@ body {
 /* 중앙의 마지막 패널 (배틀 로그) — 고정 높이 */
 .center-col > .panel:last-child {
     flex-shrink: 0;
-    height: 320px;
+    height: 280px;   /* ★ 요청으로 살짝 축소 (기존 320px) */
     display: flex;
     flex-direction: column;
     overflow: hidden;
