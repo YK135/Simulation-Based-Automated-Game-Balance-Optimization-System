@@ -29,6 +29,13 @@ Binary Search 기반 자동 밸런싱과 사용자 행동 로그 분석을 실�
   리포트(총평/잘한 점/아쉬운 점/제안/점수)를 생성하는 모듈. 실제 패배 시
   `app/Battle.py` → `core/Balance_Hook.py`의 `after_battle()`을 거쳐 게임오버
   화면에 표시된다.
+- **행동 로그 수집** (`app/Shared.py`의 `_save_rl_log()` → DB `BattleLog` 테이블) —
+  이 프로젝트의 최종 목표(모방학습/RL용 데이터 축적) 그 자체를 담당하는 부분.
+  전투마다 `(state, action, result)` 레코드가 실제로 쌓이며, 로그인 없는
+  게스트 플레이도 빠짐없이 저장된다.
+- **랭킹 보드** (`app/Ranking.py` + `DB/Queries.py`) — 점수 기반 랭킹과, 최종
+  보스를 가장 먼저 클리어한 순서로 매기는 "선구자" 랭킹 둘 다 DB 기반으로
+  실제 동작한다.
 
 밸런스는 이 자동 역산 층 위에, `game/Enemy_Class.py`/`app/Map.py`의 손으로 정한
 배율(등급/레벨/다인원 보정)이 한 층 더 곱해지는 구조입니다 — 후자는 자동이
@@ -43,6 +50,12 @@ python3 App.py     # http://localhost:5000
 
 프로덕션 실행 방식, 환경변수, DB 초기화 등은 [CLAUDE.md](CLAUDE.md)의
 Commands 섹션 참고.
+
+Render에 원클릭으로 배포할 수 있는 [render.yaml](render.yaml)이 준비돼 있습니다
+(무료 웹서비스 + Postgres + Redis, `SECRET_KEY`는 Render가 자동 생성). 로컬
+개발용 마스터 모드(레벨업/보스전/특정 몬스터전을 노드맵을 안 밟고 바로
+실행하는 디버그 패널)는 `MASTER_MODE=1`로만 켤 수 있고 Render 배포본에서는
+항상 꺼져 있습니다 — 자세한 안전장치는 CLAUDE.md의 "Master mode" 섹션 참고.
 
 ## 검증
 
