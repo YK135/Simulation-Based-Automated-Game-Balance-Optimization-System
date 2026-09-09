@@ -11,22 +11,34 @@ const SA_STATS = [
 // 현재 분배 상태
 let saAllocation = {};   // { stg: 2, spd: 1, ... }
 let saTotalPoints = 0;   // 이번에 분배 가능한 총 포인트
+let saResolvePending = null;   // openStatAllocate()이 반환한 Promise의 resolve —
+                                // 배틀 종료 시퀀스가 "이 모달이 닫힐 때까지" 기다릴 때 사용
 
-/**
- * 스탯 분배 모달 열기
- * @param {number} points - 분배 가능한 포인트 수
- */
-function openStatAllocate(points) {
+/** 모달 내용을 (다시) 그려서 연다 — Promise/resolver는 건드리지 않는다.
+ *  saConfirm()이 "이번 배분 다 씀, 다음 레벨업분 남음"일 때 같은 모달
+ *  세션을 이어서 쓰기 위해 분리(아래 openStatAllocate()의 내부 구현). */
+function _renderStatAllocateOpen(points) {
     saTotalPoints = points;
     saAllocation = {};
     SA_STATS.forEach(s => saAllocation[s.key] = 0);
- 
+
     document.getElementById("sa-remaining").textContent = points;
     renderStatAllocList();
- 
+
     // ★ 휴식 모달과 동일하게 .modal-bg → .active 토글
     const modal = document.getElementById("modal-stat-allocate");
     if (modal) modal.classList.add("active");
+}
+
+/**
+ * 스탯 분배 모달 열기. 모달이 완전히 닫힐 때(포인트를 다 분배해서) resolve되는
+ * Promise를 반환한다 — showRewardModal()/openInvSwap()과 동일한 패턴.
+ * 기존 호출부(반환값 무시)는 그대로 동작하므로 하위 호환.
+ * @param {number} points - 분배 가능한 포인트 수
+ */
+function openStatAllocate(points) {
+    _renderStatAllocateOpen(points);
+    return new Promise(resolve => { saResolvePending = resolve; });
 }
 
 /** 분배 UI 렌더 */
@@ -124,8 +136,12 @@ async function saConfirm() {
 
         const remaining = r.remaining || 0;
         if (remaining > 0) {
-            // 남은 포인트 있으면 모달 유지 (다음 레벨업분)
-            openStatAllocate(remaining);
+            // 남은 포인트 있으면 모달 유지(다음 레벨업분) — 같은 모달 세션을
+            // 이어가므로 openStatAllocate()을 다시 부르지 않는다. 그러면
+            // 원래 Promise의 resolver(saResolvePending)가 새 Promise로
+            // 덮어써져서, 처음 이 모달을 열며 await하고 있던 쪽(배틀 종료
+            // 시퀀스)이 영원히 안 풀리는 버그가 생긴다.
+            _renderStatAllocateOpen(remaining);
             toast(`분배 완료! 남은 포인트: ${remaining}`, "ok");
         } else {
             // 모두 분배 → 닫기
@@ -140,22 +156,30 @@ async function saConfirm() {
     }
 }
 
-/** 모달 닫기 */
+/** 모달 닫기 — 대기 중인 Promise가 있으면 resolve. */
 function closeStatAllocate() {
     const modal = document.getElementById("modal-stat-allocate");
     if (modal) modal.classList.remove("active");
+    if (saResolvePending) {
+        const resolve = saResolvePending;
+        saResolvePending = null;
+        resolve();
+    }
 }
 
 /**
  * 레벨업 후 호출 — pending_points 있으면 모달 자동 오픈.
- * loadStatus() 또는 전투 종료 후 호출하면 됨.
+ * loadStatus() 또는 전투 종료 후 호출하면 됨. 모달이 닫힐 때(포인트 없으면
+ * 즉시) resolve되는 Promise를 반환 — Actions.js의 battleAction()이 보상
+ * 모달/오버플로 처리 뒤에 이걸 await해서 레벨업 모달과 겹치지 않게 한다.
  */
 function checkPendingPoints() {
-    if (!state.player) return;
+    if (!state.player) return Promise.resolve();
     const pending = state.player.pending_points || 0;
     if (pending > 0) {
-        openStatAllocate(pending);
+        return openStatAllocate(pending);
     }
+    return Promise.resolve();
 }
 
 // 버튼 이벤트 바인딩 (DOMContentLoaded 후)

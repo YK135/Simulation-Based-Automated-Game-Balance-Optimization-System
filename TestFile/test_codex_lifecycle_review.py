@@ -242,8 +242,8 @@ def test_next_chapter_allowed_after_clear():
 # 5) /api/inventory/swap — pending_swaps 티켓 검증
 # ─────────────────────────────────────────────
 
-def test_inventory_swap_rejects_unregistered_item():
-    print("\n[서버가 발급한 적 없는 아이템으로 /api/inventory/swap 시도 → 거부]")
+def test_inventory_swap_rejects_unregistered_ticket():
+    print("\n[존재하지 않는 ticket_id로 /api/inventory/swap 시도 → 거부]")
     from game.Inventory import Inventory
 
     inv = Inventory.new()
@@ -251,9 +251,10 @@ def test_inventory_swap_rejects_unregistered_item():
     gs = make_session_dict(inventory=inv, gold=100)
     client, uid, store = inject_test_session(gs, uid="test-uid-swap-fake")
 
-    r = client.post("/api/inventory/swap", json={"drop": "HP_S_potion", "new": "완전_조작된_아이템"})
+    r = client.post("/api/inventory/swap",
+                    json={"ticket_id": "완전_조작된_티켓", "drops": {"HP_S_potion": 1}})
     body = r.get_json()
-    check("등록된 적 없는 아이템 → 400", r.status_code == 400 and body.get("ok") is False,
+    check("등록된 적 없는 ticket_id → 400", r.status_code == 400 and body.get("ok") is False,
           f"body={body}")
     check("reason=no_pending_swap", body.get("reason") == "no_pending_swap", f"body={body}")
     check("인벤토리는 그대로", store[uid]["inventory"].potions.count("HP_S_potion") == 6)
@@ -270,9 +271,10 @@ def test_inventory_swap_shop_ticket_charges_gold():
     gs = make_session_dict(inventory=inv, gold=100)
     client, uid, store = inject_test_session(gs, uid="test-uid-swap-shop")
 
-    _register_pending_swap(store[uid], "HP_M_potion", source="shop", price=50)
+    ticket_id = _register_pending_swap(store[uid], "HP_M_potion", source="shop", price=50)
 
-    r = client.post("/api/inventory/swap", json={"drop": "HP_S_potion", "new": "HP_M_potion"})
+    r = client.post("/api/inventory/swap",
+                    json={"ticket_id": ticket_id, "drops": {"HP_S_potion": 1}})
     body = r.get_json()
     check("정상 스왑 성공", r.status_code == 200 and body.get("ok") is True, f"body={body}")
     check("결제됨 (100 - 50 = 50G)", body.get("gold") == 50, f"body={body}")
@@ -281,14 +283,15 @@ def test_inventory_swap_shop_ticket_charges_gold():
           store[uid]["inventory"].potions.count("HP_S_potion") == 5)
     check("티켓은 1회 소모되어 재사용 불가", store[uid].get("pending_swaps", []) == [])
 
-    # 같은 티켓으로 재시도 — 이미 소모됨
-    r2 = client.post("/api/inventory/swap", json={"drop": "HP_S_potion", "new": "HP_M_potion"})
+    # 같은 ticket_id로 재시도 — 이미 소모됨
+    r2 = client.post("/api/inventory/swap",
+                     json={"ticket_id": ticket_id, "drops": {"HP_S_potion": 1}})
     check("소모된 티켓 재사용 시도는 거부", r2.get_json().get("ok") is False)
     store.pop(uid, None)
 
 
 def test_inventory_swap_insufficient_gold_restores_ticket():
-    print("\n[골드 부족 시 결제 실패 → 티켓은 되돌려놔서 나중에 재시도 가능]")
+    print("\n[골드 부족 시 결제 실패 → 티켓은 같은 id로 되돌려놔서 나중에 재시도 가능]")
     from game.Inventory import Inventory
     from app.Shared import _register_pending_swap
 
@@ -297,15 +300,17 @@ def test_inventory_swap_insufficient_gold_restores_ticket():
     gs = make_session_dict(inventory=inv, gold=10)
     client, uid, store = inject_test_session(gs, uid="test-uid-swap-poor")
 
-    _register_pending_swap(store[uid], "HP_L_potion", source="shop", price=80)
+    ticket_id = _register_pending_swap(store[uid], "HP_L_potion", source="shop", price=80)
 
-    r = client.post("/api/inventory/swap", json={"drop": "HP_S_potion", "new": "HP_L_potion"})
+    r = client.post("/api/inventory/swap",
+                    json={"ticket_id": ticket_id, "drops": {"HP_S_potion": 1}})
     body = r.get_json()
     check("골드 부족 → 400", r.status_code == 400 and body.get("ok") is False, f"body={body}")
     check("골드 차감 안 됨", store[uid]["gold"] == 10)
     pending = store[uid].get("pending_swaps", [])
-    check("티켓은 소모되지 않고 남아있음(나중에 골드 채워서 재시도 가능)",
-          any(p["item"] == "HP_L_potion" for p in pending), f"pending={pending}")
+    check("티켓은 같은 ticket_id로 남아있음(나중에 골드 채워서 재시도 가능)",
+          any(p["ticket_id"] == ticket_id and p["item"] == "HP_L_potion" for p in pending),
+          f"pending={pending}")
     store.pop(uid, None)
 
 
@@ -319,12 +324,107 @@ def test_inventory_swap_reward_ticket_no_charge():
     gs = make_session_dict(inventory=inv, gold=100)
     client, uid, store = inject_test_session(gs, uid="test-uid-swap-reward")
 
-    _register_pending_swap(store[uid], "haste_drug", source="reward")   # price=0
+    ticket_id = _register_pending_swap(store[uid], "haste_drug", source="reward")   # price=0
 
-    r = client.post("/api/inventory/swap", json={"drop": "bomb", "new": "haste_drug"})
+    r = client.post("/api/inventory/swap",
+                    json={"ticket_id": ticket_id, "drops": {"bomb": 1}})
     body = r.get_json()
     check("결제 없이 스왑 성공", r.status_code == 200 and body.get("ok") is True, f"body={body}")
     check("골드 그대로 100G", store[uid]["gold"] == 100)
+    store.pop(uid, None)
+
+
+def test_inventory_swap_slot_mismatch_rejected():
+    print("\n[새 아이템과 다른 슬롯 종류의 아이템을 버리려는 시도 → 거부, 아무것도 안 지워짐]")
+    from game.Inventory import Inventory
+    from app.Shared import _register_pending_swap
+
+    inv = Inventory.new()
+    inv.potions = ["HP_S_potion"] * 6
+    inv.special = ["bomb"]
+    gs = make_session_dict(inventory=inv, gold=100)
+    client, uid, store = inject_test_session(gs, uid="test-uid-swap-mismatch")
+
+    # new는 포션인데 특수 아이템(bomb)을 버리겠다고 시도
+    ticket_id = _register_pending_swap(store[uid], "HP_M_potion", source="reward")
+    r = client.post("/api/inventory/swap",
+                    json={"ticket_id": ticket_id, "drops": {"bomb": 1}})
+    body = r.get_json()
+    check("슬롯 불일치 → 400", r.status_code == 400 and body.get("ok") is False, f"body={body}")
+    check("reason=slot_mismatch", body.get("reason") == "slot_mismatch", f"body={body}")
+    check("bomb은 그대로 남아있음", store[uid]["inventory"].has("bomb"))
+    check("티켓은 소모되지 않고 되돌아옴(같은 id로 재시도 가능)",
+          any(p["ticket_id"] == ticket_id for p in store[uid].get("pending_swaps", [])))
+    store.pop(uid, None)
+
+
+def test_inventory_swap_multi_item_discard_atomic():
+    print("\n[한 번의 스왑에서 서로 다른 포션 여러 개를 원자적으로 버리기]")
+    from game.Inventory import Inventory
+    from app.Shared import _register_pending_swap
+
+    inv = Inventory.new()
+    inv.potions = ["HP_S_potion", "HP_S_potion", "MP_S_potion", "HP_M_potion", "MP_M_potion", "HP_L_potion"]
+    gs = make_session_dict(inventory=inv, gold=100)
+    client, uid, store = inject_test_session(gs, uid="test-uid-swap-multi")
+
+    ticket_id = _register_pending_swap(store[uid], "HP_L_potion", source="reward")
+    # HP_S_potion 2개 + MP_S_potion 1개, 총 3칸을 한 번에 정리
+    r = client.post("/api/inventory/swap",
+                    json={"ticket_id": ticket_id,
+                          "drops": {"HP_S_potion": 2, "MP_S_potion": 1}})
+    body = r.get_json()
+    check("다중 아이템 스왑 성공", r.status_code == 200 and body.get("ok") is True, f"body={body}")
+    final_inv = store[uid]["inventory"]
+    check("HP_S_potion 2개 모두 사라짐", final_inv.count("HP_S_potion") == 0)
+    check("MP_S_potion도 사라짐", final_inv.count("MP_S_potion") == 0)
+    check("보유량 초과 요청 없이 정확히 요청한 만큼만 삭제됨(나머지는 그대로)",
+          final_inv.count("HP_M_potion") == 1 and final_inv.count("MP_M_potion") == 1)
+    check("새 아이템 2개째 HP_L_potion 획득", final_inv.count("HP_L_potion") == 2)
+    store.pop(uid, None)
+
+
+def test_inventory_swap_multi_item_partial_failure_is_atomic():
+    print("\n[다중 버리기 중 하나라도 보유량 부족하면 아무것도 안 지워짐]")
+    from game.Inventory import Inventory
+    from app.Shared import _register_pending_swap
+
+    inv = Inventory.new()
+    inv.potions = ["HP_S_potion", "MP_S_potion"]
+    gs = make_session_dict(inventory=inv, gold=100)
+    client, uid, store = inject_test_session(gs, uid="test-uid-swap-partial")
+
+    ticket_id = _register_pending_swap(store[uid], "HP_M_potion", source="reward")
+    # MP_S_potion을 실제 보유량(1개)보다 많이(3개) 버리려는 요청 — 전체 실패해야 함
+    r = client.post("/api/inventory/swap",
+                    json={"ticket_id": ticket_id,
+                          "drops": {"HP_S_potion": 1, "MP_S_potion": 3}})
+    body = r.get_json()
+    check("일부만 성공 없이 전체 실패", r.status_code == 400 and body.get("ok") is False, f"body={body}")
+    final_inv = store[uid]["inventory"]
+    check("HP_S_potion도 지워지지 않음(부분 삭제 없음)", final_inv.count("HP_S_potion") == 1)
+    check("MP_S_potion도 그대로", final_inv.count("MP_S_potion") == 1)
+    store.pop(uid, None)
+
+
+def test_inventory_swap_cancel_removes_ticket():
+    print("\n[/api/inventory/swap/cancel — 취소한 티켓은 재사용 불가]")
+    from game.Inventory import Inventory
+    from app.Shared import _register_pending_swap
+
+    inv = Inventory.new()
+    gs = make_session_dict(inventory=inv, gold=100)
+    client, uid, store = inject_test_session(gs, uid="test-uid-swap-cancel")
+
+    ticket_id = _register_pending_swap(store[uid], "bomb", source="event")
+    r = client.post("/api/inventory/swap/cancel", json={"ticket_id": ticket_id})
+    check("취소 요청은 항상 200/ok", r.status_code == 200 and r.get_json().get("ok") is True)
+    check("취소 후 pending_swaps에서 제거됨", store[uid].get("pending_swaps", []) == [])
+
+    r2 = client.post("/api/inventory/swap",
+                     json={"ticket_id": ticket_id, "drops": {}})
+    check("취소된 ticket_id는 더 이상 쓸 수 없음(빈 drops라 애초에 거부되지만 이중 확인)",
+          r2.get_json().get("ok") is False)
     store.pop(uid, None)
 
 
@@ -368,6 +468,146 @@ def test_balance_hook_generation_counter():
           f"gen={hook._sim_generation}")
 
 
+# ─────────────────────────────────────────────
+# 8) pending_swaps 세션 스냅샷 왕복
+# ─────────────────────────────────────────────
+
+def test_pending_swaps_survives_snapshot_roundtrip():
+    print("\n[pending_swaps가 세션 스냅샷(Redis 왕복 형태)에 포함되어 살아남는지]")
+    from app.Shared import _register_pending_swap, _snapshot_dict, _gs_from_snapshot
+
+    gs = make_session_dict(gold=100)
+    ticket_id = _register_pending_swap(gs, "bomb", source="event")
+
+    snap = _snapshot_dict(gs)
+    check("스냅샷에 pending_swaps 포함됨",
+          any(t["ticket_id"] == ticket_id for t in snap.get("pending_swaps", [])),
+          f"snap.pending_swaps={snap.get('pending_swaps')}")
+
+    restored = _gs_from_snapshot("test-uid-snapshot", snap)
+    check("워커 재시작/세션 복구 시뮬레이션 후에도 티켓이 남아있음",
+          restored is not None and
+          any(t["ticket_id"] == ticket_id for t in restored.get("pending_swaps", [])),
+          f"restored={restored.get('pending_swaps') if restored else None}")
+
+
+# ─────────────────────────────────────────────
+# 9) 보스전도 공용 보상 필드를 항상 채우는지
+# ─────────────────────────────────────────────
+
+def _make_boss_battle(enemy_name: str, potions_full: bool):
+    """_finish_battle() 검증용 — 실제 턴 엔진을 돌리지 않고 승리 직전 상태로
+    직접 구성한다(엔진 자체는 이미 다른 테스트들이 검증)."""
+    from ai.battle import EntitySnapshot
+    from ai.Battlesession import BattleSession
+    from game.Enemy_Class import Make_MidBoss
+    from game.Inventory import Inventory
+    from game.Player_Class import create_player_by_job
+    from app.Shared import _player_to_snap
+
+    player = create_player_by_job("보스테스터", "전사")
+    inv = Inventory.new()
+    if potions_full:
+        inv.potions = ["HP_S_potion"] * 6
+
+    player_snap = _player_to_snap(player, inv)
+    boss_unit = Make_MidBoss(player.lv)
+    boss_unit.name = enemy_name
+    enemy_snap = EntitySnapshot.from_enemy(boss_unit)
+
+    battle = BattleSession(
+        player_snap, enemy=enemy_snap, items=inv.to_flat_list(),
+        is_boss=True, enemy_origins=[boss_unit], player_original=player,
+    )
+    from core.Balance_Hook import BalanceHook
+    hook = BalanceHook(player, inv.to_flat_list(), show_graph=False, verbose=False)
+    gs = {"player": player, "inventory": inv, "hook": hook, "db_user_id": None, "gold": 100}
+    return battle, gs
+
+
+def test_boss_win_always_has_reward_fields():
+    print("\n[보스전 승리 시 result에 items_gained 등 필드가 항상 존재하는지(회귀 방지)]")
+    from app.Battle import _finish_battle
+
+    battle, gs = _make_boss_battle("최종 보스", potions_full=False)
+    result = {"player_hp": battle.player.hp, "player_mp": battle.player.mp, "messages": []}
+    _finish_battle(gs, battle, result, "player")
+
+    for key in ("items_gained", "gold_gained", "inventory_overflow", "relics_gained", "gold"):
+        check(f"result['{key}'] 존재", key in result, f"result keys={list(result.keys())}")
+    check("최종 보스는 골드/드랍 없음(밸런스 무변경)",
+          result["gold_gained"] == 0 and result["items_gained"] == [])
+
+
+def test_midboss_potion_success_populates_items_gained():
+    print("\n[중간보스 포션 지급 성공 시 items_gained에 반영되는지]")
+    from app.Battle import _finish_battle
+
+    battle, gs = _make_boss_battle("중간 보스", potions_full=False)
+    result = {"player_hp": battle.player.hp, "player_mp": battle.player.mp, "messages": []}
+    _finish_battle(gs, battle, result, "player")
+
+    check("HP_L_potion이 items_gained에 포함됨", "HP_L_potion" in result["items_gained"],
+          f"items_gained={result['items_gained']}")
+    check("가방에 실제로 들어감", gs["inventory"].has("HP_L_potion"))
+
+
+def test_midboss_potion_failure_registers_overflow_ticket():
+    print("\n[중간보스 포션 지급 시 가방이 꽉 차 있으면 add() 실패를 확인해 오버플로 처리]")
+    from app.Battle import _finish_battle
+
+    battle, gs = _make_boss_battle("중간 보스", potions_full=True)
+    result = {"player_hp": battle.player.hp, "player_mp": battle.player.mp, "messages": []}
+    _finish_battle(gs, battle, result, "player")
+
+    check("items_gained엔 없음(실제로 못 받음)", "HP_L_potion" not in result["items_gained"])
+    check("inventory_overflow에 티켓과 함께 기록됨",
+          any(ov["item"] == "HP_L_potion" and ov.get("ticket_id") for ov in result["inventory_overflow"]),
+          f"overflow={result['inventory_overflow']}")
+    check("가방 가득 참을 정직하게 알리는 메시지(예전엔 무조건 '획득!'이었음)",
+          any("놓쳤다" in m for m in result["messages"]), f"messages={result['messages']}")
+    pending = gs.get("pending_swaps", [])
+    check("실제로 pending_swaps 티켓도 등록됨",
+          any(t["item"] == "HP_L_potion" for t in pending), f"pending={pending}")
+
+
+# ─────────────────────────────────────────────
+# 10) 전투 중 BattleSession._state()의 inventory 필드
+# ─────────────────────────────────────────────
+
+def test_battle_state_inventory_field_matches_items():
+    print("\n[BattleSession._state() 응답의 inventory 필드가 실제 보유 아이템과 일치하는지]")
+    from ai.battle import EntitySnapshot
+    from ai.Battlesession import BattleSession
+    from game.Enemy_Class import Make_Goblin
+    from game.Inventory import Inventory
+    from game.Player_Class import create_player_by_job
+    from app.Shared import _player_to_snap
+
+    player = create_player_by_job("인벤토리테스터", "전사")
+    inv = Inventory.new()
+    inv.potions = ["HP_S_potion", "HP_S_potion", "MP_M_potion"]
+
+    player_snap = _player_to_snap(player, inv)
+    goblin = Make_Goblin(1, "중")
+    enemy_snap = EntitySnapshot.from_enemy(goblin)
+
+    battle = BattleSession(
+        player_snap, enemy=enemy_snap, items=inv.to_flat_list(),
+        is_boss=False, enemy_origins=[goblin], player_original=player,
+    )
+
+    state = battle._state()
+    check("inventory 필드 자체가 존재함(예전엔 items만 있었음)", "inventory" in state,
+          f"state keys={list(state.keys())}")
+    pot_names = {p["name"] for p in state["inventory"].get("potions", [])}
+    check("inventory.potions에 실제 보유 아이템이 반영됨",
+          pot_names == {"HP_S_potion", "MP_M_potion"}, f"potions={state['inventory']}")
+    hp_entry = next((p for p in state["inventory"]["potions"] if p["name"] == "HP_S_potion"), None)
+    check("중복 개수(count)도 정확함", hp_entry is not None and hp_entry["count"] == 2,
+          f"hp_entry={hp_entry}")
+
+
 def main():
     print("=" * 56)
     print(" Codex 생명주기/상태검증 리뷰 수정 회귀 테스트")
@@ -381,12 +621,21 @@ def main():
         test_mark_visited_rejects_unavailable_node()
         test_next_chapter_blocked_before_clear()
         test_next_chapter_allowed_after_clear()
-        test_inventory_swap_rejects_unregistered_item()
+        test_inventory_swap_rejects_unregistered_ticket()
         test_inventory_swap_shop_ticket_charges_gold()
         test_inventory_swap_insufficient_gold_restores_ticket()
         test_inventory_swap_reward_ticket_no_charge()
+        test_inventory_swap_slot_mismatch_rejected()
+        test_inventory_swap_multi_item_discard_atomic()
+        test_inventory_swap_multi_item_partial_failure_is_atomic()
+        test_inventory_swap_cancel_removes_ticket()
         test_user_lock_registry_identity()
         test_balance_hook_generation_counter()
+        test_pending_swaps_survives_snapshot_roundtrip()
+        test_boss_win_always_has_reward_fields()
+        test_midboss_potion_success_populates_items_gained()
+        test_midboss_potion_failure_registers_overflow_ticket()
+        test_battle_state_inventory_field_matches_items()
     except Exception as ex:
         import traceback
         traceback.print_exc()

@@ -184,9 +184,13 @@ async function battleAction(action) {
                 refreshPlayer();
             }
 
-            if (typeof checkPendingPoints === 'function') checkPendingPoints();
+            // ★ 순서 고정: 보상 확인 → 오버플로 처리 → 레벨업 스탯 분배 →
+            //   노드 완료/맵 복귀. 예전엔 checkPendingPoints()가 여기서
+            //   await 없이 바로 호출돼서(레벨업 모달이 즉시 뜸) 보상 모달과
+            //   동시에 열리거나 순서가 꼬일 수 있었다 — 이제 둘 다 모달이
+            //   닫힐 때 resolve되는 Promise라 순서대로 하나씩만 뜬다.
 
-            // ★ 승리 시 보상 팝업 (확인 클릭까지 대기) → 노드맵 완료 처리
+            // ★ 승리 시 보상 팝업 (확인 클릭까지 대기, 보상이 0개여도 항상 뜸)
             if (r.winner === 'player') {
                 const _gold = r.gold_gained || 0;
                 const _items = r.items_gained || [];
@@ -207,14 +211,16 @@ async function battleAction(action) {
                 if (typeof showRewardModal === 'function') await showRewardModal(r);
 
                 // ★ 보상 요약 확인 → (칸 넘친 아이템이 있으면) 교체 선택창 →
-                //   노드맵, 순서로 진행. openInvSwap()은 모달이 닫힐 때
+                //   레벨업 → 노드맵, 순서로 진행. openInvSwap()은 모달이 닫힐 때
                 //   resolve되는 Promise를 반환하므로 순서대로 하나씩 처리.
                 const _overflow = r.inventory_overflow || [];
                 if (_overflow.length && typeof openInvSwap === 'function') {
                     for (const ov of _overflow) {
-                        await openInvSwap(ov.item, ov.candidates || []);
+                        await openInvSwap(ov.item, ov.candidates || [], ov.ticket_id);
                     }
                 }
+
+                if (typeof checkPendingPoints === 'function') await checkPendingPoints();
             }
             if (r.winner === 'player' && typeof handleMapNodeDone === 'function') {
                 await handleMapNodeDone(r);

@@ -6,6 +6,7 @@ from __future__ import annotations
 from ai.battle import (
     _current_element,
 )
+from game.Inventory import Inventory
 
 
 class StateMixin:
@@ -33,6 +34,19 @@ class StateMixin:
                 for s in getattr(entity, "status_effects", [])
             ],
         }
+
+    def _live_inventory_dict(self) -> dict:
+        """전투 중 self.items(원본 평탄 리스트 — 문자열)로부터 구조화 인벤토리
+        breakdown을 만들어 반환 — app/Shared.py._player_dict()의 비-Inventory
+        폴백과 동일한 패턴(분류 로직 재구현 없음). gs["inventory"] 자체는
+        건드리지 않는다.
+        ★ get_items()는 UI 아이템 메뉴용으로 이미 {name,count} dict 리스트로
+          집계돼 있어서 여기선 쓸 수 없다 — 원본 문자열 리스트인 self.items를
+          직접 써야 한다."""
+        tmp = Inventory.new()
+        for item_name in self.items:
+            tmp.add(item_name)
+        return tmp.to_response_dict()
 
     def _state(self, messages: list = None,
                next_actor: str = "player",
@@ -148,6 +162,15 @@ class StateMixin:
             "target_idx":       self._target_idx,  # 현재 선택된 타깃 슬롯
             # ── 공통 ──
             "items":      self.get_items(),
+            # ★ 전투 중 아이템 팝업(플레이어 패널)이 state.player.items(평탄
+            #   리스트)만 보고 있어서 state.player.inventory(구조화 필드)와
+            #   실시간으로 어긋나던 버그 — 여기서도 매 응답마다 구조화 breakdown을
+            #   함께 실어보낸다. app/Shared.py의 _player_dict()가 이미 쓰는
+            #   "평탄 리스트 → Inventory.new()+add() 반복" 폴백과 동일한 패턴이라
+            #   새 분류 로직을 만들지 않는다. gs["inventory"](Inventory 객체)
+            #   자체는 여전히 전투 중엔 안 건드림 — 최종 반영은 전투 종료 시
+            #   app/Battle.py._finish_battle()이 한 번에 처리(기존 그대로).
+            "inventory":  self._live_inventory_dict(),
             "skills":     self.get_skills(),
             "done":       self.done,
             "winner":     self.winner,

@@ -272,11 +272,12 @@
     border-color: var(--border);
 }
 
-/* 특수 인벤토리 교체 모달 */
-.modal-inv-swap {
-    width: 440px;
-    max-width: 92vw;
-}
+/* ★ #modal-inv-swap(세로 목록형 교체 모달)은 제거됨 — 인벤토리 팝업
+   (#modal-item-inventory, static/js/UI_Player.js의 overflow 모드)으로 통합.
+   아래 .iv-desc/.iv-incoming/.iv-footer/.iv-btn-*는 그 모달에서 그대로
+   재사용 중이라 남겨둔다 — .modal-inv-swap 자체 폭 규칙과, 후보를 세로
+   목록으로 그리던 .iv-section-label/.iv-candidates/.iv-candidate*만 죽은
+   코드라 제거. */
 
 .iv-desc {
     color: var(--text-dim);
@@ -293,56 +294,6 @@
     font-weight: 700;
     font-family: 'Cormorant Garamond', serif;
     font-size: 16px;
-}
-
-.iv-section-label {
-    color: var(--text-dim);
-    font-size: 11px;
-    letter-spacing: 0.15em;
-    text-transform: uppercase;
-    margin-bottom: 10px;
-    text-align: center;
-}
-
-.iv-candidates {
-    display: flex;
-    flex-direction: column;
-    gap: 8px;
-    margin-bottom: 18px;
-}
-
-.iv-candidate {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    background: var(--bg-darkest);
-    border: 1px solid var(--border);
-    border-radius: 4px;
-    padding: 12px 16px;
-    cursor: pointer;
-    transition: all 0.15s;
-}
-.iv-candidate:hover {
-    border-color: var(--text-dim);
-}
-.iv-candidate.selected {
-    border-color: #ff6b4a;
-    background: rgba(255, 107, 74, 0.08);
-}
-
-.iv-cand-name {
-    color: var(--text-main);
-    font-size: 13px;
-    font-weight: 600;
-}
-.iv-cand-mark {
-    color: #ff6b4a;
-    font-size: 14px;
-    font-weight: 700;
-    opacity: 0;
-}
-.iv-candidate.selected .iv-cand-mark {
-    opacity: 1;
 }
 
 .iv-footer {
@@ -427,6 +378,20 @@
 .ii-item-name { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .ii-item-count { color: var(--accent-gold); font-weight: 700; }
 .ii-item-badge { color: var(--accent-gold); font-size: 10px; }
+
+/* ── overflow(교체) 모드 — 클릭 가능/선택된 셀 (색 언어는 .iv-candidate와 동일) ── */
+.ii-item.selectable { cursor: pointer; color: var(--text-main); }
+.ii-item.selectable:hover { border-color: var(--text-dim); }
+.ii-item.selected {
+    border-color: #ff6b4a;
+    background: rgba(255, 107, 74, 0.08);
+}
+.ii-selected-badge {
+    color: #ff6b4a;
+    font-size: 10px;
+    font-weight: 700;
+    white-space: nowrap;
+}
 .ii-empty {
     grid-column: 1 / -1;
     text-align: center;

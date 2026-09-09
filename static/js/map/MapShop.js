@@ -80,7 +80,7 @@ async function buyShopItem(itemId, price) {
         // ★ 포션도 특수템과 동일하게 "버릴 아이템 선택" UI를 받도록 통일
         //   (예전엔 포션 가득 참은 그냥 재구매 불가 표시만 하고 끝났음).
         if (!r.ok && (r.reason === "special_full" || r.reason === "potion_full")) {
-            if (typeof openInvSwap === "function") await openInvSwap(itemId, r.candidates || []);
+            if (typeof openInvSwap === "function") await openInvSwap(itemId, r.candidates || [], r.ticket_id);
             else toast("가방이 가득 찼습니다.", "warn");
             return;
         }

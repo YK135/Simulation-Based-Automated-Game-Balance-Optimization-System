@@ -182,19 +182,47 @@ class Inventory:
     # 슬롯 교체 (포션/특수 공용 — 가득 찼을 때 사용)
     # ─────────────────────────────────────────
 
+    def discard_multi(self, drops: dict) -> dict:
+        """
+        여러 아이템을 한 번에, 원자적으로 버린다.
+        drops: {item_name: count} — 포션/특수 섞여도 무방(버킷은 remove()가
+        알아서 찾음). 실행 전 모든 (item, count)가 실제 보유 수량 이내인지
+        먼저 전부 검증하고, 하나라도 부족하면 아무것도 지우지 않고 실패를
+        반환한다(중간 실패로 일부만 삭제되는 일이 없음).
+
+        성공: {"ok": True, "dropped": {item: count, ...}}
+        실패: {"ok": False, "reason": "empty"|"invalid_count"|"insufficient",
+               "message": ...}
+        """
+        if not drops:
+            return {"ok": False, "reason": "empty", "message": "버릴 아이템이 없습니다."}
+
+        for item_name, count in drops.items():
+            if not isinstance(count, int) or count <= 0:
+                return {"ok": False, "reason": "invalid_count",
+                        "message": f"{item_name}의 수량이 올바르지 않습니다."}
+            owned = self.count(item_name)
+            if owned < count:
+                return {"ok": False, "reason": "insufficient",
+                        "message": f"{item_name}을(를) {count}개 버리려 했지만 "
+                                   f"{owned}개만 보유 중입니다."}
+
+        for item_name, count in drops.items():
+            for _ in range(count):
+                self.remove(item_name)
+
+        return {"ok": True, "dropped": dict(drops)}
+
     def swap_item(self, drop_item: str, new_item: str) -> dict:
         """
         포션/특수 슬롯이 가득 찼을 때 호출. drop_item을 제거하고 new_item 추가.
         new_item의 슬롯 종류(포션/특수)로 대상 버킷을 정하고, drop_item이
         같은 종류가 아니면 거부한다(포션 칸이 꽉 찼는데 특수템을 버려서
-        자리를 만드는 식의 뒤섞임 방지).
+        자리를 만드는 식의 뒤섞임 방지). 실제 제거는 discard_multi()에
+        위임 — 중복 로직 없이 동일한 원자성 보장을 재사용한다.
         """
         slot = get_slot(new_item)
-        if slot == "potion":
-            bucket = self.potions
-        elif slot == "special":
-            bucket = self.special
-        else:
+        if slot not in ("potion", "special"):
             return {"ok": False, "reason": "unknown_slot",
                     "message": f"{new_item}은(는) 알 수 없는 종류입니다."}
 
@@ -202,11 +230,14 @@ class Inventory:
             return {"ok": False, "reason": "slot_mismatch",
                     "message": f"{drop_item}과(와) {new_item}은(는) 종류가 달라 교체할 수 없습니다."}
 
-        if drop_item not in bucket:
-            return {"ok": False, "reason": "drop_not_found",
-                    "message": f"버릴 아이템 {drop_item}이(가) 인벤토리에 없습니다."}
+        discard_res = self.discard_multi({drop_item: 1})
+        if not discard_res["ok"]:
+            reason = "drop_not_found" if discard_res["reason"] == "insufficient" else discard_res["reason"]
+            message = (f"버릴 아이템 {drop_item}이(가) 인벤토리에 없습니다."
+                       if reason == "drop_not_found" else discard_res["message"])
+            return {"ok": False, "reason": reason, "message": message}
 
-        bucket.remove(drop_item)
+        bucket = self.potions if slot == "potion" else self.special
         bucket.append(new_item)
         return {"ok": True, "dropped": drop_item, "added": new_item, "slot": slot}
 

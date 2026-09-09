@@ -21,6 +21,7 @@ app/shared.py — 공용 상태 + 헬퍼
 from __future__ import annotations
 
 import json
+import secrets
 import threading
 import time
 from typing import Optional
@@ -135,6 +136,11 @@ def _snapshot_dict(gs: dict) -> dict:
         "pending_node_id":  gs.get("pending_node_id"),
         "battle_node_type": gs.get("battle_node_type"),
         "battle_map_layer": gs.get("battle_map_layer"),
+        # ★ Redis 스냅샷에는 포함(그대로 dict로 저장돼 왕복됨) — DB PlayerState엔
+        #   전용 컬럼이 없어 _apply_snapshot_to_row()가 이 필드를 쓰지 않는다.
+        #   battle(BattleSession)과 같은 급의 트레이드오프: Redis까지 완전히
+        #   사라진 뒤 DB로만 복구하는 극단적 상황에서만 대기 티켓이 유실된다.
+        "pending_swaps":    gs.get("pending_swaps", []),
     }
 
 
@@ -175,6 +181,7 @@ def _gs_from_snapshot(uid: str, snap: dict) -> Optional[dict]:
         "gold":             snap.get("gold", 100),
         "battle_node_type": snap.get("battle_node_type"),
         "battle_map_layer": snap.get("battle_map_layer"),
+        "pending_swaps":    snap.get("pending_swaps", []),
     }
 
 
@@ -276,26 +283,44 @@ def _persist_session(uid: str, gs: dict) -> None:
 # ─────────────────────────────────────────────
 # 포션/특수 슬롯이 가득 차서 즉시 못 받은 아이템(상점 구매/이벤트 발견/전투
 # 보상)은 클라이언트에 "버릴 아이템을 골라라" 모달을 띄우고, 확정되면
-# POST /api/inventory/swap로 {drop, new}를 보낸다. 예전엔 new(획득할 아이템)를
-# 클라이언트가 보낸 문자열 그대로 믿고 인벤토리에 넣었다 — 즉 서버가 실제로
-# 발급한 적 없는 아이템 id를 new에 넣어 보내면 그대로 생성돼 들어갔다.
+# POST /api/inventory/swap로 {ticket_id, drops}를 보낸다. 예전엔 new(획득할
+# 아이템)를 클라이언트가 보낸 문자열 그대로 믿고 인벤토리에 넣었다 — 즉 서버가
+# 실제로 발급한 적 없는 아이템 id를 new에 넣어 보내면 그대로 생성돼 들어갔다.
 # 여기서 "서버가 실제로 발급 대기 중인 아이템"만 티켓으로 등록해두고,
-# /api/inventory/swap은 요청의 new가 이 목록에 있는 것과 정확히 일치할 때만
-# 처리한다(1개 소모). 상점 구매(source="shop")는 슬롯이 가득 찬 시점엔 아직
-# 결제 전이므로 price를 함께 기록해 스왑이 실제로 확정되는 순간 결제한다.
-def _register_pending_swap(gs: dict, item: str, source: str, price: int = 0) -> None:
+# /api/inventory/swap은 요청의 ticket_id가 정확히 일치할 때만 처리한다(1개
+# 소모). 상점 구매(source="shop")는 슬롯이 가득 찬 시점엔 아직 결제 전이므로
+# price를 함께 기록해 스왑이 실제로 확정되는 순간 결제한다.
+#
+# ★ 이름이 아니라 ticket_id로 식별하는 이유: 같은 아이템에 대해 출처가 다른
+#   (상점=유료 / 보상=무료) 티켓이 동시에 대기 중일 수 있는데, 이름 매칭이면
+#   둘 중 아무거나 먼저 매칭된 게 소모돼 엉뚱한 티켓이 결제/무료 처리될 수
+#   있었다. ticket_id는 예측 불가능한 값이라 클라이언트가 다른 유저/세션의
+#   티켓을 추측해 소모할 수도 없다.
+def _register_pending_swap(gs: dict, item: str, source: str, price: int = 0) -> str:
+    """대기 티켓을 등록하고 그 ticket_id를 반환한다."""
+    ticket_id = secrets.token_hex(8)
     gs.setdefault("pending_swaps", []).append(
-        {"item": item, "source": source, "price": price}
+        {"ticket_id": ticket_id, "item": item, "source": source, "price": price}
     )
+    return ticket_id
 
 
-def _pop_pending_swap(gs: dict, item: str) -> Optional[dict]:
-    """item과 일치하는 대기 티켓 1개를 꺼내 제거. 없으면 None."""
+def _pop_pending_swap(gs: dict, ticket_id: str) -> Optional[dict]:
+    """ticket_id와 일치하는 대기 티켓 1개를 꺼내 제거. 없으면 None."""
+    if not ticket_id:
+        return None
     pending = gs.get("pending_swaps") or []
     for i, ticket in enumerate(pending):
-        if ticket.get("item") == item:
+        if ticket.get("ticket_id") == ticket_id:
             return pending.pop(i)
     return None
+
+
+def _restore_pending_swap(gs: dict, ticket: dict) -> None:
+    """실패한 스왑 시도(골드 부족/드롭 실패 등) 후 이미 꺼낸 티켓을 그대로
+    되돌려놓는다 — 새 ticket_id를 발급하지 않고 원래 id를 유지해야 클라이언트가
+    들고 있는 ticket_id로 재시도할 수 있다."""
+    gs.setdefault("pending_swaps", []).append(ticket)
 
 
 # ─────────────────────────────────────────────

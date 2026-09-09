@@ -67,22 +67,40 @@ function refreshBattle(bs) {
 // ═══════════════════════════════════════════════════════════
 
 // 전투 모드 표시 토글 + 행동 버튼/도망 버튼 상태
+//
+// ★ 예전엔 bs.done(전투가 방금 끝남)이어도 여기서 #battle-mode를 즉시
+//   display:none 처리했다 — 그런데 이 함수는 Actions.js의 battleAction()이
+//   서버 응답을 받자마자(사망 애니메이션·승리 여운 대기·보상 모달보다도
+//   먼저) 호출하는 refreshBattle() 안에서 실행된다. 그 결과 몬스터가 죽는
+//   순간부터 실제로 화면이 꺼져 있어서, 그 뒤에 재생되는 사망 애니메이션과
+//   "이겼다"는 여운, 보상 모달이 전부 안 보이는 화면 위에서 진행되고
+//   있었다(승리 직후 화면이 검게 비는 것처럼 느껴진 원인).
+//   전투가 막 끝난 경우엔 화면을 그대로 켜둔 채 버튼만 비활성화하고,
+//   실제로 전장을 치우는 시점은 static/js/UI_Map.js의 setMapMode()
+//   하나로 단일화한다 — 그건 이미 보상/오버플로/레벨업까지 다 끝난 뒤,
+//   handleMapNodeDone()을 통해서만 호출되므로 타이밍이 원래도 맞았다.
 function updateBattleModeVisibility(bs) {
     const mapModeEl = document.getElementById('map-mode');
     const invPanel = document.getElementById('player-inventory-panel');
     if (invPanel) invPanel.style.display = state.inBattle ? 'none' : '';
-    if (mapModeEl) mapModeEl.style.display = 'none';
-    const battleModeEl = document.getElementById('battle-mode');
-    if (battleModeEl) battleModeEl.style.display = state.inBattle ? 'block' : 'none';
+
+    if (!bs.done) {
+        if (mapModeEl) mapModeEl.style.display = 'none';
+        const battleModeEl = document.getElementById('battle-mode');
+        if (battleModeEl) battleModeEl.style.display = state.inBattle ? 'block' : 'none';
+    }
     const actionsPanelEl = document.getElementById('actions-panel');
     if (actionsPanelEl) actionsPanelEl.style.display = state.inBattle ? 'block' : 'none';
- 
+
     if (!state.inBattle) {
         ['btn-attack','btn-skill','btn-item','btn-escape'].forEach(id => {
             const btn = document.getElementById(id);
             if (btn) btn.disabled = true;
         });
-        return false;
+        // bs.done이면 렌더 파이프라인을 계속 진행시켜(true 반환) 최종 상태
+        // (0 HP 등)가 실제로 그려지게 한다 — 예전엔 여기서 항상 false를
+        // 반환해 refreshBattle()이 조기 종료, 마지막 응답이 아예 안 그려졌다.
+        return !!bs.done;
     }
 
     // ── 보스전이면 escape 비활성 + 시각 표시 ──
@@ -110,6 +128,11 @@ function syncPlayerBattleState(bs) {
         state.player.hp = bs.player_hp;
         state.player.mp = bs.player_mp;
         if (bs.items) state.player.items = bs.items;
+        // ★ 전투 중 아이템 사용 후 플레이어 패널 팝업(state.player.inventory
+        //   기준)이 실시간으로 갱신되지 않던 버그 — bs.inventory는 이제 매
+        //   응답마다 서버가 최신으로 계산해서 실어보낸다(ai/battle_session/
+        //   State.py의 _live_inventory_dict() 참고).
+        if (bs.inventory) state.player.inventory = bs.inventory;
         document.getElementById('hp-cur').textContent = Math.round(bs.player_hp);
         document.getElementById('mp-cur').textContent = Math.round(bs.player_mp);
         document.getElementById('hp-fill').style.height = (bs.player_hp/bs.player_maxhp*100) + '%';

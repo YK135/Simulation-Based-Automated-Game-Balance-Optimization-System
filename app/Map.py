@@ -237,9 +237,10 @@ def _event_item_found(gs: dict) -> dict:
         return {**base, "message": f"[아이템 발견] {gained}을(를) 발견했다!",
                 "item": gained}
     elif result.get("reason") == "special_full":
-        _register_pending_swap(gs, gained, source="event")
+        ticket_id = _register_pending_swap(gs, gained, source="event")
         return {**base, "event": "item_full",
                 "incoming":   gained,
+                "ticket_id":  ticket_id,
                 "candidates": result["candidates"],
                 "message":    result["message"]}
     else:
@@ -720,14 +721,16 @@ def shop_buy():
             # ★ 아직 결제 전(gold 차감 안 함) — 스왑 확정 시점에 결제한다.
             #   그때 /api/inventory/swap이 이 티켓을 확인해야만 처리되므로
             #   결제 없이 임의의 아이템을 얻는 경로가 되지 않는다.
-            _register_pending_swap(gs, item_id, source="shop", price=price)
+            ticket_id = _register_pending_swap(gs, item_id, source="shop", price=price)
             return jsonify({"ok": False, "error": "특수 아이템 칸이 가득 찼습니다.",
-                           "reason": "special_full", "candidates": result.get("candidates", [])}), 400
+                           "reason": "special_full", "ticket_id": ticket_id,
+                           "candidates": result.get("candidates", [])}), 400
         if reason == "potion_full":
-            _register_pending_swap(gs, item_id, source="shop", price=price)
+            ticket_id = _register_pending_swap(gs, item_id, source="shop", price=price)
             return jsonify({"ok": False,
                            "error": "포션 슬롯이 가득 찼습니다. 기존 포션을 사용한 뒤 구매하세요.",
-                           "reason": "potion_full", "candidates": result.get("candidates", [])}), 400
+                           "reason": "potion_full", "ticket_id": ticket_id,
+                           "candidates": result.get("candidates", [])}), 400
         return jsonify({"ok": False, "error": result.get("message", "인벤토리 가득 참")}), 400
 
     gs["gold"]  = gold - price

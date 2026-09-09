@@ -18,16 +18,15 @@ function showRewardModal(result) {
         const gold  = result.gold_gained  || 0;
         const items = result.items_gained || [];
         const relics = result.relics_gained || [];
+        const hasLoot = gold > 0 || items.length > 0 || relics.length > 0;
 
-        // 보상이 아무것도 없으면 팝업 생략 (보스전 등)
-        if (gold <= 0 && items.length === 0 && relics.length === 0) {
-            resolve();
-            return;
-        }
-
-        // ── 골드 ──
+        // ★ 예전엔 보상이 하나도 없으면(보스전은 items_gained 등 필드 자체가
+        //   없었음 — app/Battle.py 참고, 이제는 항상 채워짐) 팝업을 생략하고
+        //   바로 다음 화면으로 넘어갔다. 그러면 "승리 확인" 절차 없이 화면이
+        //   훅 넘어가서 승리 상태를 볼 틈이 없었다 — 이제 보상이 없어도
+        //   "전리품 없음"과 확인 버튼으로 항상 모달을 띄운다.
         const goldEl = document.getElementById('reward-gold');
-        if (goldEl) goldEl.textContent = gold > 0 ? `💰 ${gold} G` : '';
+        if (goldEl) goldEl.textContent = gold > 0 ? `💰 ${gold} G` : (hasLoot ? '' : '전리품 없음');
 
         // ── 아이템 목록 (일반/특수 구분 + 툴팁) ──
         const listEl = document.getElementById('reward-item-list');

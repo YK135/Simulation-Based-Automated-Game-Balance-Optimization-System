@@ -3,7 +3,7 @@
 function _showEventResult(r) {
     if (r.event === "item_full" || r.reason === "special_full" || r.reason === "potion_full") {
         if (typeof openInvSwap === "function") {
-            openInvSwap(r.incoming || r.item, r.candidates || []);
+            openInvSwap(r.incoming || r.item, r.candidates || [], r.ticket_id);
         } else {
             toast("특수 아이템 칸이 가득 찼습니다.", "warn");
         }

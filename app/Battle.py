@@ -239,14 +239,25 @@ def _finish_battle(gs: dict, battle, result: dict, winner: str) -> None:
         gs["inventory"] = new_inv
         gs["items"]     = new_inv.to_flat_list()
 
-    # ── 전투 보상: 골드 + 아이템 드랍 (승리 + 보스 전투 제외) ──
+    # ── 전투 보상 ──────────────────────────────────────────────
+    #    ★ gained/overflow는 보스 여부와 무관하게 항상 초기화한다 — 예전엔
+    #      이 블록 자체가 "승리 + 비보스"일 때만 돌아서, 보스전은
+    #      items_gained/gold_gained/inventory_overflow/relics_gained 키가
+    #      result에 아예 없었다. RewardModal.js는 보상이 0개면(정확히는 이
+    #      필드들이 없어서 || 0 / || []로 빈 값 취급되면) 팝업 자체를 생략하는데,
+    #      그 결과 보스전은 "승리 확인" 절차 없이 곧장 다음 화면으로 넘어갔다.
+    #      골드/드랍 계산 자체(calc_battle_rewards)는 여전히 보스전에서 스킵
+    #      한다 — 밸런스/드랍 확률은 이번 변경과 무관.
+    gained      = []   # 실제 획득 성공한 아이템만
+    overflow    = []   # 칸이 꽉 차서 못 받은 아이템 — 프론트가 교체 선택창을 띄울 재료
+    gold_gained = 0    # 보스전은 골드 드랍이 없으므로 기본값 0
+
     if winner == "player" and not getattr(battle, "is_boss", False):
         from game.Rewards import calc_battle_rewards
         node_type = _get_current_node_type(gs)
         rw = calc_battle_rewards(_get_defeated_list(battle), node_type)
+        gold_gained = rw["gold"]
         gs["gold"] = gs.get("gold", 0) + rw["gold"]
-        gained = []      # 실제 획득 성공한 아이템만
-        overflow = []    # 칸이 꽉 차서 못 받은 아이템 — 프론트가 교체 선택창을 띄울 재료
         for it in rw["items"]:
             add_res = gs["inventory"].add(it)
             if add_res.get("ok"):
@@ -257,27 +268,44 @@ def _finish_battle(gs: dict, battle, result: dict, winner: str) -> None:
                 #   보여준 뒤 이 목록으로 교체 선택창을 띄워서 최종 결정은 플레이어가.
                 #   /api/inventory/swap이 "실제로 서버가 발급한 대기 아이템"인지
                 #   확인할 수 있도록 티켓으로 등록(가격 없음 — 이미 승리로 획득한 보상).
-                _register_pending_swap(gs, it, source="reward")
+                ticket_id = _register_pending_swap(gs, it, source="reward")
                 overflow.append({
                     "item": it,
+                    "ticket_id": ticket_id,
                     "reason": add_res.get("reason"),
                     "candidates": add_res.get("candidates", []),
                 })
-        gs["items"] = gs["inventory"].to_flat_list()
-        result["gold_gained"]       = rw["gold"]
-        result["items_gained"]      = gained          # 성공분만 (실패는 메시지로만)
-        result["relics_gained"]     = rw["relics"]    # 유물 자리 (현재 항상 [])
-        result["inventory_overflow"] = overflow
-        result["gold"]              = gs["gold"]
-        # 보상 로그는 messages로만 표시 (gold_gained/items_gained는 데이터용)
         result["messages"].extend(rw["messages"])
+        relics_gained = rw["relics"]   # 유물 자리 (현재 항상 [])
+    else:
+        relics_gained = []
 
     # 중간 보스 클리어 보상 (재반영 이후 지급 — 덮어쓰기 방지)
     if battle.enemy.name == "중간 보스" and winner == "player":
         gs["mid_boss_cleared"] = True
-        gs["inventory"].add("HP_L_potion")
-        gs["items"] = gs["inventory"].to_flat_list()
-        result["messages"].append("보상: HP_L_potion 획득!")
+        # ★ 예전엔 add()의 반환값을 확인하지 않아서, 가방이 꽉 차 실제 지급이
+        #   실패해도 "획득!" 메시지가 그대로 나갔다 — 이제 성공/실패에 따라
+        #   일반 보상과 동일한 gained/overflow 경로를 함께 탄다.
+        potion_res = gs["inventory"].add("HP_L_potion")
+        if potion_res.get("ok"):
+            gained.append("HP_L_potion")
+            result["messages"].append("보상: HP_L_potion 획득!")
+        else:
+            ticket_id = _register_pending_swap(gs, "HP_L_potion", source="reward")
+            overflow.append({
+                "item": "HP_L_potion",
+                "ticket_id": ticket_id,
+                "reason": potion_res.get("reason"),
+                "candidates": potion_res.get("candidates", []),
+            })
+            result["messages"].append("가방이 가득 차 HP_L_potion을(를) 놓쳤다...")
+
+    gs["items"] = gs["inventory"].to_flat_list()
+    result["gold_gained"]        = gold_gained
+    result["items_gained"]       = gained
+    result["relics_gained"]      = relics_gained
+    result["inventory_overflow"] = overflow
+    result["gold"]               = gs.get("gold", 0)
 
     # 모든 보상 지급 후 플레이어/인벤토리 스냅샷
     result["player"] = _player_dict(player, gs["inventory"])
