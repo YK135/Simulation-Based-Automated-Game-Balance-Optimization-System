@@ -327,29 +327,6 @@ class LogManager:
 
     # ── 불러오기 ─────────────────────────────
 
-    def load_latest_sim_log(
-        self, enemy_name: str, difficulty: str, player_lv: int,
-    ) -> Optional[BattleResult]:
-        candidates = self._find_logs(SIM_DIR, enemy_name=enemy_name,
-                                     difficulty=difficulty, player_lv=player_lv,
-                                     ext=".json")
-        if not candidates:
-            return None
-        return self._load_file(os.path.join(SIM_DIR, sorted(candidates)[-1]))
-
-    def load_latest_player_log(
-        self, enemy_name: str, player_lv: int, winner: str = None,
-    ) -> Optional[BattleResult]:
-        candidates = self._find_logs(PLAYER_DIR, enemy_name=enemy_name,
-                                     player_lv=player_lv, ext=".json")
-        if not candidates:
-            return None
-        for filename in sorted(candidates, reverse=True):
-            result = self._load_file(os.path.join(PLAYER_DIR, filename))
-            if result and (winner is None or result.winner == winner):
-                return result
-        return None
-
     def load_all_player_logs(
         self, player_name: str = None, enemy_name: str = None,
     ) -> List[BattleResult]:
@@ -373,23 +350,6 @@ class LogManager:
 
     # ── 내부 유틸 ────────────────────────────
 
-    def _find_logs(self, directory, enemy_name=None, difficulty=None,
-                   player_lv=None, ext=".json") -> List[str]:
-        result = []
-        if not os.path.exists(directory):
-            return result
-        # difficulty/player_lv는 애초에 안전한 값(hard/normal/easy, 정수)이라
-        # 위생화가 필요 없지만, enemy_name은 플레이어 이름과 마찬가지로
-        # _safe_filename_part()를 거친 파일명과 비교해야 한다.
-        safe_enemy = _safe_filename_part(enemy_name) if enemy_name else None
-        for filename in os.listdir(directory):
-            if not filename.endswith(ext): continue
-            if safe_enemy  and safe_enemy  not in filename: continue
-            if difficulty  and difficulty  not in filename: continue
-            if player_lv   and f"lv{player_lv}" not in filename: continue
-            result.append(filename)
-        return result
-
     def _load_file(self, path: str) -> Optional[BattleResult]:
         try:
             with open(path, "r", encoding="utf-8") as f:
@@ -397,13 +357,3 @@ class LogManager:
             return LogSerializer.dict_to_result(data)
         except Exception:
             return None
-
-    def print_summary(self, result: BattleResult):
-        print(LogFormatter.format_log(
-            logs=result.logs,
-            player_name=result.player_name,
-            enemy_name=result.enemy_name,
-            winner=result.winner,
-            total_turns=result.total_turns,
-            final_player_hp=result.final_player_hp,
-        ))

@@ -83,7 +83,6 @@ def check(name, cond, detail=""):
 
 def test_basic_attack():
     print("\n[1] 일반 공격")
-    p = make_player()
     e = make_enemy(hp=300)
     before = e.hp
     # 기본 공격은 BattleSession이 처리하지만, 데미지 적용 함수로 검증
@@ -290,7 +289,7 @@ def test_status_effects():
     e = make_enemy(hp=500)
     e.apply_status_effect(StatusEffect(effect_type="ignite", turns=3, name="fire"))
     before = e.hp
-    msgs = e.tick_status_effects()
+    e.tick_status_effects()
     check("화상 점화 데미지", e.hp < before, f"{before}→{e.hp}")
 
     # 동상 (frostbite): effective_spd 50% 감소

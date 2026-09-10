@@ -104,7 +104,7 @@ def main():
     p4 = mk_player()
     e4 = mk_enemy(shield=100)            # 1타에 일부, 2타에 깨짐
     bs4 = BattleSession(p4, enemies=[e4])
-    r4 = bs4.step("skill:연속공격1")
+    bs4.step("skill:연속공격1")
     mh = bs4.rl_log[0]["result"]["multi_hit"]["hits"]
     check("1타 실드 흡수 기록", mh[0]["shield_damage"] > 0, str(mh[0]))
     check("2타에서 실드 깨지고 HP 피해", mh[1]["damage"] > 0, str(mh[1]))
@@ -117,7 +117,7 @@ def main():
     e5 = mk_enemy(name="빙결 슬라임", etype="빙결 슬라임")
     e5.element_queue = ["ice"]
     bs5 = BattleSession(p5, enemies=[e5])
-    r5 = bs5.step("skill:연속공격1")
+    bs5.step("skill:연속공격1")
     mh5 = bs5.rl_log[0]["result"]["multi_hit"]["hits"]
     reacted = [h for h in mh5 if h["reaction"]]
     check("파쇄가 2타 모두 발동 (innate 큐 유지)", len(reacted) == 2,
@@ -130,7 +130,7 @@ def main():
     weak = mk_enemy(name="약한놈", hp=10)
     strong = mk_enemy(name="강한놈", hp=100000)
     bs6 = BattleSession(p6, enemies=[weak, strong])
-    r6 = bs6.step("skill:연속공격1:0")    # 약한놈 지정
+    bs6.step("skill:연속공격1:0")    # 약한놈 지정
     mh6 = bs6.rl_log[0]["result"]["multi_hit"]
     check("1타로 약한놈 처치", mh6["hits"][0]["killed"] is True, str(mh6["hits"][0]))
     check("2타는 강한놈에게 재타겟", mh6["hits"][1]["target_name"] == "강한놈",
@@ -142,7 +142,7 @@ def main():
     solo = mk_enemy(name="솔로", hp=10)
     bs7 = BattleSession(p7, enemies=[solo])
     cnt_before = getattr(bs7, "_warrior_attack_count", 0)
-    r7 = bs7.step("skill:연속공격1")
+    bs7.step("skill:연속공격1")
     mh7 = bs7.rl_log[0]["result"]["multi_hit"]
     check("1타 처치 후 2타 중단 (hits 1개만)", len(mh7["hits"]) == 1, str(mh7))
     check("중단된 타는 전사 카운트 제외 (+1만)",

@@ -121,6 +121,7 @@ def new_game():
         "pending_node_id":  None,
         "pending_node_choice_id": None,
         "run_id":           None,
+        "run_finished":     False,   # app/Map.py의 _create_run/_finish_run이 관리
         "gold":             100,    # 시작 골드
     }
 

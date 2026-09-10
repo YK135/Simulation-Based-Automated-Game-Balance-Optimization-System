@@ -168,7 +168,7 @@ def main():
                 for _ in range(N):
                     try:
                         run_one(job, lvl, bt, st)
-                    except Exception as ex:
+                    except Exception:
                         st["errors"] += 1
                 results[f"{job}|{lvl}|{bt}"] = dict(st)
         print(f"[{time.time()-t0:6.1f}s] {job} 완료", file=sys.stderr)

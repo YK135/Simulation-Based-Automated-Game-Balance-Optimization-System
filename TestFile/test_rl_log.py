@@ -100,7 +100,6 @@ def main():
     p = make_player()
     bs3 = BattleSession(p, enemies=[make_enemy()], items=["HP_S_potion"])
     bs3.player.hp = 500   # 회복 여지
-    r1_avail = None
     bs3.step("item:HP_S_potion")
     rec3 = bs3.rl_log[0]
     check("사용 전 available에 item:HP_S_potion 포함",

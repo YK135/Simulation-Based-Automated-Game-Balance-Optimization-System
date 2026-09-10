@@ -116,7 +116,8 @@ def test_finish_battle_wiring():
     # 최소 한 번 실제 행동을 밟아서 logs를 채운 뒤(피드백 분석 대상),
     # 플레이어 차례에 HP를 0으로 만들어 패배로 강제 전이.
     # (Battlesession.py: 플레이어 차례 시작 시 hp<=0이면 즉시 winner="enemy" 확정)
-    state = battle.step("status") if hasattr(battle, "step") else None
+    if hasattr(battle, "step"):
+        battle.step("status")
     na, _ = battle._peek_next_actor()
     if na == "enemy":
         battle.step("auto")

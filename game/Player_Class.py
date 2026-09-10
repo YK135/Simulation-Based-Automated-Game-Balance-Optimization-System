@@ -100,18 +100,6 @@ class Player:
         p.learned_skills = list(skill_sys.learned_skills)
         return p
 
-    def Show_Staters(self):
-        print(f"\n이  름 : {self.name}  ({self.job})")
-        print(f"LV : {self.lv}         경험치 : {self.exp}/{self.maxexp}")
-        print(f"HP : {int(self.hp)}/{int(self.maxhp)}")
-        print(f"MP : {int(self.mp)}/{int(self.maxmp)}")
-        print(f"힘   : {round(self.stg, 1)}")
-        print(f"방어력 : {round(self.arm, 1)}")
-        print(f"마법 방어력 : {round(self.sparm, 1)}")
-        print(f"마력 : {round(self.sp, 1)}")
-        print(f"스피드 : {round(self.spd, 1)}")
-        print(f"행운 : {round(self.luc, 1)}\n")
-
 
 def create_player_by_job(name: str, job: str) -> Player:
     """직업별 초기 스탯으로 플레이어 생성"""

@@ -480,7 +480,7 @@ def test_prune_idle_sessions_also_clears_user_lock():
     uid = "stress-lock-prune-target"
 
     try:
-        lock = Shared._get_user_lock(uid)   # _user_locks에 등록
+        Shared._get_user_lock(uid)   # _user_locks에 등록 (반환값은 등록 여부 확인용으로 불필요)
         check("정리 전엔 락이 존재", uid in Shared._user_locks)
 
         cutoff = _time.monotonic() - Shared._SESSION_MAX_IDLE_SECONDS - 10

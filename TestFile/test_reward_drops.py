@@ -96,8 +96,6 @@ def main():
     src = inspect.getsource(AB._finish_battle)
     # calc_battle_rewards가 감싸인 if 조건문을 직접 찾아 검사
     #   (현재 구조: if winner == "player" and not getattr(battle, "is_boss", False):)
-    import re
-    m = re.search(r'if ([^\n:]*calc_battle_rewards[^\n]*|[^\n:]*):\n(?:[^\n]*\n)*?[^\n]*calc_battle_rewards', src)
     # 보상 호출 직전의 가장 가까운 if 조건 줄 추출
     idx = src.index("calc_battle_rewards(")
     guard = src.rfind("if ", 0, idx)

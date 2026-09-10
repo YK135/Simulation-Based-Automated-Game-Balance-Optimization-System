@@ -3,15 +3,13 @@ visualizer.py
 ─────────────────────────────────────────────
 시뮬레이션 결과 시각화 모듈.
 
-출력 그래프 3종:
+출력 그래프 2종:
   1. win_rate_bar     : 난이도별 승률 막대 그래프
-  2. hp_timeline      : 턴별 HP 변화 (플레이어 vs 적)
-  3. stat_radar       : 플레이어 vs 몬스터 스탯 방사형 비교
+  2. stat_radar       : 플레이어 vs 몬스터 스탯 방사형 비교
 
 사용 예시:
   viz = Visualizer()
   viz.win_rate_bar(monsters)        # MonsterFactory 결과
-  viz.hp_timeline(battle_result)    # BattleResult
   viz.stat_radar(player, enemy)     # EntitySnapshot 둘
   viz.show()                        # 전부 출력
 """
@@ -39,7 +37,7 @@ def _set_korean_font():
 _set_korean_font()
 matplotlib.rcParams['axes.unicode_minus'] = False
 
-from ai.battle import BattleResult, EntitySnapshot
+from ai.battle import EntitySnapshot
 # SimulationResult는 사용 시점에 import (순환 import 방지)
 
 
@@ -157,98 +155,7 @@ class Visualizer:
         plt.tight_layout()
         self._output(fig, "win_rate_bar")
 
-    # ── 2. 턴별 HP 변화 ─────────────────────
-
-    def hp_timeline(
-        self,
-        result: BattleResult,
-        title:  str = None,
-    ):
-        """
-        전투 로그에서 턴별 HP 변화를 꺾은선 그래프로 표시.
-        플레이어 HP(파랑) / 적 HP(레드) 두 선.
-        """
-        # 턴 역순 재구성: 로그를 거슬러 올라가며 hp_after 복원
-        # 플레이어 행동 → 적 HP 변화 / 적 행동 → 플레이어 HP 변화
-        turn_data = {}
-        for log in result.logs:
-            turn_data.setdefault(log.turn, []).append(log)
-
-        # 턴 순서대로 HP 재구성
-        p_hp_points = []
-        e_hp_points = []
-        turn_points = []
-
-        # 시작 HP 추정 (첫 공격 전 역산)
-        start_p = result.final_player_hp
-        start_e = result.final_enemy_hp
-        for log in result.logs:
-            if log.actor == "player":
-                start_e += log.damage_dealt
-            elif log.actor == "enemy":
-                start_p += log.damage_dealt
-        p_hp_points.append(round(start_p))
-        e_hp_points.append(round(start_e))
-        turn_points.append(0)
-
-        # 턴별 누적 HP
-        cur_p = start_p
-        cur_e = start_e
-        for t in sorted(turn_data.keys()):
-            for log in turn_data[t]:
-                if log.actor == "player":
-                    cur_e -= log.damage_dealt
-                elif log.actor == "enemy":
-                    cur_p -= log.damage_dealt
-            p_hp_points.append(round(cur_p))
-            e_hp_points.append(round(cur_e))
-            turn_points.append(t)
-
-        fig, ax = plt.subplots(figsize=(9, 5))
-        fig.patch.set_facecolor(COLORS["bg"])
-        ax.set_facecolor(COLORS["bg"])
-
-        ax.plot(turn_points, p_hp_points,
-                color=COLORS["player"], linewidth=2.2,
-                marker="o", markersize=5, label=result.player_name, zorder=3)
-        ax.plot(turn_points, e_hp_points,
-                color=COLORS["enemy"], linewidth=2.2,
-                marker="s", markersize=5, label=result.enemy_name, zorder=3)
-
-        # HP=0 기준선
-        ax.axhline(0, color=COLORS["grid"], linewidth=1, linestyle="--", zorder=1)
-
-        # 승패 결과 표기
-        winner_txt = (
-            f"{result.player_name} 승리 🏆"
-            if result.winner == "player"
-            else f"{result.enemy_name} 승리"
-        )
-        ax.text(
-            0.99, 0.97, winner_txt,
-            transform=ax.transAxes,
-            ha="right", va="top",
-            fontsize=10, color=COLORS["text"],
-            bbox=dict(boxstyle="round,pad=0.3",
-                      facecolor="white", alpha=0.7, edgecolor="none")
-        )
-
-        ax.set_xlabel("턴", fontsize=10, color=COLORS["sub"])
-        ax.set_ylabel("HP", fontsize=10, color=COLORS["sub"])
-        ax.set_title(
-            title or f"{result.player_name} vs {result.enemy_name} — 전투 HP 변화",
-            fontsize=13, fontweight="bold",
-            color=COLORS["text"], pad=14
-        )
-        ax.legend(fontsize=10)
-        ax.grid(color=COLORS["grid"], linewidth=0.8, zorder=0)
-        ax.spines[["top", "right"]].set_visible(False)
-        ax.tick_params(colors=COLORS["sub"])
-
-        plt.tight_layout()
-        self._output(fig, "hp_timeline")
-
-    # ── 3. 스탯 방사형 비교 ──────────────────
+    # ── 2. 스탯 방사형 비교 ──────────────────
 
     def stat_radar(
         self,
@@ -317,25 +224,6 @@ class Visualizer:
 
         plt.tight_layout()
         self._output(fig, "stat_radar")
-
-    # ── 4. 시뮬레이션 전체 요약 ─────────────
-
-    def sim_summary(
-        self,
-        monsters:    dict,
-        player:      EntitySnapshot,
-        sample_result: BattleResult = None,
-    ):
-        """
-        win_rate_bar + stat_radar 를 한 번에.
-        sample_result 있으면 hp_timeline 도 추가.
-        """
-        self.win_rate_bar(monsters, player.name)
-        hard_snap = monsters["hard"][0]
-        self.stat_radar(player, hard_snap,
-                        title=f"스탯 비교 — {player.name} vs 강한 {hard_snap.name}")
-        if sample_result:
-            self.hp_timeline(sample_result)
 
     # ── 내부 유틸 ────────────────────────────
 
