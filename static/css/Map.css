@@ -6,7 +6,15 @@
 #map-mode {
     display: flex;
     flex-direction: column;
-    height: 100%;
+    /* ★ (이번 요청 — "배틀 이미지도 노드맵처럼 늘려줘"의 반대 방향 정리)
+       예전엔 height:100%였는데, 부모 .battle-zone(battle/BattleStage.css)이
+       flex 컨테이너가 아니었던 탓에 이 100%가 형제 .battle-header가 이미
+       차지한 공간을 못 빼고 .battle-zone 콘텐츠 박스 전체 기준으로 계산돼
+       실제로 부모 테두리를 살짝(실측 2px) 넘어가고 있었다 — .battle-zone이
+       이제 flex column이 됐으니(BattleStage.css 참고) 형제 공간을 자동으로
+       빼주는 flex:1 1 0%로 바꾼다. min-height:320px는 그대로(이 값 아래로는
+       안 줄어드는 하한선 — 위 아래로는 flex-grow가 남는 공간을 채움). */
+    flex: 1 1 0%;
     min-height: 320px;
     overflow: hidden;
     position: relative;
