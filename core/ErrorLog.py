@@ -21,6 +21,7 @@ REDIS_URL/SECRET_KEY와 같은 패턴 — 뭘 설정 안 해도 앱은 그대로
 from __future__ import annotations
 
 import os
+import threading
 import traceback as _traceback
 import urllib.request
 import json
@@ -42,21 +43,32 @@ def _get_request_context() -> tuple:
 def _notify_webhook(context: str, error_type: str, error_message: str) -> None:
     """ERROR_WEBHOOK_URL이 설정돼 있으면 Discord/Slack 호환 웹훅으로 알림.
     미설정이거나 전송 실패해도 조용히 넘어간다 — 알림이 안 가는 것 때문에
-    실제 에러 로깅(DB 저장)까지 막혀선 안 됨."""
+    실제 에러 로깅(DB 저장)까지 막혀선 안 됨.
+
+    ★ 실제 HTTP 전송은 데몬 스레드에서 한다 — 이 함수가 요청을 처리 중인
+      gunicorn 스레드에서 동기로 urlopen(timeout=3)까지 블로킹하면, 클라이언트가
+      타입이 안 맞는 요청(예: {"name": null})을 반복 전송해 log_error()를 계속
+      유발하는 것만으로 --workers 1 --threads 8 환경의 스레드가 최대 3초씩
+      묶여 서비스 전체가 지연될 수 있었다. 알림 자체는 최선 노력이라 지금
+      요청 흐름을 막을 이유가 없다."""
     url = os.environ.get("ERROR_WEBHOOK_URL")
     if not url:
         return
-    try:
-        payload = json.dumps({
-            "content": f"🚨 [{context}] {error_type}: {error_message[:300]}"
-        }).encode("utf-8")
-        req = urllib.request.Request(
-            url, data=payload,
-            headers={"Content-Type": "application/json"},
-        )
-        urllib.request.urlopen(req, timeout=3)
-    except Exception as e:
-        print(f"[ErrorLog] 웹훅 전송 실패: {e}")
+
+    def _send():
+        try:
+            payload = json.dumps({
+                "content": f"🚨 [{context}] {error_type}: {error_message[:300]}"
+            }).encode("utf-8")
+            req = urllib.request.Request(
+                url, data=payload,
+                headers={"Content-Type": "application/json"},
+            )
+            urllib.request.urlopen(req, timeout=3)
+        except Exception as e:
+            print(f"[ErrorLog] 웹훅 전송 실패: {e}")
+
+    threading.Thread(target=_send, daemon=True).start()
 
 
 def log_error(context: str, exc: Exception) -> None:

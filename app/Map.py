@@ -18,6 +18,7 @@ app/Map.py — 노드맵 Blueprint
 """
 from __future__ import annotations
 
+import random
 from random import choices as rand_choices, randint, choice
 
 from flask import Blueprint, jsonify
@@ -27,8 +28,9 @@ from game.Enemy_Class import (
     Make_MidBoss, Make_FinalBoss,
 )
 
-from app.Shared  import _get_session, _player_dict, _register_pending_swap, _get_json_body
+from app.Shared  import _get_session, _player_dict, _register_pending_swap, _get_json_body, _get_str_field
 from app.Battle  import _start_battle, _start_battle_multi
+from core.ErrorLog import log_error
 
 map_bp = Blueprint("map", __name__)
 
@@ -167,7 +169,7 @@ def _make_enemies(hook, n: int, grade_pool: dict, chapter: int = 1, layer: int =
         grade      = _pick_grade(grade_pool)
         diff_key   = _GRADE_TO_KEY.get(grade, "normal")
         # difficulty 파라미터로 원하는 난이도 직접 지정
-        snap       = hook.get_enemy(enemy_type, difficulty=diff_key)
+        snap       = hook.get_enemy(enemy_type, difficulty=diff_key, chapter=chapter)
         unit       = hook.make_battle_unit(snap)
         enemies.append(unit)
         grades.append(grade)
@@ -190,7 +192,7 @@ def _make_elite_encounter(hook, chapter: int = 1, layer: int = 1):
     else:
         paired = randint(1, 2) == 2
 
-    leader_snap = hook.get_enemy(leader_type, difficulty="hard")
+    leader_snap = hook.get_enemy(leader_type, difficulty="hard", chapter=chapter)
     leader_unit = hook.make_battle_unit(leader_snap)
     leader_unit.is_elite = True
     leader_unit.elite_leader = True
@@ -210,7 +212,7 @@ def _make_elite_encounter(hook, chapter: int = 1, layer: int = 1):
         pool = CHAPTER_TIER_POOL.get((chapter, tier)) or CHAPTER_TIER_POOL[(2, "late")]
         escort_pool = [t for t in pool if t != "사제"] or pool
         escort_type = choice(escort_pool)
-        escort_snap = hook.get_enemy(escort_type, difficulty="hard")
+        escort_snap = hook.get_enemy(escort_type, difficulty="hard", chapter=chapter)
         escort_unit = hook.make_battle_unit(escort_snap)
         enemies.append(escort_unit)
         grades.append("상")
@@ -288,7 +290,7 @@ def _log_node_choice(gs: dict, node, battle_result: str = None,
             db.flush()
             return nc.id
     except Exception as e:
-        print(f"[DB] NodeChoice log failed: {e}")
+        log_error("node_choice_log", e)
         return None
 
 
@@ -308,7 +310,7 @@ def _update_node_choice_result(node_choice_id: int, battle_result: str, battle_t
                 nc.battle_result = battle_result
                 nc.battle_turns  = battle_turns
     except Exception as e:
-        print(f"[DB] NodeChoice result update failed: {e}")
+        log_error("node_choice_result_update", e)
 
 
 def _create_run(gs: dict, chapter: int) -> None:
@@ -322,6 +324,7 @@ def _create_run(gs: dict, chapter: int) -> None:
             return
 
         player = gs["player"]
+        new_run_id = None
         with db_session() as db:
             run = Run(
                 user_id        = db_user_id,
@@ -331,11 +334,17 @@ def _create_run(gs: dict, chapter: int) -> None:
             )
             db.add(run)
             db.flush()
-            gs["run_id"] = run.id
-            gs["run_finished"] = False   # 새 런 시작 — 이전 런의 종료 표시 초기화
-            print(f"[DB] Run created: id={run.id}, chapter={chapter}")
+            new_run_id = run.id
+        # ★ gs 반영은 with 블록을 예외 없이 빠져나온 뒤(=커밋 확정 후)에만
+        #   한다 — flush 직후(커밋 전)에 곧장 대입하면, 그 뒤 commit만 실패하는
+        #   드문 DB 장애에서 gs["run_id"]가 실제로는 존재하지 않는(롤백된) 행을
+        #   가리키게 되고, 이후 그 run_id로 저장되는 모든 NodeChoice가 고아
+        #   레코드가 될 수 있었다.
+        gs["run_id"] = new_run_id
+        gs["run_finished"] = False   # 새 런 시작 — 이전 런의 종료 표시 초기화
+        print(f"[DB] Run created: id={new_run_id}, chapter={chapter}")
     except Exception as e:
-        print(f"[DB] Run creation failed: {e}")
+        log_error("run_create", e)
 
 
 def _finish_run(gs: dict, result: str) -> None:
@@ -363,7 +372,7 @@ def _finish_run(gs: dict, result: str) -> None:
         #   덮어쓰지 않게 한다 — 아래 참고.
         gs["run_finished"] = True
     except Exception as e:
-        print(f"[DB] Run finish failed: {e}")
+        log_error("run_finish", e)
 
 
 # ─────────────────────────────────────────────
@@ -395,8 +404,11 @@ def map_generate():
     if gs.get("map"):
         return jsonify({"ok": False, "error": "이미 진행 중인 맵이 있습니다."}), 400
 
-    data    = _get_json_body()
-    chapter = int(data.get("chapter", 1))
+    data = _get_json_body()
+    try:
+        chapter = int(data.get("chapter", 1))
+    except (TypeError, ValueError):
+        return jsonify({"ok": False, "error": "chapter는 정수여야 합니다."}), 400
 
     if chapter != 1:
         return jsonify({"ok": False, "error": "챕터 1만 이 API로 시작할 수 있습니다."}), 400
@@ -459,7 +471,7 @@ def map_choose():
         return jsonify({"ok": False, "error": "맵이 없습니다. /api/map/generate 먼저 호출하세요."}), 400
 
     data    = _get_json_body()
-    node_id = data.get("node_id", "").strip()
+    node_id = _get_str_field(data, "node_id")
     if not node_id:
         return jsonify({"ok": False, "error": "node_id가 필요합니다."}), 400
 
@@ -623,6 +635,13 @@ def map_node_complete():
     _save_map(gs, fmap)
 
     if fmap.completed:
+        # ★ 아래 미완료 분기와 동일하게 pending_node_id를 비운다 — 현재
+        #   라우팅상 이 분기는 보스가 아닌 노드(휴식/상점)에서 fmap.completed가
+        #   True가 되는 경우가 없어 실질적으로 도달하지 않지만(보스전 완료는
+        #   app/Battle.py의 _finish_battle()이 처리), 방어적으로 맞춰둔다 —
+        #   여기서 안 지우면 다음 요청이 이미 끝난 노드를 pending으로 오인할
+        #   잠재 위험이 있다.
+        gs["pending_node_id"] = None
         _finish_run(gs, "clear")
         chapter = gs.get("chapter", 1)
         if chapter >= 2:
@@ -729,9 +748,6 @@ def _get_shop_items(player_lv: int) -> list:
              "effect": "다음 스킬 추가 피해", "price": 100},
         ]
     return items
-
-
-import random  # _pick_event에서 사용
 
 
 # ─────────────────────────────────────────────

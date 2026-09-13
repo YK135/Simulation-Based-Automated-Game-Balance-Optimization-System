@@ -26,6 +26,7 @@ from .Shared import (
     _save_battle_to_db,
     _register_pending_swap,
     _get_json_body,
+    _get_str_field,
 )
 
 battle_bp = Blueprint("battle", __name__)
@@ -187,9 +188,15 @@ def _get_current_node_type(gs: dict):
     map_data = gs.get("map")
     if not node_id or not map_data:
         return None
-    for nd in map_data.get("nodes", []):
-        if nd.get("node_id") == node_id:
-            return nd.get("node_type")
+    # ★ gs["map"]["nodes"]는 리스트가 아니라 {node_id: node_dict} 형태의 dict
+    #   (game/Map.py의 FloorMap.to_dict() 참고) — 예전엔 이걸 리스트처럼
+    #   `for nd in ...`로 순회해서 각 nd가 실제로는 키 문자열이 되어
+    #   nd.get(...)에서 AttributeError가 나는 코드였다(현재 호출부가 전부
+    #   1순위 battle_node_type으로 먼저 반환돼 도달하지 않아 드러나지
+    #   않았을 뿐). app/Rest.py의 _current_pending_node_type()과 동일한
+    #   방식으로 통일.
+    node = (map_data.get("nodes") or {}).get(node_id)
+    return node.get("node_type") if node else None
     return None
 
 
@@ -365,26 +372,35 @@ def _finish_battle(gs: dict, battle, result: dict, winner: str) -> None:
             _update_node_choice_result(
                 node_choice_id, _NC_RESULT_MAP.get(winner, winner), battle.turn)
         except Exception as e:
-            print(f"[Map] NodeChoice result update failed: {e}")
+            log_error("node_choice_result_update", e)
 
     # 노드맵 사용 중이면 승리 시에만 노드 완료 (패배/도망은 노드 유지)
     if winner == "player" and gs.get("pending_node_id") and gs.get("map"):
+        # ★ FloorMap 계산을 전부 지역 변수로 먼저 끝내고, 전부 성공했을 때만
+        #   한꺼번에 gs/result에 반영한다 — 예전엔 gs["map"] 대입 이후 단계
+        #   (get_state() 등)에서 예외가 나면, 맵 내부적으로는 이미 노드가
+        #   visited로 바뀌었는데 gs["pending_node_id"]는 못 지워 "보상은
+        #   받았는데 노드는 여전히 미완료"인 어중간한 상태가 될 수 있었다.
         try:
             from game.Map import FloorMap
             fmap = FloorMap.from_dict(gs["map"])
             fmap.mark_visited(gs["pending_node_id"])
-            gs["map"] = fmap.to_dict()
-            result["map"] = fmap.get_state()
-            result["map_done"] = fmap.completed
+            new_map_dict = fmap.to_dict()
+            map_state    = fmap.get_state()
+            completed    = fmap.completed
+        except Exception as e:
+            log_error("map_node_complete", e)
+        else:
+            gs["map"] = new_map_dict
+            result["map"] = map_state
+            result["map_done"] = completed
             gs["pending_node_id"] = None
 
-            if fmap.completed:
+            if completed:
                 # 런 종료 처리 — 이 분기는 winner=="player"가 이미 확정된
                 # 상태(위 if문 조건)라 결과는 항상 "clear"뿐이다.
                 from app.Map import _finish_run
                 _finish_run(gs, "clear")
-        except Exception as e:
-            print(f"[Map] node complete failed: {e}")
     elif winner == "enemy" and gs.get("run_id"):
         # ★ 예전엔 _finish_run이 위 winner=="player" 분기 안에서만 호출돼서,
         #   실제 패배는 Run.result가 영원히 None(= "진행 중")으로 DB에 남았다
@@ -418,7 +434,7 @@ def battle_action():
         return jsonify({"ok": False, "error": "게임 세션이 없습니다."}), 404
 
     data   = _get_json_body()
-    action = data.get("action", "").strip()
+    action = _get_str_field(data, "action")
     if not action:
         return jsonify({"ok": False, "error": "action이 필요합니다."}), 400
 

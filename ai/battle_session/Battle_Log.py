@@ -84,7 +84,11 @@ class BattleLogMixin:
         return out
 
     def _rl_available_actions(self) -> list:
-        """이 시점 플레이어가 선택 가능했던 행동 목록."""
+        """이 시점 플레이어가 선택 가능했던 행동 목록.
+        ※ 여기 나열된 행동이 전부 실제로 성공한다는 뜻은 아니다 — 마비 상태면
+          이 목록과 무관하게 어떤 행동이든 확률적으로 강제 실패할 수 있다
+          (_step_core의 is_paralyzed() 판정 참고). action_t의
+          forced_fail_risk 플래그가 그 가능성을 나타낸다."""
         from ai.battle import SKILL_META
         acts = ["attack", "escape"]
         p = self.player
@@ -99,11 +103,24 @@ class BattleLogMixin:
             acts.append(f"item:{it}")
         return acts
 
+    @staticmethod
+    def _rl_has_paralyze(unit) -> bool:
+        """마비 상태이상 보유 여부만 확인 — is_paralyzed()와 달리 실제 확률을
+        굴리지 않는다. RL 로그를 남기려고 여기서 is_paralyzed()를 한 번 더
+        부르면 그 호출 자체가 RNG를 소모해서, 실제 턴 처리(_step_core)가
+        나중에 쓰는 난수 시퀀스가 밀려 전투 결과가 달라질 수 있다."""
+        return any(getattr(e, "effect_type", "") == "paralyze"
+                   for e in getattr(unit, "status_effects", []) or [])
+
     # ───────────────────────── pre / post 후킹 ─────────────────────────
 
     def _rl_pre(self, action: str) -> Optional[dict]:
-        """행동 직전 스냅샷. done 상태면 기록 생략."""
-        if getattr(self, "done", False):
+        """행동 직전 스냅샷. done 상태거나 상태조회 전용(status, 실제 행동
+        아님)이면 기록 생략.
+        ★ "status"를 그냥 두면 실제로는 아무 행동도 일어나지 않았는데 정상
+          행동 레코드가 남고, 특히 적 턴 도중 호출되면 _rl_post가 직전의
+          진짜 행동(self.logs[-1])을 재사용해 그 행동을 중복 기록했다."""
+        if getattr(self, "done", False) or action == "status":
             return None
         try:
             actor, aidx = self._peek_next_actor()
@@ -113,6 +130,8 @@ class BattleLogMixin:
             return None
 
         is_player = (actor == "player")
+        acting_unit = self.player if is_player else (
+            self.enemies[aidx] if 0 <= aidx < len(self.enemies) else None)
         state_t = {
             "turn": self.turn,
             "player": self._rl_pack_player(),
@@ -142,6 +161,10 @@ class BattleLogMixin:
             "detail": detail,
             "target_idx": tgt,
             "available": self._rl_available_actions() if is_player else [],
+            # available 목록은 "선택 가능"했다는 뜻일 뿐 — 마비 상태면 이 중
+            # 무엇을 골라도 확률적으로 강제 실패할 수 있다(실제 확률은 여기서
+            # 굴리지 않음, _rl_has_paralyze 참고).
+            "forced_fail_risk": self._rl_has_paralyze(acting_unit) if acting_unit is not None else False,
             "source": (getattr(self, "battle_meta", {}) or {}).get("source", "human")
                       if is_player else "ai",
         }

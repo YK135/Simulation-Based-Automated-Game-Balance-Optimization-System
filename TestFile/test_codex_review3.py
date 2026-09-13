@@ -165,8 +165,11 @@ def test_balance_hook_uses_bounded_thread_pool():
 
     player = create_player_by_job("실행기테스터", "전사")
     hook = BalanceHook(player, [], show_graph=False, verbose=False)
-    check("백그라운드 시뮬 작업이 제출되면 멤버십으로 추적됨(고블린/박쥐 2종)",
-          set(hook._sim_threads.keys()) == {"고블린", "박쥐"},
+    # ★ 챕터별로 몬스터 AI 킷이 달라(ai/battle/MonsterKit.py) 캐시/작업 추적
+    #   키가 (enemy_type, chapter) 튜플로 바뀜 — BalanceHook 생성 시 기본
+    #   프리웜(고블린/박쥐)은 항상 chapter=1로 제출된다.
+    check("백그라운드 시뮬 작업이 제출되면 멤버십으로 추적됨(고블린/박쥐 2종, 챕터1)",
+          set(hook._sim_threads.keys()) == {("고블린", 1), ("박쥐", 1)},
           f"keys={list(hook._sim_threads.keys())}")
 
     # 여러 BalanceHook을 새로 만들어도(= 여러 유저의 "새 게임") 워커 스레드

@@ -375,7 +375,15 @@ class BattleSession(
             if enemy.hp <= 0:
                 self.action_queue.pop(0)
                 self._cleanup_dead_from_queue()
-                msgs.append(f"🔥 {enemy.name}이(가) 점화 데미지로 쓰러졌다!")
+                # ★ "쓰러졌다"가 아니라 다른 적 처치 메시지들과 동일하게
+                #   "처치했다"로 통일 — 프런트(BattleSequencer.js의
+                #   _classifyMessages)는 "쓰러졌다"를 플레이어 사망 전용
+                #   문구로 보고 groups.ending에 넣어 playerDied를 판정한다.
+                #   이 메시지가 "쓰러졌다"였을 때는 적이 점화로 죽었을 뿐인데
+                #   플레이어 사망으로 오판되어, 승리 직후 플레이어 스프라이트가
+                #   함께 사망 포즈로 굳는(setDeadState('player_battle')가
+                #   잘못 호출되는) 버그가 있었다.
+                msgs.append(f"🔥 {enemy.name}을(를) 점화 데미지로 처치했다!")
                 self._check_elite_death(enemy, msgs)   # 분열/부활취소 — 직접피해 경로와 동일하게 처리
                 if not self._alive_enemies():
                     self.done = True
@@ -416,6 +424,27 @@ class BattleSession(
                 except Exception:
                     pass
                 msgs.append(f"{self.player.name}이(가) 쓰러졌다...")
+                return self._state(messages=msgs, next_actor="done")
+
+            # ── 모든 적 사망 체크(적 턴 도중에도 적이 죽을 수 있음) ──
+            #    도적의 회피 반격(_rogue_counter, Enemy_Actions.py)은 적의
+            #    턴 안에서 즉시 반격 데미지를 주는데, 그게 마지막으로 살아
+            #    있던 적을 처치해도 여기서 체크하지 않으면 승리 판정이 이번
+            #    턴엔 안 나고 다음 플레이어 턴(허공 공격)까지 미뤄졌다.
+            #    플레이어 턴 분기(위쪽)는 이 체크를 이미 하고 있어 대칭을 맞춤.
+            if not self._alive_enemies():
+                self.done = True
+                self.winner = "player"
+                try:
+                    self.player.atb_remainder = float(self.player_atb)
+                    if self.player_original is not None:
+                        self.player_original.atb_remainder = float(self.player_atb)
+                except Exception:
+                    pass
+                if len(self.enemies) > 1:
+                    msgs.append("모든 적을 처치했다!")
+                else:
+                    msgs.append(f"{self.enemies[0].name}을(를) 처치했다!")
                 return self._state(messages=msgs, next_actor="done")
 
             # ── 모든 살아있는 entity ATB += 자기 SPD ──

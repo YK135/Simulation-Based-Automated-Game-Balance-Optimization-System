@@ -48,19 +48,13 @@ SCORE_WEIGHTS = {
 # 점수 계산 — 단일 사용자
 # ═══════════════════════════════════════════════════════════
 
-def calculate_user_score(db: Session, user_id: int) -> Optional[Dict]:
-    """
-    한 사용자의 모험에 대한 점수 + 상세 내역.
-
-    반환:
-      None → 전투 기록이 없는 경우 (점수 0점이거나 미플레이)
-      Dict → {
-          'score': int,
-          'final_boss_cleared': bool,
-          'breakdown': { ... 모든 가중치별 점수 ... }
-      }
-    """
-    battles = db.query(Battle).filter(Battle.user_id == user_id).all()
+def _score_data_from_battles(user_id: int, battles: list) -> Optional[Dict]:
+    """battles(이미 조회된 해당 유저의 Battle row 리스트)만으로 점수 계산 —
+    이 함수 자체는 DB에 접근하지 않는다. 여러 유저를 한 번에 계산할 때
+    (get_score_ranking/get_user_rank_position이 각자 유저 수만큼 Battle을
+    따로 쿼리하던 N+1 패턴) _all_active_user_scores()가 미리 한 번에 가져온
+    battles를 유저별로 그룹핑해 재사용하기 위해 calculate_user_score()의
+    실제 로직 본체를 분리해뒀다."""
     if not battles:
         return None
 
@@ -151,34 +145,79 @@ def calculate_user_score(db: Session, user_id: int) -> Optional[Dict]:
     }
 
 
+def calculate_user_score(db: Session, user_id: int) -> Optional[Dict]:
+    """
+    한 사용자의 모험에 대한 점수 + 상세 내역 (단일 유저 조회용).
+
+    반환:
+      None → 전투 기록이 없는 경우 (점수 0점이거나 미플레이)
+      Dict → {
+          'score': int,
+          'final_boss_cleared': bool,
+          'breakdown': { ... 모든 가중치별 점수 ... }
+      }
+    """
+    battles = db.query(Battle).filter(Battle.user_id == user_id).all()
+    return _score_data_from_battles(user_id, battles)
+
+
+def _all_active_user_scores(db: Session) -> List[Dict]:
+    """활성 유저 전원의 점수 데이터를 단 2번의 쿼리(users 전체 1번, battles 전체
+    1번)로 계산한다.
+
+    ★ 예전엔 get_score_ranking()이 유저 수만큼 매번 별도 Battle 쿼리를
+      던졌고(N+1), 게다가 /api/ranking 한 번 호출이 get_score_ranking()과
+      get_user_rank_position() 양쪽에서 이 "전체 유저 순회 + 유저별 쿼리"를
+      각각 따로 또 돌려 사실상 요청 1건당 2×(N+1)이었다. 이제 두 함수 모두
+      이 결과 하나를 공유한다(app/Ranking.py가 한 번만 계산해서 넘김)."""
+    users = db.query(User).filter(User.is_active == True).all()
+    if not users:
+        return []
+    user_ids = [u.id for u in users]
+    nickname_by_id = {u.id: u.nickname for u in users}
+
+    battles_by_user: Dict[int, list] = {}
+    for b in db.query(Battle).filter(Battle.user_id.in_(user_ids)).all():
+        battles_by_user.setdefault(b.user_id, []).append(b)
+
+    out = []
+    for uid in user_ids:
+        sd = _score_data_from_battles(uid, battles_by_user.get(uid, []))
+        if sd:
+            sd["nickname"] = nickname_by_id[uid]
+            out.append(sd)
+    return out
+
+
 # ═══════════════════════════════════════════════════════════
 # 랭킹 1: 점수 기반 (메인 랭킹)
 # ═══════════════════════════════════════════════════════════
 
-def get_score_ranking(db: Session, limit: int = 20) -> List[Dict]:
+def get_score_ranking(db: Session, limit: int = 20,
+                       _all_scores: Optional[List[Dict]] = None) -> List[Dict]:
     """
     점수 기반 랭킹 TOP N.
 
     각 사용자의 최고 점수만 반영 (같은 사용자가 여러 번 플레이 시).
+    _all_scores: 이미 계산된 _all_active_user_scores() 결과가 있으면 그걸
+      재사용(호출부가 get_user_rank_position()과 같은 요청에서 중복 계산을
+      피하고 싶을 때 전달). 없으면 이 함수가 직접 계산한다.
     """
-    # 모든 사용자 가져와서 점수 계산 후 정렬.
-    # 사용자 많아지면 DB 쿼리 최적화 필요하지만 캡스톤 규모면 충분.
-    users = db.query(User).filter(User.is_active == True).all()
+    all_scores = _all_scores if _all_scores is not None else _all_active_user_scores(db)
 
     rankings = []
-    for u in users:
-        score_data = calculate_user_score(db, u.id)
-        if score_data is None or score_data["score"] == 0:
-            continue  # 전투 기록 없거나 0점인 사용자는 제외
+    for sd in all_scores:
+        if sd["score"] == 0:
+            continue  # 0점인 사용자는 제외
 
         rankings.append({
-            "user_id":  u.id,
-            "nickname": u.nickname,
-            "job":      score_data["last_job"],
-            "score":    score_data["score"],
-            "level":    score_data["max_level"],
-            "boss_kills":  score_data["boss_kills"],
-            "final_boss_cleared": score_data["final_boss_cleared"],
+            "user_id":  sd["user_id"],
+            "nickname": sd["nickname"],
+            "job":      sd["last_job"],
+            "score":    sd["score"],
+            "level":    sd["max_level"],
+            "boss_kills":  sd["boss_kills"],
+            "final_boss_cleared": sd["final_boss_cleared"],
         })
 
     # 점수 내림차순 정렬
@@ -247,34 +286,29 @@ def get_pioneer_ranking(db: Session, limit: int = 10) -> List[Dict]:
 # 헬퍼: 현재 사용자의 랭킹 위치 찾기
 # ═══════════════════════════════════════════════════════════
 
-def get_user_rank_position(db: Session, user_id: int) -> Optional[Dict]:
+def get_user_rank_position(db: Session, user_id: int,
+                            _all_scores: Optional[List[Dict]] = None) -> Optional[Dict]:
     """
     특정 사용자의 현재 랭킹 위치를 반환.
     TOP 20 안에 없어도 자신의 등수와 점수 알려줌.
+    _all_scores: get_score_ranking()과 동일 — 미리 계산된 결과를 재사용 가능.
     """
-    score_data = calculate_user_score(db, user_id)
-    if not score_data:
+    all_scores = _all_scores if _all_scores is not None else _all_active_user_scores(db)
+
+    my_entry = next((sd for sd in all_scores if sd["user_id"] == user_id), None)
+    if my_entry is None:
         return None
+    my_score = my_entry["score"]
 
-    my_score = score_data["score"]
-
-    # 모든 사용자의 점수 계산 후 내 위치 찾기
-    users = db.query(User).filter(User.is_active == True).all()
-    all_scores = []
-    for u in users:
-        sd = calculate_user_score(db, u.id)
-        if sd:
-            all_scores.append(sd["score"])
-
-    all_scores.sort(reverse=True)
+    scores_desc = sorted((sd["score"] for sd in all_scores), reverse=True)
     try:
-        rank = all_scores.index(my_score) + 1
+        rank = scores_desc.index(my_score) + 1
     except ValueError:
-        rank = len(all_scores) + 1
+        rank = len(scores_desc) + 1
 
     return {
         "rank":     rank,
-        "total":    len(all_scores),
+        "total":    len(scores_desc),
         "score":    my_score,
         "user_id":  user_id,
     }

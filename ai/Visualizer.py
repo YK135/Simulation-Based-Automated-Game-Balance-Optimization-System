@@ -109,7 +109,7 @@ class Visualizer:
                       alpha=0.85, label="실제 승률", zorder=3)
 
         # 목표 승률 점선
-        for i, (xi, tgt) in enumerate(zip(x, targets)):
+        for xi, tgt in zip(x, targets):
             ax.plot(
                 [xi - width/2 - 0.05, xi + width/2 + 0.05],
                 [tgt, tgt],

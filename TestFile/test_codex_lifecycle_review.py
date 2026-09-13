@@ -632,9 +632,22 @@ def main():
         test_user_lock_registry_identity()
         test_balance_hook_generation_counter()
         test_pending_swaps_survives_snapshot_roundtrip()
+
+        # 아래 세 보스전 테스트는 각각 _finish_battle()을 거쳐 실제 BattleLog
+        # row를 하나씩 만든다(게스트라도 RL 로그는 저장됨) — 끝나고 지운다.
+        from DB import get_session as _db_session
+        from DB.Models import BattleLog as _BattleLog
+        with _db_session() as _db:
+            _before = _db.query(_BattleLog.id).order_by(_BattleLog.id.desc()).first()
+            _before_max_id = _before[0] if _before else 0
+
         test_boss_win_always_has_reward_fields()
         test_midboss_potion_success_populates_items_gained()
         test_midboss_potion_failure_registers_overflow_ticket()
+
+        with _db_session() as _db:
+            _db.query(_BattleLog).filter(_BattleLog.id > _before_max_id).delete(synchronize_session=False)
+
         test_battle_state_inventory_field_matches_items()
     except Exception as ex:
         import traceback

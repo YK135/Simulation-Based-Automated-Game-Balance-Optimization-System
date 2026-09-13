@@ -137,6 +137,15 @@ def test_finish_battle_wiring():
         "gold": 100,
     }
     result = {}
+
+    # _finish_battle()이 게스트(db_user_id=None)여도 _save_rl_log()를 통해
+    # 실제 BattleLog row를 남긴다 — 테스트 종료 후 지우기 위해 전후 max id를 비교.
+    from DB import get_session as db_session
+    from DB.Models import BattleLog
+    with db_session() as db:
+        before = db.query(BattleLog.id).order_by(BattleLog.id.desc()).first()
+        before_max_id = before[0] if before else 0
+
     _finish_battle(gs, battle, result, "enemy")
 
     check("result에 feedback 키가 채워짐", "feedback" in result, f"result keys={list(result.keys())}")
@@ -147,6 +156,12 @@ def test_finish_battle_wiring():
         check("feedback에 good_plays/bad_plays/suggestions 키 존재",
               all(k in fb for k in ("good_plays", "bad_plays", "suggestions")))
     check("gs['battle']가 정리됨(None)", gs["battle"] is None)
+
+    # 정리 — 이 테스트가 실제로 만든 BattleLog row를 지운다.
+    with db_session() as db:
+        new_rows = db.query(BattleLog).filter(BattleLog.id > before_max_id).all()
+        for row in new_rows:
+            db.delete(row)
 
 
 def main():

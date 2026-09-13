@@ -63,13 +63,21 @@ def _escape_chance(player_spd: float, enemy_spd: float) -> float:
 class BattleEngine:
     MAX_TICKS = 500
 
-    def __init__(self, player: EntitySnapshot, enemy: EntitySnapshot, spd_multiplier: float = 1.0):
+    def __init__(self, player: EntitySnapshot, enemy: EntitySnapshot, spd_multiplier: float = 1.0,
+                 chapter: int = 1):
         self.player = copy.deepcopy(player)
         self.enemy = copy.deepcopy(enemy)
         self.logs: list[TurnLog] = []
         self.atb = ATBSystem(spd_multiplier)
         self.tick_count = 0
         self.action_count = 0
+        # ★ 실전(ai/battle_session/Enemy_Actions.py)은 챕터별 몬스터 킷
+        #   (ai/battle/MonsterKit.py)으로 AI 행동 확률/스킬셋을 결정하는데,
+        #   여기(자동 밸런싱 시뮬레이터)는 이 값을 안 넘겨받으면 EnemyAI가
+        #   항상 기본값 chapter=1 킷으로만 판단해 챕터2 이상 몬스터를 실전보다
+        #   약한 AI로 측정했다 — 밸런스 튜닝 결과가 실전과 갈라지는 원인 중
+        #   하나였음.
+        self.chapter = chapter
         # 직업 패시브용 카운터
         self._player_action_count = 0   # 전사 패시브 (2번마다 회복)
 
@@ -89,7 +97,7 @@ class BattleEngine:
         # ── first_strike 처리 (암살자) ──
         if getattr(self.enemy, "first_strike", False):
             self.action_count += 1
-            action = enemy_ai(self.enemy, self.player)
+            action = enemy_ai(self.enemy, self.player, chapter=self.chapter)
             self._execute_action(action, self.enemy, self.player, "enemy")
             if self.player.hp <= 0:
                 return self._make_result("enemy")
@@ -124,17 +132,24 @@ class BattleEngine:
                     if self.enemy.hp <= 0:
                         return self._make_result("player")
                 else:
-                    action = enemy_ai(self.enemy, self.player)
+                    action = enemy_ai(self.enemy, self.player, chapter=self.chapter)
                     self._execute_action(action, self.enemy, self.player, "enemy")
                     if self.player.hp <= 0:
                         return self._make_result("enemy")
 
+            # ── 버프/디버프 1틱 소진 (실전 ai/battle_session/Enemy_Actions.py의
+            #    _single_enemy_action과 동일 규칙으로 맞춤) ──
+            #    실전은 "자기 버프/디버프는 자기 행동 시" + "플레이어 디버프는
+            #    추가로 적이 행동할 때마다도" 감소한다 — 플레이어 자신의 행동
+            #    시점에는 플레이어 디버프를 감소시키지 않는다. 예전엔 여기서
+            #    "player" in actors일 때 self.player.tick_debuffs()를 불러서
+            #    실전과 반대로(플레이어가 움직일 때 자기 디버프가 풀림) 동작했다.
             if "player" in actors:
-                self.player.tick_debuffs()
                 self.player.tick_buffs()
             if "enemy" in actors:
                 self.enemy.tick_debuffs()
                 self.enemy.tick_buffs()
+                self.player.tick_debuffs()
 
         winner = "player" if self.player.hp >= self.enemy.hp else "enemy"
         return self._make_result(winner)

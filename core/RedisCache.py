@@ -59,6 +59,19 @@ def _get_client():
     return _client
 
 
+def _reset_client() -> None:
+    """런타임 중 Redis 호출이 실패하면 클라이언트를 버리고 재연결 경로를
+    다시 타게 한다.
+    ★ 예전엔 최초 연결에 한 번 성공하면(_client is not None) 이후 redis_get/
+      redis_set이 예외를 잡아도 _client를 그대로 둬서, Redis가 재시작되거나
+      네트워크가 끊기는 등 "연결 이후"의 장애에서는 _get_client()의 재연결/
+      쿨다운 로직 자체를 다시 탈 방법이 없었다 — 워커가 죽을 때까지 DB-only로
+      저하된 채 남을 수 있었다."""
+    global _client, _last_attempt_at
+    _client = None
+    _last_attempt_at = time.monotonic()  # 쿨다운을 여기서부터 다시 시작 (재시도 폭주 방지)
+
+
 def redis_get(key: str) -> dict | None:
     client = _get_client()
     if not client:
@@ -68,6 +81,7 @@ def redis_get(key: str) -> dict | None:
         return json.loads(raw) if raw else None
     except Exception as e:
         print(f"[Redis] get 실패({key}): {e}")
+        _reset_client()
         return None
 
 
@@ -79,3 +93,4 @@ def redis_set(key: str, value: dict) -> None:
         client.set(key, json.dumps(value, ensure_ascii=False), ex=_SESSION_TTL_SECONDS)
     except Exception as e:
         print(f"[Redis] set 실패({key}): {e}")
+        _reset_client()

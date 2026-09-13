@@ -46,7 +46,7 @@ function _triggerSpriteStates(bs) {
             if (m.includes(name + ' →') || m.includes(name + ' → ')) {
                 enemyActed = true;
                 // 적이 공격하면 플레이어가 hurt (단, 회피/실드 흡수 메시지는 제외)
-                if (!m.includes('회피') && /\\d+ 데미지/.test(m)) {
+                if (!m.includes('회피') && /\d+ 데미지/.test(m)) {
                     playerHurt = true;
                 }
                 // 적 슬롯 자체는 attack 상태로
@@ -58,7 +58,7 @@ function _triggerSpriteStates(bs) {
         if (foundEnemyAction) continue;
 
         // 플레이어 스킬 사용: "XXX 사용 →" 또는 "사용!"
-        if (/[가-힣\\w]+ 사용/.test(m) && !m.includes('아이템')) {
+        if (/[가-힣\w]+ 사용/.test(m) && !m.includes('아이템')) {
             playerSkillUsed = true;
             playerActed = true;
             continue;
@@ -66,7 +66,7 @@ function _triggerSpriteStates(bs) {
 
         // 적 데미지: "└ XXX에게 ... 데미지" (AoE 후속 적) 또는 "XXX HP: NNN"
         for (const [name, slotIdx] of Object.entries(enemyNameToSlot)) {
-            if (m.includes(name + '에게') && /\\d+ 데미지/.test(m)) {
+            if (m.includes(name + '에게') && /\d+ 데미지/.test(m)) {
                 damagedEnemies.add(slotIdx);
             }
             if (m.includes(name + ' HP:') && /HP: 0/.test(m)) {
@@ -75,7 +75,7 @@ function _triggerSpriteStates(bs) {
         }
 
         // 일반 플레이어 공격 메시지 ("→ NN 데미지")
-        if (/^→ \\d+ 데미지/.test(m) || /^\\s*→ \\d+/.test(m)) {
+        if (/^→ \d+ 데미지/.test(m) || /^\s*→ \d+/.test(m)) {
             playerActed = true;
             // 현재 타깃이 데미지 받음
             if (bs.target_idx !== undefined) {

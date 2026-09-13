@@ -194,7 +194,19 @@ class PlayerPowerIndex:
 # ────────────────────────────────────────────
 
 class BattleSimulator:
-    """N회 반복 시뮬레이션 → 승률 반환"""
+    """N회 반복 시뮬레이션 → 승률 반환.
+
+    알려진 한계 — 전투 간 ATB 이월 미모델링:
+      실전(ai/Battlesession.py)은 플레이어의 atb_remainder를 전투 종료 시점의
+      잔여값 그대로 다음 전투 시작 ATB로 이월한다(고SPD 직업일수록 다음
+      전투를 유리하게 시작). 여기서는 매 시행(run() 안의 for 루프 한 번)이
+      서로 독립된 통계적 표본이라 "이전 전투"라는 개념 자체가 없고,
+      EntitySnapshot에도 atb_remainder에 대응하는 필드가 없어 이 이점을
+      표현할 방법이 없다 — 매 시행이 항상 ATB 0에서 시작한다. 의도적으로
+      보완하지 않았다: 그럴듯한 초기값(예: 평균 이월량 추정)을 넣으면 목표
+      승률 산정 자체가 바뀌므로, 이 프로젝트의 다른 밸런스 상수들과 마찬가지로
+      montecarlo.py 전체 스윕으로 재검증하기 전에는 손대지 않는 편이 안전하다.
+    """
 
     def __init__(
         self,
@@ -202,12 +214,14 @@ class BattleSimulator:
         enemy:  EntitySnapshot,
         n:      int = 500,
         player_ai_mode: str = "balanced",
+        chapter: int = 1,
     ):
         self.player_template = player
         self.enemy_template  = enemy
         self.n               = n
         self.player_ai       = PlayerAI(player_ai_mode)
         self.enemy_ai        = EnemyAI()
+        self.chapter         = chapter
 
     def run(self) -> SimulationResult:
         wins      = 0
@@ -217,7 +231,7 @@ class BattleSimulator:
         for _ in range(self.n):
             p_snap = copy.deepcopy(self.player_template)
             e_snap = copy.deepcopy(self.enemy_template)
-            engine = BattleEngine(p_snap, e_snap)
+            engine = BattleEngine(p_snap, e_snap, chapter=self.chapter)
             result = engine.run(self.player_ai, self.enemy_ai)
 
             if result.winner == "player":
@@ -261,6 +275,16 @@ class MultiBattleSimulator:
       sim = MultiBattleSimulator(player_snap, enemies, n=300)
       result = sim.run()
       print(f"승률 {result.win_rate*100:.1f}%, 평균 {result.avg_turns}턴")
+
+    ★ 미연결 상태: core/Balance_Hook.py의 자동 밸런싱 파이프라인
+      (MonsterFactory → StatTuner)은 아직 이 클래스가 아니라 1v1 전용
+      BattleSimulator만 사용한다 — 다대일(1v2/1v3)·엘리트 스폰 몬스터도
+      전부 1v1 시뮬 결과로 스탯이 튜닝된다는 뜻이다(전사 슬래시/난사 같은
+      AoE 스킬의 다대일 가치가 자동 튜닝에 전혀 반영되지 않음). 이 클래스를
+      StatTuner에 연결하는 건 "몬스터가 실제로 몇 마리를 상대하는 목표
+      승률로 튜닝되는가"를 바꾸는 밸런스 변경이라, 연결 자체보다 그 뒤에
+      montecarlo.py 전체 스윕으로 다대일/엘리트 노드 난이도를 처음부터 다시
+      맞추는 작업이 더 크다 — 그래서 지금은 클래스만 준비된 상태로 남겨둔다.
     """
 
     def __init__(
@@ -460,9 +484,10 @@ class StatTuner:
     MAX_ITER  = 20
     SIM_N     = 300
 
-    def __init__(self, player: EntitySnapshot, base_enemy: EntitySnapshot):
+    def __init__(self, player: EntitySnapshot, base_enemy: EntitySnapshot, chapter: int = 1):
         self.player     = player
         self.base_enemy = base_enemy
+        self.chapter    = chapter
 
         # 몬스터 이름 기반 목표 승률 결정
         enemy_name = getattr(base_enemy, "name", "").strip()
@@ -507,7 +532,7 @@ class StatTuner:
         for _ in range(self.MAX_ITER):
             mid   = (lo + hi) / 2
             enemy = self._scale_enemy(mid)
-            sim   = BattleSimulator(self.player, enemy, n=self.SIM_N).run()
+            sim   = BattleSimulator(self.player, enemy, n=self.SIM_N, chapter=self.chapter).run()
 
             if abs(sim.win_rate - target) <= self.TOLERANCE:
                 best_enemy = enemy
@@ -521,7 +546,7 @@ class StatTuner:
             best_enemy = enemy
 
         # 최종 검증
-        final_sim = BattleSimulator(self.player, best_enemy, n=500).run()
+        final_sim = BattleSimulator(self.player, best_enemy, n=500, chapter=self.chapter).run()
 
         # 난이도 라벨을 몬스터 스냅샷에 기록 (UI 표시용)
         # hard/normal/easy → 약/중/강과 반대 매핑 주의:
@@ -650,11 +675,12 @@ BASE_ENEMIES = _make_base_enemies()
 class MonsterFactory:
     """플레이어 상태 기반으로 강/중/약 3종 몬스터를 자동 생성."""
 
-    def __init__(self, player: EntitySnapshot, enemy_type: str = "고블린"):
+    def __init__(self, player: EntitySnapshot, enemy_type: str = "고블린", chapter: int = 1):
         self.player     = player
         self.enemy_type = enemy_type                               # ← 추가
+        self.chapter    = chapter
         self.base_enemy = _make_base_enemy(enemy_type, player.lv) # 레벨 기반 동적 생성
-        self.tuner      = StatTuner(player, self.base_enemy)
+        self.tuner      = StatTuner(player, self.base_enemy, chapter=chapter)
 
     def generate_all(self, verbose: bool = True, monitor=None) -> dict:
         """

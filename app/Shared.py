@@ -21,6 +21,7 @@ app/shared.py — 공용 상태 + 헬퍼
 from __future__ import annotations
 
 import json
+import os
 import secrets
 import threading
 import time
@@ -53,6 +54,16 @@ def _get_json_body() -> dict:
     except Exception:
         body = None
     return body if isinstance(body, dict) else {}
+
+
+def _get_str_field(data: dict, key: str, default: str = "") -> str:
+    """data[key]가 실제로 문자열일 때만 strip해서 반환, 아니면 default.
+    ★ `data.get(key, default).strip()` 패턴은 요청 JSON에 그 키가 null/숫자/
+      배열 등 비-문자열 값으로 존재하면(예: {"name": null}) dict.get()의
+      default는 "키가 아예 없을 때만" 적용되므로 그 비-문자열 값이 그대로
+      나와 .strip()에서 AttributeError(→500)로 이어졌다."""
+    val = data.get(key, default)
+    return val.strip() if isinstance(val, str) else default
 
 
 # ─────────────────────────────────────────────
@@ -129,17 +140,33 @@ def _prune_idle_sessions() -> None:
         cutoff = now - _SESSION_MAX_IDLE_SECONDS
         with _last_seen_guard:
             stale = [uid for uid, ts in _session_last_seen.items() if ts < cutoff]
-            for uid in stale:
-                _session_last_seen.pop(uid, None)
+
         for uid in stale:
-            GAME_SESSIONS.pop(uid, None)
-            # ★ _user_locks는 _get_user_lock()의 체크-후-생성 패턴이
-            #   _user_locks_guard로만 안전을 보장한다 — 여기서 그 락 없이
-            #   pop()하면, 정리 직후 같은 uid로 새 요청이 들어와 새 락 객체를
-            #   만드는 사이 "그 uid의 요청을 하나씩만 처리"라는 보장이 잠깐
-            #   깨질 수 있었다(요청 A가 옛 락을 쥔 채 아직 처리 중인데, 요청
-            #   C가 방금 지워진 항목을 보고 새 락을 만들어 A와 동시에 진행).
+            # ★ 이 uid의 락을 "지금 실제로 아무도 안 쓰고 있을 때만"(non-blocking
+            #   acquire 성공) 정리한다. 예전엔 이 확인 없이 곧장 pop()해서,
+            #   진행 중인 요청(POST, 락 보유 중)이 있는 uid의 락 항목이
+            #   지워지면 그 틈에 도착한 또 다른 요청이 _get_user_lock()에서
+            #   새 Lock()을 만들어 바로 획득해버릴 수 있었다 — "같은 uid의
+            #   요청은 한 번에 하나씩만"이라는 보장이 정확히 그 경로로 깨짐
+            #   (수련 경험치 중복 지급 등을 막으려고 이 락을 도입한 것과 같은
+            #   종류의 문제가 락 자신의 정리 과정에서 재발할 수 있었던 것).
+            #   락을 못 잡으면(사용 중) 이번 주기는 건너뛴다 — 처리가 끝나면
+            #   다음 5분 주기에 다시 시도되고, 그 사이 실제로 활동했다면
+            #   아래 last_seen 재확인에서 애초에 걸러진다.
             with _user_locks_guard:
+                lock = _user_locks.get(uid)
+                if lock is not None:
+                    if not lock.acquire(blocking=False):
+                        continue
+                    lock.release()
+                with _last_seen_guard:
+                    # GET 요청은 락을 안 잡으므로 위 확인만으론 "그 사이 다시
+                    #   조회했는지"를 못 잡는다 — last_seen을 한 번 더 확인.
+                    ts = _session_last_seen.get(uid)
+                    if ts is not None and ts >= cutoff:
+                        continue
+                    _session_last_seen.pop(uid, None)
+                GAME_SESSIONS.pop(uid, None)
                 _user_locks.pop(uid, None)
     finally:
         _prune_guard.release()
@@ -191,7 +218,10 @@ def _gs_from_snapshot(uid: str, snap: dict) -> Optional[dict]:
     player = Player.from_dict(snap["player"])
     inv = Inventory.from_dict(snap.get("inventory") or {})
     items = inv.to_flat_list()
-    hook = BalanceHook(player, items, show_graph=False, verbose=False)
+    # ★ auto_prewarm=False — 이건 새 게임이 아니라 기존 세션 복구(워커
+    #   재시작/유휴 세션 방출/Redis 히트마다 여기로 옴)라, 매번 고블린/박쥐
+    #   시뮬 job을 다시 큐에 넣을 필요가 없다.
+    hook = BalanceHook(player, items, show_graph=False, verbose=False, auto_prewarm=False)
 
     try:
         db_user_id = int(uid)
@@ -250,6 +280,7 @@ def _load_session_from_db(uid: str) -> Optional[dict]:
                 "pending_node_id":  row.pending_node_id,
                 "battle_node_type": row.battle_node_type,
                 "battle_map_layer": row.battle_map_layer,
+                "rest_used_node_id": row.rest_used_node_id,
             }
     except Exception as e:
         log_error("session_db_recovery", e)
@@ -285,6 +316,7 @@ def _persist_session(uid: str, gs: dict) -> None:
         row.pending_node_id   = snap["pending_node_id"]
         row.battle_node_type  = snap["battle_node_type"]
         row.battle_map_layer  = snap["battle_map_layer"]
+        row.rest_used_node_id = snap["rest_used_node_id"]
 
     try:
         from DB import get_session as db_session
@@ -476,11 +508,59 @@ def _player_dict(player, inv) -> dict:
 # DB 저장 헬퍼
 # ─────────────────────────────────────────────
 
-def _save_rl_log(gs: dict, battle) -> None:
+# RL 로그 레코드 포맷 자체가 바뀔 때(필드 추가/제거/의미 변경) 올려서, 나중에
+# 이 데이터로 학습할 때 어느 버전 이후 로그만 쓸지 걸러낼 수 있게 한다.
+_RL_LOG_SCHEMA_VERSION = 2  # v2: run_id/battle_id/schema_version/code_revision 추가
+
+_code_revision_cache: Optional[str] = None
+
+
+def _code_revision() -> str:
+    """현재 배포된 코드의 짧은 git 커밋 해시(가능하면) — best-effort, 실패하면
+    'unknown'.
+    ★ 밸런스 상수(GRADE_MULT, STAT_SCALE 등)가 수동 버전 문자열 없이 자주
+      바뀌는 프로젝트라, 사람이 매번 올려야 하는 "balance_version" 문자열은
+      깜빡하고 안 올리면 오히려 거짓 정보가 된다 — 커밋 해시는 커밋할 때마다
+      자동으로 바뀌므로 유지보수 없이도 "이 로그가 정확히 어느 코드 시점에
+      만들어졌는지"를 정확하게 알려준다. 프로세스 생애 동안 1회만 계산해 캐싱
+      (매 전투마다 서브프로세스를 새로 띄우면 낭비)."""
+    global _code_revision_cache
+    if _code_revision_cache is not None:
+        return _code_revision_cache
+    try:
+        import subprocess
+        rev = subprocess.run(
+            ["git", "rev-parse", "--short", "HEAD"],
+            capture_output=True, text=True, timeout=2,
+            cwd=os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
+        ).stdout.strip()
+        _code_revision_cache = rev or "unknown"
+    except Exception:
+        _code_revision_cache = "unknown"
+    return _code_revision_cache
+
+
+def _save_rl_log(gs: dict, battle, run_id: Optional[int] = None,
+                  battle_id: Optional[int] = None) -> None:
     """(state, action, result) 행동 로그를 BattleLog 테이블에 저장.
     ※ 예전엔 data/RL_LOG/user_{id}/*.json 로컬 파일이었음 — 호스팅 디스크가
       ephemeral이면 재배포마다 학습 데이터가 사라질 수 있어 DB로 이전.
-      실패해도 게임은 계속 진행."""
+      실패해도 게임은 계속 진행.
+
+    run_id/battle_id: 있으면 함께 저장해 user_id와 함께 3중 식별자로 이
+      로그가 어느 유저의 어느 런의 어느 전투에서 나왔는지 재구성 가능하게
+      한다(게스트는 run_id는 있어도 db_user_id/battle_id가 없을 수 있음 —
+      _save_battle_to_db에서 db_user_id가 없으면 Battle 자체를 안 만들므로
+      battle_id는 항상 None).
+
+    ※ RNG seed는 의도적으로 기록하지 않는다 — 이 프로세스 전체가 모듈 전역
+      random(단일 공유 상태)을 스레드 세이프 처리 없이 쓰기 때문에(gunicorn
+      --threads 8), 전투 시작 시점의 random.getstate()를 찍어도 그 사이 다른
+      스레드의 동시 전투가 같은 전역 상태에서 난수를 소모하면 "이 상태에서
+      재현 가능하다"는 보장 자체가 성립하지 않는다 — 잘못된 재현성을
+      약속하느니 아예 기록하지 않는 편이 정직하다. 진짜 재현성이 필요해지면
+      먼저 전투별로 독립된 random.Random() 인스턴스를 쓰도록(현재 모든 전투
+      계산 코드가 공유하는) 리팩터링이 선행돼야 한다."""
     rl_log = getattr(battle, "rl_log", None)
     if not rl_log:
         return
@@ -493,15 +573,19 @@ def _save_rl_log(gs: dict, battle) -> None:
         meta = dict(getattr(battle, "battle_meta", {}) or {})
         meta.update({
             # 최소 메타 필드 (개인정보 없음 — email/nickname 저장 금지, uid는 익명 숫자)
-            "job":         getattr(player, "job", "") if player else "",
-            "level":       getattr(player, "lv", 0) if player else 0,
-            "enemy_count": len(getattr(battle, "enemies", [])),
-            "enemies":     [e.name for e in getattr(battle, "enemies", [])],
+            "job":            getattr(player, "job", "") if player else "",
+            "level":          getattr(player, "lv", 0) if player else 0,
+            "enemy_count":    len(getattr(battle, "enemies", [])),
+            "enemies":        [e.name for e in getattr(battle, "enemies", [])],
+            "schema_version": _RL_LOG_SCHEMA_VERSION,
+            "code_revision":  _code_revision(),
         })
 
         with db_session() as db:
             db.add(BattleLog(
                 user_id=db_user_id,
+                run_id=run_id,
+                battle_id=battle_id,
                 meta_json=json.dumps(meta, ensure_ascii=False),
                 records_json=json.dumps(rl_log, ensure_ascii=False),
             ))
@@ -514,60 +598,71 @@ def _save_rl_log(gs: dict, battle) -> None:
 def _save_battle_to_db(gs: dict, battle, result: dict, winner: str) -> None:
     """
     전투 결과를 DB에 저장. 실패해도 게임은 계속 진행.
+
+    ★ Battle 요약 행을 먼저 저장해 그 id를 확보한 뒤 RL 로그에 battle_id로
+      실어 보낸다 — 순서를 반대로 하면(예전처럼 RL 로그 먼저) 그 시점엔
+      Battle.id가 아직 존재하지 않아 연결할 방법이 없다.
     """
     from DB import get_session as db_session
     from DB.Models import Battle
 
-    # ── RL 행동 로그는 DB 유저가 없어도(게스트) 항상 저장 ──
-    _save_rl_log(gs, battle)
-
     db_user_id = gs.get("db_user_id")
-    if not db_user_id:
+    run_id     = gs.get("run_id")
+    battle_id  = None
+
+    if db_user_id:
+        player = gs["player"]
+
+        enemies_payload = []
+        for e in getattr(battle, "enemies", []):
+            diff  = getattr(e, "difficulty", None) or getattr(e, "_difficulty", None)
+            label = e.name
+            if diff:
+                diff_map = {"hard": "상", "normal": "중", "easy": "하"}
+                label = f"{e.name}({diff_map.get(diff, diff)})"
+            enemies_payload.append({
+                "name":       e.name,
+                "lv":         getattr(e, "lv", 1),
+                "difficulty": diff,
+                "label":      label,
+            })
+
+        db_result = (
+            "win"    if winner == "player"
+            else "lose"   if winner == "enemy"
+            else "escape"
+        )
+
+        try:
+            with db_session() as db:
+                new_battle = Battle(
+                    user_id      = db_user_id,
+                    # ★ gs["turn"]은 초기화 후 어디서도 증가하지 않는 필드라
+                    #   "몇 번째 탐험에서"를 항상 0으로 만들었다 — 실제로
+                    #   증가하는 탐험 카운터는 map_turn(app/Map.py의
+                    #   choose_node에서 매 노드 선택마다 +1).
+                    explore_turn = gs.get("map_turn", 0),
+                    enemies      = json.dumps(enemies_payload, ensure_ascii=False),
+                    is_boss      = bool(getattr(battle, "is_boss", False)),
+                    is_multi     = len(getattr(battle, "enemies", [])) > 1,
+                    result       = db_result,
+                    turns        = result.get("turn", battle.turn),
+                    player_job   = player.job,
+                    player_lv    = player.lv,
+                    hp_remaining = float(result.get("player_hp", player.hp)),
+                    exp_gained   = int(result.get("exp_gained", 0)),
+                    skills_used  = getattr(battle, "skills_used", 0),
+                    items_used   = getattr(battle, "items_used", 0),
+                )
+                db.add(new_battle)
+                db.flush()
+                battle_id = new_battle.id
+                print(f"[DB] Battle saved: id={new_battle.id}, user={db_user_id}, "
+                      f"result={db_result}, turns={new_battle.turns}")
+        except Exception as e:
+            log_error("battle_save_db", e)
+    else:
         print("[DB] Battle save skipped: no db_user_id in session")
-        return
 
-    player = gs["player"]
-
-    enemies_payload = []
-    for e in getattr(battle, "enemies", []):
-        diff  = getattr(e, "difficulty", None) or getattr(e, "_difficulty", None)
-        label = e.name
-        if diff:
-            diff_map = {"hard": "상", "normal": "중", "easy": "하"}
-            label = f"{e.name}({diff_map.get(diff, diff)})"
-        enemies_payload.append({
-            "name":       e.name,
-            "lv":         getattr(e, "lv", 1),
-            "difficulty": diff,
-            "label":      label,
-        })
-
-    db_result = (
-        "win"    if winner == "player"
-        else "lose"   if winner == "enemy"
-        else "escape"
-    )
-
-    try:
-        with db_session() as db:
-            new_battle = Battle(
-                user_id      = db_user_id,
-                explore_turn = gs.get("turn", 0),
-                enemies      = json.dumps(enemies_payload, ensure_ascii=False),
-                is_boss      = bool(getattr(battle, "is_boss", False)),
-                is_multi     = len(getattr(battle, "enemies", [])) > 1,
-                result       = db_result,
-                turns        = result.get("turn", battle.turn),
-                player_job   = player.job,
-                player_lv    = player.lv,
-                hp_remaining = float(result.get("player_hp", player.hp)),
-                exp_gained   = int(result.get("exp_gained", 0)),
-                skills_used  = getattr(battle, "skills_used", 0),
-                items_used   = getattr(battle, "items_used", 0),
-            )
-            db.add(new_battle)
-            db.flush()
-            print(f"[DB] Battle saved: id={new_battle.id}, user={db_user_id}, "
-                  f"result={db_result}, turns={new_battle.turns}")
-    except Exception as e:
-        log_error("battle_save_db", e)
+    # ── RL 행동 로그는 DB 유저가 없어도(게스트) 항상 저장 ──
+    _save_rl_log(gs, battle, run_id=run_id, battle_id=battle_id)

@@ -47,8 +47,15 @@ class _BoundedDaemonPool:
       전제로 하고 있었다(_start_background_sim() 참고) — 그 성질을 그대로
       유지하기 위해 직접 만든다."""
 
+    # ★ 큐 자체에 상한을 둔다 — 이게 없으면 (인증/레이트리밋이 없는 앱이라)
+    #   /api/new_game을 스크립트로 반복 호출하는 것만으로 매번 몬스터 2종
+    #   시뮬 job이 무제한으로 쌓일 수 있었다(워커 4개는 그대로라 실행 자체는
+    #   막혀도 대기열 메모리가 계속 자람). 정상적인 다수 유저 트래픽에서
+    #   동시에 쌓일 수 있는 양보다 넉넉히 크게 잡아, 진짜 폭주일 때만 거절한다.
+    MAX_QUEUE_SIZE = 64
+
     def __init__(self, max_workers: int):
-        self._queue: "queue.Queue" = queue.Queue()
+        self._queue: "queue.Queue" = queue.Queue(maxsize=self.MAX_QUEUE_SIZE)
         for i in range(max_workers):
             t = threading.Thread(
                 target=self._worker_loop, daemon=True,
@@ -64,8 +71,16 @@ class _BoundedDaemonPool:
             except Exception:
                 pass   # 제출되는 콜러블(_run) 자신이 이미 예외를 처리한다
 
-    def submit(self, fn) -> None:
-        self._queue.put(fn)
+    def submit(self, fn) -> bool:
+        """큐가 가득 차 있으면 제출하지 않고 False를 반환한다(폴백 스탯으로
+        대체됨 — BalanceHook._start_background_sim 참고). 절대 블로킹하지
+        않는다: 요청 스레드가 큐 공간이 빌 때까지 기다리게 만들면 자원고갈
+        방어라는 원래 목적과 반대로 요청을 오래 붙잡게 된다."""
+        try:
+            self._queue.put_nowait(fn)
+            return True
+        except queue.Full:
+            return False
 
 
 # ★ 프로세스 전체에서 몬스터 밸런스 시뮬레이션에 쓰는 스레드 풀.
@@ -222,7 +237,7 @@ class BalanceHook:
             _snap.element_queue = list(_init_q)
         return _snap
 
-    def __init__(self, player, item_list, show_graph=False, verbose=True):
+    def __init__(self, player, item_list, show_graph=False, verbose=True, auto_prewarm=True):
         self.player     = player
         self.item_list  = item_list
         self.show_graph = show_graph
@@ -233,13 +248,18 @@ class BalanceHook:
         self._viz = Visualizer(save_dir=os.path.join(ROOT_DIR, "graphs")) if show_graph else None
         self._monitor_opened = False  # 모니터 창 열렸는지 여부
 
-        # 캐시: {enemy_type: {"hard": (snap, sim), ...}}
+        # 캐시: {(enemy_type, chapter): {"hard": (snap, sim), ...}}
+        # ★ 챕터를 키에 포함한다 — 몬스터 AI 킷(ai/battle/MonsterKit.py)이
+        #   챕터별로 달라서, 같은 enemy_type이라도 챕터1에서 튜닝된 스탯을
+        #   챕터2 조우에 그대로 재사용하면 그 챕터의 실제 AI 강도로 다시
+        #   맞춘 게 아니게 된다 — 챕터가 바뀌면 그냥 새 캐시 항목으로 취급해
+        #   자연스럽게 재시뮬되게 한다(별도 무효화 로직 불필요).
         self._monster_cache = {}
         self._cache_lock    = threading.Lock()
 
-        # 백그라운드 시뮬 작업 추적
-        self._sim_threads = {}   # {enemy_type: True} — _SIM_EXECUTOR에 제출됐음을 표시(멤버십 전용)
-        self._sim_ready   = {}   # {enemy_type: threading.Event}
+        # 백그라운드 시뮬 작업 추적 — 위와 동일하게 (enemy_type, chapter) 키
+        self._sim_threads = {}   # {(enemy_type, chapter): True} — _SIM_EXECUTOR에 제출됐음을 표시(멤버십 전용)
+        self._sim_ready   = {}   # {(enemy_type, chapter): threading.Event}
 
         # ★ 레벨업(on_level_up)은 _sim_threads/_sim_ready를 비우고 새로 시작만
         #   할 뿐, 이미 돌고 있던 이전 스레드는 취소/join하지 않는다(파이썬
@@ -255,8 +275,17 @@ class BalanceHook:
         self._last_lv         = player.lv
 
         # 게임 시작 시 기본 몬스터 2종 미리 백그라운드 시뮬 시작
-        self._start_background_sim("고블린")
-        self._start_background_sim("박쥐")
+        # ★ auto_prewarm=False는 세션 복구(app/Shared.py의 _gs_from_snapshot,
+        #   워커 재시작/유휴 세션 방출/Redis 히트 시마다 새 BalanceHook을
+        #   만듦)에서 쓴다 — 이미 한참 진행 중인 게임을 다시 불러오는 것뿐인데
+        #   매번 고블린/박쥐 시뮬 job 2개를 다시 큐에 넣을 이유가 없다(그
+        #   시점에 플레이어가 실제로 마주칠 몬스터는 get_enemy() 호출 시점에
+        #   그때그때 정상적으로 시작됨 — 그때까지는 _make_fallback()이
+        #   대신한다). 반면 새 게임(app/Game.py의 new_game())은 이 프리웜이
+        #   초반 조우를 앞당겨 대비해주므로 그대로 켜둔다.
+        if auto_prewarm:
+            self._start_background_sim("고블린")
+            self._start_background_sim("박쥐")
 
     # ── 모니터 출력 헬퍼 ─────────────────────
 
@@ -270,13 +299,14 @@ class BalanceHook:
 
     # ── 백그라운드 시뮬레이션 ────────────────
 
-    def _start_background_sim(self, enemy_type: str):
+    def _start_background_sim(self, enemy_type: str, chapter: int = 1):
         """백그라운드 스레드에서 시뮬레이션 시작"""
-        if enemy_type in self._sim_threads:
+        key = (enemy_type, chapter)
+        if key in self._sim_threads:
             return  # 이미 실행 중
 
         event = threading.Event()
-        self._sim_ready[enemy_type] = event
+        self._sim_ready[key] = event
         gen = self._sim_generation   # 이 스레드가 속한 "세대" — 완료 시점에 비교
 
         def _run():
@@ -287,7 +317,7 @@ class BalanceHook:
                 #   초과분은 스레드가 아니라 풀의 내부 큐에 가벼운 콜러블로
                 #   쌓인다.
                 p_snap  = _player_to_snap(self.player, self.item_list)
-                factory = MonsterFactory(p_snap, enemy_type)
+                factory = MonsterFactory(p_snap, enemy_type, chapter=chapter)
 
                 # 모니터 창: 딱 한 번만 열기
                 with self._cache_lock:
@@ -306,7 +336,7 @@ class BalanceHook:
                     #   뒤일 수 있음) 지금 와서 옛 레벨 기준 결과로 캐시를
                     #   덮어쓰지 않는다 — 조용히 버림.
                     if gen == self._sim_generation:
-                        self._monster_cache[enemy_type] = monsters
+                        self._monster_cache[key] = monsters
                         self._last_lv = self.player.lv
 
                 # 그래프 저장 (옵션)
@@ -328,53 +358,67 @@ class BalanceHook:
                 event.set()  # 완료 신호
                 # 마지막 스레드가 완료되면 모니터에 DONE 신호
                 all_done = all(
-                    self._sim_ready.get(et, threading.Event()).is_set()
-                    for et in self._sim_threads
+                    self._sim_ready.get(k, threading.Event()).is_set()
+                    for k in self._sim_threads
                 )
                 if all_done:
                     self._monitor_done()
 
-        # _sim_threads는 "이 enemy_type 작업이 이미 제출/진행 중인지"만
-        # 표시하는 멤버십 집합으로 쓰인다(Thread/Future 객체 자체를 다시
-        # join/취소하는 곳이 코드 어디에도 없다) — 그래서 값은 True만으로 충분.
-        _SIM_EXECUTOR.submit(_run)
-        self._sim_threads[enemy_type] = True
+        # _sim_threads는 "이 (enemy_type, chapter) 작업이 이미 제출/진행
+        # 중인지"만 표시하는 멤버십 집합으로 쓰인다(Thread/Future 객체 자체를
+        # 다시 join/취소하는 곳이 코드 어디에도 없다) — 그래서 값은 True만으로
+        # 충분.
+        submitted = _SIM_EXECUTOR.submit(_run)
+        if submitted:
+            self._sim_threads[key] = True
+        else:
+            # ★ 큐 포화(비정상적으로 많은 동시 요청) — _run이 아예 실행되지
+            #   않으므로 event.set()도 안 일어난다. sim_threads/sim_ready에
+            #   미완료 상태로 흔적을 남기면 다음 get_enemy() 호출이 영원히
+            #   "이미 진행 중"으로 착각해 재시도를 안 하게 되므로 정리해서
+            #   다음 요청이 다시 제출을 시도할 수 있게 한다. 그 사이엔
+            #   _get_cached_monsters()가 _make_fallback()으로 정상 진행.
+            self._sim_ready.pop(key, None)
+            if self.verbose:
+                print(f"  [AI] {enemy_type} 시뮬 제출 실패 — 큐 포화, 폴백 스탯 사용")
 
-    def _get_cached_monsters(self, enemy_type: str):
+    def _get_cached_monsters(self, enemy_type: str, chapter: int = 1):
         """
         캐시에서 몬스터 데이터 반환.
         시뮬 완료 전이면 잠깐 기다리거나 폴백 사용.
         """
+        key = (enemy_type, chapter)
         with self._cache_lock:
-            if enemy_type in self._monster_cache:
-                return self._monster_cache[enemy_type]
+            if key in self._monster_cache:
+                return self._monster_cache[key]
 
         # 시뮬레이션이 실행 중이면 최대 2초 대기
-        event = self._sim_ready.get(enemy_type)
+        event = self._sim_ready.get(key)
         if event:
             ready = event.wait(timeout=2.0)
             if ready:
                 with self._cache_lock:
-                    if enemy_type in self._monster_cache:
-                        return self._monster_cache[enemy_type]
+                    if key in self._monster_cache:
+                        return self._monster_cache[key]
 
         # 여전히 없으면 폴백 (기본 스탯)
         return None
 
     # ── 1. 전투 전: 몬스터 생성 ──────────────
 
-    def get_enemy(self, enemy_type: str = "고블린", difficulty: str = None) -> EntitySnapshot:
+    def get_enemy(self, enemy_type: str = "고블린", difficulty: str = None,
+                  chapter: int = 1) -> EntitySnapshot:
         """AI 밸런싱된 몬스터 반환. 시뮬 미완료 시 기본 스탯 사용."""
 
         # 레벨업 감지 → 캐시 무효화 + 재시뮬
         if self.player.lv != self._last_lv:
             self.on_level_up()
 
-        # 시뮬이 아직 안 시작됐으면 시작
-        if enemy_type not in self._sim_threads:
-            self._start_background_sim(enemy_type)
+        # 시뮬이 아직 안 시작됐으면 시작 (챕터별로 별도 캐시/작업)
+        if (enemy_type, chapter) not in self._sim_threads:
+            self._start_background_sim(enemy_type, chapter)
 
-        monsters = self._get_cached_monsters(enemy_type)
+        monsters = self._get_cached_monsters(enemy_type, chapter)
 
         if monsters is None:
             # 폴백: Enemy_Class 기준 동적 생성 (수치 출처 단일화)
@@ -387,7 +431,7 @@ class BalanceHook:
         enemy_snap, sim_result = monsters[difficulty]
 
         # AI 시뮬 로그 저장
-        self._cache_sim_log(enemy_snap, sim_result, difficulty)
+        self._cache_sim_log(enemy_snap, sim_result, difficulty, chapter)
 
         return enemy_snap
 
@@ -398,10 +442,10 @@ class BalanceHook:
             pool.extend([diff] * weight)
         return random.choice(pool)
 
-    def _cache_sim_log(self, enemy_snap, sim_result, difficulty):
+    def _cache_sim_log(self, enemy_snap, sim_result, difficulty, chapter: int = 1):
         """AI 최적 전투 시뮬 1회 → 로그 저장 (복기 비교용)"""
         p_snap = _player_to_snap(self.player, self.item_list)
-        engine = BattleEngine(p_snap, enemy_snap)
+        engine = BattleEngine(p_snap, enemy_snap, chapter=chapter)
         result = engine.run(PlayerAI("balanced"), EnemyAI())
         self._last_sim_result = result
 
@@ -529,6 +573,10 @@ class _SnapUnit:
         self.init_element_queue  = list(getattr(snap, 'element_queue', None)
                                         or getattr(snap, 'init_element_queue', []) or [])
 
-    def exp_reward(self, player_maxexp: int) -> int:
-        ratio = {"상": 0.45, "중": 0.34, "하": 0.28}.get(self.grade, 0.34)
-        return int(player_maxexp * ratio)
+    # ★ exp_reward()를 의도적으로 정의하지 않는다 — self.grade는 항상 위
+    #   getattr 기본값 '중'으로 채워지는데(EntitySnapshot에 grade 필드 자체가
+    #   없음), 이전에 여기 있던 구현은 그 고정된 '중'만으로 경험치를 계산해
+    #   실제 난이도(하/중/상)와 무관하게 항상 같은 비율을 반환했다. 이 메서드가
+    #   없으면 app/Battle.py의 _enemy_exp()가 다음 우선순위인 self.difficulty
+    #   (StatTuner.tune()이 실측 기준으로 채우는 hard/normal/easy)로 정확하게
+    #   폴백한다 — 그쪽이 이미 올바르게 동작하고 있었다.

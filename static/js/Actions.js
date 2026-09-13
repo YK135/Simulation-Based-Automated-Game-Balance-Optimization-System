@@ -41,7 +41,7 @@ async function loadStatus() {
 
     // 맵이 있으면 맵 모드, 없으면 맵 생성
     if (typeof setMapMode === 'function') {
-        const ms = await api('/map/state', null, 'GET');
+        const ms = await api('/map/state');
         if (ms.ok && ms.map) {
             if (typeof refreshMap === 'function') refreshMap(ms.map);
             setMapMode();
@@ -126,13 +126,23 @@ async function battleAction(action) {
         if (!Array.isArray(state.battleMessages)) state.battleMessages = [];
         state.battleMessages.push(...messages);
         const bsForRefresh = { ...r, messages: [] };
-        refreshBattle(bsForRefresh);
+        // ★ deferDeathAnim: true — 이 시점에 HP/ATB/버튼 등은 최신 상태로
+        //   반영하되, 방금 죽은 캐릭터의 스프라이트만큼은 아직 'dead'로
+        //   바꾸지 않는다. 즉시 바꿔버리면 아래 playBattleSequence가 재생하는
+        //   공격→피격→사망 연출이 시작되기도 전에 이미 죽은 포즈로 굳어서,
+        //   그 연출 전체가 화면에 아무 효과 없이 허비됐다(CharSprite.js의
+        //   "이미 dead면 재적용 스킵" 가드 때문에 시퀀서의 setDeadState
+        //   호출도 무시됨).
+        refreshBattle(bsForRefresh, { deferDeathAnim: true });
         showEnemyTurn(r.acting_enemy_idx);
 
         if (typeof playBattleSequence === 'function') {
             await playBattleSequence(action, { ...r, messages });
         } else {
+            // 시퀀서가 없으면 위에서 미룬 사망 스프라이트를 아무도 안 걸어주므로
+            // 여기서 최종 상태로 한 번 더 그려 보정한다.
             messages.forEach(m => logLine(m));
+            refreshBattle(r);
         }
 
         // ★ 승리로 전투가 끝나는 순간엔 여유를 더 준다 — playBattleSequence가

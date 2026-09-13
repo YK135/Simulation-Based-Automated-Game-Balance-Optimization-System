@@ -210,3 +210,22 @@
 .battle-stage.is-boss > .battle-slot:nth-child(5) {
     display: none;
 }
+
+/* ── 낮은 뷰포트(1366×768 등 흔한 노트북 해상도) 대응 ──
+   지금까지 이 파일/Layout.css/Map.css의 반응형 규칙은 전부 폭(max-width)
+   기준이었다 — .battle-zone min-height(440px) + gap(12px) +
+   BATTLE LOG 고정 높이(280px) ≈ 732px가 필요한데, 세로가 낮은 화면은
+   상단바/패딩을 빼면 가용 높이가 이보다 작아 .center-col(Layout.css,
+   overflow-y:auto)이 스크롤로 빠져버렸다 — "화면 크기에 맞게 늘어난다"는
+   설계 의도가 흔한 노트북 해상도에서는 스크롤로 대체된 것. 이 하한선들만
+   낮춰서 좁은 세로 공간에서도 스크롤 없이 들어가게 한다(모든 전투 타입이
+   여전히 같은 값을 공유하므로 타입 간 통일성은 그대로 유지됨). */
+@media (max-height: 800px) {
+    :root {
+        --battle-stage-h: 300px;
+        --battle-slot-h:  252px;
+    }
+    .battle-zone {
+        min-height: 360px;
+    }
+}

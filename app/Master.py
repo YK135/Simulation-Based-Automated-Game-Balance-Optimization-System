@@ -127,7 +127,7 @@ def master_battle_monster():
         return jsonify({"ok": False, "error": "grade는 하/중/상 중 하나여야 합니다."}), 400
 
     hook  = gs["hook"]
-    snap  = hook.get_enemy(monster_type, difficulty=_GRADE_TO_KEY[grade])
+    snap  = hook.get_enemy(monster_type, difficulty=_GRADE_TO_KEY[grade], chapter=gs.get("chapter", 1))
     enemy = hook.make_battle_unit(snap)
 
     gs["battle_node_type"] = "battle"

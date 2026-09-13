@@ -135,7 +135,7 @@ function refreshBattleBackground(bs) {
     //   BattleCombatant.css의 .is-boss). 배경 클래스와 별개로 매번 갱신.
     stage.classList.toggle('is-boss', !!bs.is_boss);
 
-    const layer = bs.current_layer || bs.map_layer || 0;
+    const layer = bs.current_layer || 0;
     const turn = state.exploreTurn || layer || 0;
     const chapter = bs.chapter || (turn >= 30 ? 2 : 1);
     if (bs.is_boss) {

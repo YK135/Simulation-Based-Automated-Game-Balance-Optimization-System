@@ -14,6 +14,7 @@ from DB.Queries import (
     get_score_ranking,
     get_pioneer_ranking,
     get_user_rank_position,
+    _all_active_user_scores,
 )
 
 from .Shared import _get_db_user_id
@@ -32,11 +33,16 @@ def ranking():
 
     try:
         with db_session() as db:
-            rankings = get_score_ranking(db, limit=limit)
+            # ★ 전체 유저 점수 계산을 이 요청 안에서 한 번만 수행 — 예전엔
+            #   get_score_ranking()과 get_user_rank_position()이 각자 따로
+            #   전체 유저를 순회하며 매번 Battle을 다시 조회해서, 요청 1건이
+            #   사실상 이 계산을 두 번 반복했다.
+            all_scores = _all_active_user_scores(db)
+            rankings = get_score_ranking(db, limit=limit, _all_scores=all_scores)
             my_rank  = None
             db_user_id = _get_db_user_id()
             if db_user_id:
-                my_rank = get_user_rank_position(db, db_user_id)
+                my_rank = get_user_rank_position(db, db_user_id, _all_scores=all_scores)
 
         return jsonify({
             "ok":       True,

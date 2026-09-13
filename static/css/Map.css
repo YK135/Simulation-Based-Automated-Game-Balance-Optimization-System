@@ -26,6 +26,13 @@
     margin-top: -10px;               /* LIVE BATTLE 아래 빈 간격 축소 — 블록만 위로 (battle-header 무수정) */
 }
 
+/* ── 낮은 뷰포트(1366×768 등) 대응 — battle/BattleStage.css 상단 주석 참고 */
+@media (max-height: 800px) {
+    #map-mode {
+        min-height: 260px;
+    }
+}
+
 /* vignette는 #map-mode::after로 이동 (스크롤과 무관하게 고정 — 상단만 어두워지던 버그 해결) */
 #map-mode::after {
     content: "";

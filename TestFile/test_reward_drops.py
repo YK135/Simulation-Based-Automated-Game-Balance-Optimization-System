@@ -35,6 +35,12 @@ class E:
 
 
 def main():
+    # 일부 체크가 수천 회 표본의 min/max가 이론적 극단값과 정확히 일치하는지
+    # 확인한다 — 표본이 커서 실제 flake 확률은 낮지만 시드 없이는 이론상
+    # 간헐적 실패가 가능했다(test_job_passives.py와 동일한 이유로 고정).
+    import random
+    random.seed(20260703)
+
     print("=" * 52)
     print(" 전투 보상 시스템 검증 (골드 + 아이템 드랍)")
     print("=" * 52)

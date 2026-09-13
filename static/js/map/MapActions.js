@@ -119,7 +119,7 @@ async function _completeNode(nodeId) {
 
 async function _reloadMapState() {
     try {
-        const r = await api("/map/state", null, "GET");
+        const r = await api("/map/state");
         if (r.ok && r.map) refreshMap(r.map);
     } catch (e) {
         console.error("[_reloadMapState]", e);

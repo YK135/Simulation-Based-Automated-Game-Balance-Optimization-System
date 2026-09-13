@@ -164,13 +164,12 @@ body {
    중앙 컬럼 — 메인 + 배틀 로그
    ═══════════════════════════════════════════════════════════ */
 
-/* 중앙의 첫 패널 (메인 게임 영역) */
-.center-col > .panel:first-child,
-.center-col > .panel:not(:last-child) {
-    flex: 1;
-    min-height: 0;
-    overflow-y: auto;
-}
+/* ★ 예전엔 여기 ".center-col > .panel:first-child, .center-col > .panel:
+   not(:last-child) { flex:1; ... }" 규칙이 있었는데, .center-col의 첫
+   자식은 .battle-zone(.panel 클래스 없음, battle/BattleStage.css가 크기를
+   따로 관리)이고 .center-col 안의 .panel은 아래 마지막 자식(배틀 로그)
+   하나뿐이라 이 셀렉터는 실제로 아무 것도 매치하지 않는 죽은 규칙이었다
+   — 실제 배틀존 크기는 battle/BattleStage.css/Map.css가 담당. */
 
 /* 중앙의 마지막 패널 (배틀 로그) — 고정 높이 */
 .center-col > .panel:last-child {
@@ -215,6 +214,15 @@ body {
     .dashboard {
         grid-template-columns: 240px 1fr 280px;
         gap: 8px;
+    }
+}
+
+/* ── 낮은 뷰포트(1366×768 등) 대응 — battle/BattleStage.css 상단 주석 참고.
+   지금까지 여기 있던 반응형 규칙은 전부 폭 기준이라, 폭은 넉넉하지만
+   세로만 짧은 흔한 노트북 화면에는 전혀 적용되지 않았다. */
+@media (max-height: 800px) {
+    .center-col > .panel:last-child {
+        height: 220px;
     }
 }
 

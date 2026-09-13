@@ -243,6 +243,10 @@ class PlayerState(Base):
     pending_node_id  = Column(String(16), nullable=True)
     battle_node_type = Column(String(16), nullable=True)
     battle_map_layer = Column(Integer, nullable=True)
+    # 이미 보상을 받은 휴식 노드 id — Redis에만 있고 이 컬럼이 없던 동안은
+    # Redis가 유실된 채(미설정 로컬 개발 포함) 워커 재시작/유휴 세션 방출이
+    # 겹치면 같은 휴식 노드에서 "수련" 보상을 다시 받을 수 있었다.
+    rest_used_node_id = Column(String(16), nullable=True)
 
     def __repr__(self):
         return f"<PlayerState user={self.user_id} updated={self.updated_at}>"
@@ -262,12 +266,21 @@ class BattleLog(Base):
     user_id      = Column(Integer, ForeignKey("users.id"), nullable=True)
     created_at   = Column(DateTime, default=datetime.utcnow, nullable=False)
 
-    meta_json    = Column(Text, nullable=False)   # job/level/enemies/chapter 등
+    # FK 아님 — ErrorLog.user_id와 같은 이유로 느슨하게: 게스트/삭제된 런도
+    # 로그 자체는 남아야 하므로 참조 무결성으로 묶지 않는다. user_id·run_id·
+    # id(이 전투의 battle_id) 세 값으로 어느 유저의 어느 런의 어느 전투인지
+    # 수동 조인 가능 — 예전엔 run_id/battle_id가 아예 없어서 게스트는 물론
+    # 로그인 유저도 이 셋을 신뢰성 있게 엮을 방법이 없었다.
+    run_id       = Column(Integer, nullable=True)
+    battle_id    = Column(Integer, nullable=True)
+
+    meta_json    = Column(Text, nullable=False)   # job/level/enemies/chapter/schema_version/code_revision 등
     records_json = Column(Text, nullable=False)   # (state, action, result) 레코드 리스트
 
     __table_args__ = (
         Index("ix_battle_logs_user_id", "user_id"),
         Index("ix_battle_logs_created_at", "created_at"),
+        Index("ix_battle_logs_run_id", "run_id"),
     )
 
     def __repr__(self):

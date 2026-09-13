@@ -33,7 +33,8 @@ function updateShieldBar(rowId, fillId, textId, shield, maxhp) {
     if (text) text.textContent = Math.round(value);
 }
 
-function renderPlayerCombatant(bs) {
+function renderPlayerCombatant(bs, opts) {
+    opts = opts || {};
     const p = state.player;
     document.getElementById('player-combatant-art').textContent = JOB_ICONS[p.job] || '?';
 
@@ -41,7 +42,20 @@ function renderPlayerCombatant(bs) {
     //   기존엔 player_battle의 idle을 트는 호출(resetAllSprites)이 어디서도 실행되지
     //   않아 스프라이트시트가 등록돼 있어도 항상 이모지 폴백만 보이는 버그가 있었음.
     const playerStateKey = bs.player_hp > 0 ? 'idle' : 'dead';
-    setCharState('player_battle', playerStateKey, { persist: playerStateKey === 'dead' });
+    // ★ opts.deferDeathAnim(Actions.js가 playBattleSequence 실행 전 호출하는
+    //   refreshBattle에서만 true)이면서 "방금 막 죽은" 경우엔 여기서 즉시
+    //   dead로 바꾸지 않는다 — 그대로 두면 CharSprite.js의 "이미 dead면
+    //   재적용 스킵" 가드 때문에, 뒤이어 실행되는 playBattleSequence의
+    //   피격/사망 애니메이션이 전부 무시되고 서버 응답이 오자마자 죽은
+    //   포즈로 굳어버렸다(공격 모션조차 보여주기 전에). 이미 죽어 있던
+    //   슬롯(이번 행동과 무관하게 예전부터 dead)은 isCharDead가 true라
+    //   그대로 재적용 — 세션 복구 등 시퀀서 없이 바로 그려야 하는 경우와
+    //   동일하게 정상 동작한다.
+    if (playerStateKey === 'dead' && opts.deferDeathAnim && !isCharDead('player_battle')) {
+        // 사망 애니메이션은 playBattleSequence의 setDeadState('player_battle')가 담당
+    } else {
+        setCharState('player_battle', playerStateKey, { persist: playerStateKey === 'dead' });
+    }
     renderNameWithStatus(document.getElementById('player-combatant-name'), {
         name: p.name,
         element_aura: bs.player_element_aura || p.element_aura || '',
@@ -78,7 +92,8 @@ function renderPlayerCombatant(bs) {
 // ── 적 슬롯 (다대일 지원): 슬롯 show/hide, 이름/이미지/HP/ATB 바, 타겟 태그, 슬롯 클릭 ──
 // 슬롯↔ID 매핑: slot 0 → enemy-slot-1/enemy-name/enemy-cb-hp(접미사 없음)
 //              slot 1 → -2,  slot 2 → -3
-function renderEnemySlots(bs) {
+function renderEnemySlots(bs, opts) {
+    opts = opts || {};
     const enemiesArr = bs.enemies || [];
     const enemyIdSuffix = (i) => i === 0 ? '' : `-${i + 1}`;
     const slotIdSuffix  = (i) => i === 0 ? '-1' : `-${i + 1}`;
@@ -105,7 +120,13 @@ function renderEnemySlots(bs) {
         //   찰나에 이모지 폴백이 깜빡이는 버그가 있었음(모든 시트 몬스터 공통).
         //   idle/dead는 자동 idle 복귀 타이머를 안 타므로 매 렌더 호출해도 안전.
         const stateKey = en.alive ? 'idle' : 'dead';
-        setCharState(`enemy_battle:${i}`, stateKey, { persist: stateKey === 'dead' });
+        // ★ renderPlayerCombatant와 동일한 이유로 "방금 죽은" 슬롯은 여기서
+        //   즉시 dead 처리하지 않고 playBattleSequence의 사망 연출에 맡긴다.
+        if (stateKey === 'dead' && opts.deferDeathAnim && !isCharDead(`enemy_battle:${i}`)) {
+            // no-op — 아래 playBattleSequence의 setDeadState가 담당
+        } else {
+            setCharState(`enemy_battle:${i}`, stateKey, { persist: stateKey === 'dead' });
+        }
 
         const nameEl = document.getElementById(`enemy-name${enemyIdSuffix(i)}`);
         const metaEl = document.getElementById(`enemy-meta${enemyIdSuffix(i)}`);

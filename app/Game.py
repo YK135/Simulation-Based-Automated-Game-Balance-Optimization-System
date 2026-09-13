@@ -21,7 +21,7 @@ from game.Lv           import Allocate_Stat_Points
 from ai.battle  import SKILL_META
 from core.Balance_Hook import BalanceHook
 
-from .Shared import GAME_SESSIONS, _get_session, _player_dict, _get_json_body
+from .Shared import GAME_SESSIONS, _get_session, _player_dict, _get_json_body, _get_str_field
 
 game_bp = Blueprint("game", __name__)
 
@@ -37,7 +37,7 @@ def new_game():
     from DB.Models import User
 
     data = _get_json_body()
-    name = data.get("name", "용사").strip() or "용사"
+    name = _get_str_field(data, "name", "용사") or "용사"
     job  = data.get("job",  "전사")
 
     if job not in ("전사", "마법사", "탱커", "도적"):

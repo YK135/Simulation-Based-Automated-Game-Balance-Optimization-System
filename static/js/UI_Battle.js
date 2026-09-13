@@ -22,7 +22,8 @@
    이 파일은 refreshBattle 오케스트레이터만 담당.
    ─────────────────────────────────────────────────────────── */
 
-function refreshBattle(bs) {
+function refreshBattle(bs, opts) {
+    opts = opts || {};
     state.battleState = bs;
     state.inBattle = !bs.done && (bs.player_hp > 0);
 
@@ -34,7 +35,7 @@ function refreshBattle(bs) {
     refreshPlayerStatusList(bs);
     refreshBattleBackground(bs);
 
-    renderBattleStage(bs);
+    renderBattleStage(bs, opts);
 
     // 캐릭터 스프라이트 상태
     if (bs.messages) {
@@ -105,7 +106,8 @@ function updateBattleModeVisibility(bs) {
 
     // ── 보스전이면 escape 비활성 + 시각 표시 ──
     ['btn-attack','btn-skill','btn-item','btn-escape'].forEach(id => {
-        document.getElementById(id).disabled = false;
+        const btn = document.getElementById(id);
+        if (btn) btn.disabled = false;
     });
     if (state.battleState && state.battleState.is_boss) {
         const escBtn = document.getElementById('btn-escape');
@@ -145,9 +147,9 @@ function syncPlayerBattleState(bs) {
 
 
 // ── 전투 무대 렌더 오케스트레이터 ──
-function renderBattleStage(bs) {
-    renderPlayerCombatant(bs);
-    renderEnemySlots(bs);
+function renderBattleStage(bs, opts) {
+    renderPlayerCombatant(bs, opts);
+    renderEnemySlots(bs, opts);
     renderBattleTargetTags(bs);
     bindEnemyTargetClicks(bs);
     updateBattleTurnVisual(bs);

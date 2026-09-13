@@ -63,9 +63,23 @@ def test_repeated_new_game_no_leak():
     check("매 호출마다 다른 db_user_id 발급됨", len(set(seen_uids)) == len(seen_uids),
           f"uids={seen_uids}")
 
-    # 정리
+    # 정리 — 인메모리 세션뿐 아니라 이 테스트가 실제로 만든 DB User row도
+    # 지운다(안 지우면 반복 실행마다 로컬 개발 DB에 테스터용 게스트 User가
+    # 계속 쌓인다).
     for uid in seen_uids:
         GAME_SESSIONS.pop(uid, None)
+
+    from DB import get_session as db_session
+    from DB.Models import User
+    with db_session() as db:
+        for uid in seen_uids:
+            try:
+                db_id = int(uid)
+            except (TypeError, ValueError):
+                continue
+            row = db.query(User).filter_by(id=db_id).first()
+            if row:
+                db.delete(row)
 
 
 def main():

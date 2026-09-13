@@ -125,6 +125,15 @@ function setDeadState(target) {
     setCharState(target, 'dead', { persist: true });
 }
 
+/**
+ * 이 target이 이미 dead 상태로 표시돼 있는지 (아직 한 번도 dead로 안
+ * 바뀐 슬롯은 false — 이번에 "방금 죽었는지" 새로 죽은 건지 구분하는 데 쓰임.
+ * static/js/battle/BattleRender.js의 refreshBattle deferDeathAnim 옵션 참고.
+ */
+function isCharDead(target) {
+    return _spriteCurrentState[target] === 'dead';
+}
+
 
 // ─────────────────────────────────────────────
 // DOM 요소 조회

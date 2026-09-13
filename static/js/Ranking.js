@@ -15,6 +15,14 @@
 // 현재 보고 있는 랭킹 종류
 var _currentRankingType = "score";
 
+// ★ 화살표를 응답 도착 전에 연달아 눌러(score→pioneers→score 등) 요청 여러 개가
+//   동시에 날아가면, 나중에 보낸 요청의 응답이 먼저 온 요청보다 먼저 도착할
+//   수도 있다 — 도착 순서가 아니라 "가장 마지막에 보낸 요청"만 화면에 반영
+//   되도록 순번으로 막는다(다른 API들의 processing 플래그와 달리, 여기는
+//   중복 호출 자체를 막는 게 아니라 오래된 응답을 버리는 문제라 시퀀스
+//   번호가 맞는 방식).
+var _rankingLoadSeq = 0;
+
 
 // ─────────────────────────────────────────────
 // 랭킹 모달 열기
@@ -50,6 +58,8 @@ async function toggleRanking() {
 // 랭킹 데이터 로드 + 렌더링
 // ─────────────────────────────────────────────
 async function loadRanking(type) {
+    var mySeq = ++_rankingLoadSeq;
+
     var titleEl    = document.getElementById('ranking-title');
     var subtitleEl = document.getElementById('ranking-subtitle');
     var tableEl    = document.getElementById('ranking-table');
@@ -68,6 +78,7 @@ async function loadRanking(type) {
 
             var r = await fetch('/api/ranking', { credentials: 'same-origin' });
             var data = await r.json();
+            if (mySeq !== _rankingLoadSeq) return;  // 그 사이 더 최신 요청이 시작됨 — 이 응답은 폐기
             if (!data.ok) {
                 if (typeof toast === 'function') toast('랭킹 로드 실패', 'error');
                 return;
@@ -92,6 +103,7 @@ async function loadRanking(type) {
 
             var r2 = await fetch('/api/ranking/pioneers', { credentials: 'same-origin' });
             var data2 = await r2.json();
+            if (mySeq !== _rankingLoadSeq) return;  // 그 사이 더 최신 요청이 시작됨 — 이 응답은 폐기
             if (!data2.ok) {
                 if (typeof toast === 'function') toast('선구자 랭킹 로드 실패', 'error');
                 return;
@@ -100,9 +112,9 @@ async function loadRanking(type) {
         }
     } catch (e) {
         console.error('[Ranking] load failed:', e);
-        if (typeof toast === 'function') toast('네트워크 오류', 'error');
+        if (mySeq === _rankingLoadSeq && typeof toast === 'function') toast('네트워크 오류', 'error');
     } finally {
-        if (loadingEl) loadingEl.style.display = 'none';
+        if (mySeq === _rankingLoadSeq && loadingEl) loadingEl.style.display = 'none';
     }
 }
 

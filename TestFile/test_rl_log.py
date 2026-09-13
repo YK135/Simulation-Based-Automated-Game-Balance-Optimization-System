@@ -127,6 +127,7 @@ def main():
     gs = {"player": p4, "db_user_id": None}   # DB 유저 없음
     _save_rl_log(gs, bs4)
 
+    new_row_ids = []
     with db_session() as db:
         new_rows = db.query(BattleLog).filter(BattleLog.id > before_max_id).all()
         check("게스트도 row 생성", len(new_rows) == 1, str(new_rows))
@@ -143,6 +144,13 @@ def main():
             blob = row.meta_json + row.records_json
             check("개인정보 미저장 (email/nickname 없음)",
                   "email" not in blob and "nickname" not in blob)
+        new_row_ids = [r.id for r in new_rows]
+
+    # 정리 — 이 테스트가 실제로 만든 BattleLog row를 지운다(안 지우면 반복
+    # 실행마다 로컬 개발 DB에 테스트용 로그가 계속 쌓인다).
+    if new_row_ids:
+        with db_session() as db:
+            db.query(BattleLog).filter(BattleLog.id.in_(new_row_ids)).delete(synchronize_session=False)
 
     print("\n" + "=" * 52)
     print(f" 결과: {PASS} 통과 / {FAIL} 실패")
