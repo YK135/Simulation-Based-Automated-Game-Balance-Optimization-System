@@ -14,10 +14,25 @@ player_original=player)를 매 전투마다 사용) 여러 전투를 연속으�
 "이월 덕분에 첫 행동에서 즉시 보너스 행동권을 얻은 비율"(직업별 SPD 차이
 — 특히 도적의 고SPD 복리효과 — 를 직접 드러내는 지표).
 
-단순화: 캠페인 내 각 전투는 1v1만 사용한다(그룹 튜닝/다대일 검증은
-montecarlo.py의 메인 스윕이 이미 담당 — 여기는 ATB 이월 메커니즘 자체만
-격리해서 본다. 이월 메커니즘은 1v1이든 1vN이든 "전투 시작 ATB" 하나에만
-관여하므로 1v1로 좁혀도 효과 측정에는 지장이 없다).
+단순화 (둘 다 명시):
+  1) 캠페인 내 각 전투는 1v1만 사용한다(그룹 튜닝/다대일 검증은
+     montecarlo.py의 메인 스윕이 이미 담당 — 여기는 ATB 이월 메커니즘
+     자체만 격리해서 본다. 이월 메커니즘은 1v1이든 1vN이든 "전투 시작
+     ATB" 하나에만 관여하므로 1v1로 좁혀도 효과 측정에는 지장이 없다).
+  2) 전투 사이에 HP/MP/아이템을 전혀 이월하지 않는다 — 매 전투 시작마다
+     player_snap()이 maxhp/maxmp로 다시 채운다. 실전은 노드맵을 걷는 동안
+     회복 없이 누적 피해를 받는(휴식 노드에서만 회복) "소모전"에 가깝지만,
+     여기서는 ATB 이월 하나만 격리해서 보려고 일부러 HP/MP를 전투마다
+     리셋했다 — 그래서 이 스크립트의 "생존 전투 수"는 실제 캠페인의 절대
+     생존력이 아니라 "ATB 이월 유무만 다른 두 조건의 상대 비교"로만
+     해석해야 한다. carryover=True/False 둘 다 같은 단순화를 받으므로
+     비교 자체는 공정하다.
+  3) 각 (job, LEVEL) 블록 시작 시 seed()를 다시 걸어 carryover=True/False가
+     최대한 같은 초기 조건(같은 몬스터 롤 시퀀스 시작점)에서 갈라지게
+     했다 — 완벽한 paired comparison은 아니다(전투 1회의 실제 진행 턴 수가
+     조건마다 달라지면 그 이후 소비되는 난수 위치도 갈라짐), 하지만 적어도
+     "이월 조건이 나중에 실행돼서 이월 없음 조건이 이미 소비한 난수를
+     이어받는" 이전 버전의 편향은 제거했다.
 
 실행: python3 TestFile/montecarlo_campaign.py
 환경변수: N(캠페인 반복수, 기본 300), BATTLES(캠페인당 전투수, 기본 6),
@@ -101,11 +116,13 @@ def run_campaign(job, level, n_battles, carryover, ai, hook):
     새로 만들면 매번 몬스터 튜닝을 처음부터 다시 돌려야 해서(N=300일 때
     감당 불가능한 속도) 실전처럼 "이미 튜닝된 세션"을 재사용하는 것이
     맞는 전제이기도 하다.
-    반환: (승리한 전투 수, 총 턴 수, 이월 덕분에 즉시 보너스를 얻은 전투 수)."""
+    반환: (승리한 전투 수, 총 턴 수, 이월 덕분에 즉시 보너스를 얻은 전투 수,
+          실제로 시도한 전투 수 — early_bonus_rate의 정확한 분모용)."""
     p = build_player(job, level)
     wins = 0
     total_turns = 0
     early_bonus = 0
+    battles_attempted = 0
     for _ in range(n_battles):
         if not carryover:
             p.atb_remainder = 0.0
@@ -113,6 +130,7 @@ def run_campaign(job, level, n_battles, carryover, ai, hook):
         start_atb = float(getattr(p, "atb_remainder", 0.0))
         if start_atb + spd >= 100.0:
             early_bonus += 1
+        battles_attempted += 1
 
         win, turns = run_one_battle(p, hook, level, ai)
         total_turns += turns
@@ -120,11 +138,11 @@ def run_campaign(job, level, n_battles, carryover, ai, hook):
             wins += 1
         else:
             break
-    return wins, total_turns, early_bonus
+    return wins, total_turns, early_bonus, battles_attempted
 
 
 def main():
-    seed(20260914)
+    BASE_SEED = 20260914
     N       = int(os.environ.get("N", "300"))
     BATTLES = int(os.environ.get("BATTLES", "6"))
     LEVEL   = int(os.environ.get("LEVEL", "10"))
@@ -141,15 +159,24 @@ def main():
         hook = BalanceHook(build_player(job, LEVEL), start_items(LEVEL),
                            show_graph=False, verbose=False, auto_prewarm=False)
         for carryover in (True, False):
-            wins = turns = bonus = 0
+            # 조건마다 시드를 다시 걸어 carryover=True/False가 같은
+            # 초기조건(같은 몬스터 롤 시퀀스 시작점)에서 갈라지게 한다 —
+            # 예전엔 시드를 한 번만 걸어서 carryover=False가 carryover=True가
+            # 이미 소비한 난수 위치를 이어받는 편향이 있었다.
+            seed(BASE_SEED)
+            wins = turns = bonus = attempted = 0
             for _ in range(N):
-                w, t, b = run_campaign(job, LEVEL, BATTLES, carryover, ai, hook)
-                wins += w; turns += t; bonus += b
+                w, t, b, a = run_campaign(job, LEVEL, BATTLES, carryover, ai, hook)
+                wins += w; turns += t; bonus += b; attempted += a
             key = f"{job}|carryover={carryover}"
             results[key] = {
                 "avg_battles_won_per_campaign": round(wins / N, 3),
                 "avg_turns_per_campaign":       round(turns / N, 2),
-                "early_bonus_rate":             round(bonus / (N * BATTLES), 4),
+                # 분모를 N*BATTLES(패배로 조기 종료된 캠페인도 끝까지 싸운
+                # 것처럼 취급)가 아니라 실제로 시도된 전투 수로 정정 —
+                # 조기 종료가 있으면 예전 계산은 비율을 과소평가했다.
+                "early_bonus_rate":             round(bonus / attempted, 4) if attempted else 0.0,
+                "battles_attempted":            attempted,
             }
             print(key, results[key], file=sys.stderr)
 

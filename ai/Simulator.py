@@ -197,16 +197,22 @@ class PlayerPowerIndex:
 class BattleSimulator:
     """N회 반복 시뮬레이션 → 승률 반환.
 
-    알려진 한계 — 전투 간 ATB 이월 미모델링:
-      실전(ai/Battlesession.py)은 플레이어의 atb_remainder를 전투 종료 시점의
-      잔여값 그대로 다음 전투 시작 ATB로 이월한다(고SPD 직업일수록 다음
-      전투를 유리하게 시작). 여기서는 매 시행(run() 안의 for 루프 한 번)이
-      서로 독립된 통계적 표본이라 "이전 전투"라는 개념 자체가 없고,
-      EntitySnapshot에도 atb_remainder에 대응하는 필드가 없어 이 이점을
-      표현할 방법이 없다 — 매 시행이 항상 ATB 0에서 시작한다. 의도적으로
-      보완하지 않았다: 그럴듯한 초기값(예: 평균 이월량 추정)을 넣으면 목표
-      승률 산정 자체가 바뀌므로, 이 프로젝트의 다른 밸런스 상수들과 마찬가지로
-      montecarlo.py 전체 스윕으로 재검증하기 전에는 손대지 않는 편이 안전하다.
+    ATB 이월 (BALANCE_PATCH_3):
+      EntitySnapshot.atb_remainder 필드로 실제 플레이어의 살아있는 ATB
+      잔여값을 시작 ATB로 반영할 수 있다(core/Balance_Hook.py의
+      _player_to_snap()이 채워줌 — 기본값 0.0이면 예전과 동일하게 ATB 0
+      시작). ★ 주의 — 자동 이월 커넥터는 없다: run() 안의 for 루프(개별 MC
+      시행)는 매번 self.player_template을 그대로 deepcopy하므로, "시행 A의
+      종료 ATB"가 "시행 B의 시작 ATB"로 자동 연결되는 코드는 어디에도 없고
+      의도적으로 만들지 않았다 — 만들면 독립 통계 표본이라는 몬테카를로
+      전제가 깨진다. 여러 전투를 실제로 이어 붙이는 "캠페인" 형태의 검증은
+      이 클래스가 아니라 실전과 동일한 ai/Battlesession.py의 BattleSession
+      (player_original을 통한 Player.atb_remainder 이월 — 이 프로젝트가
+      원래 갖고 있던, 별개의 메커니즘)으로 TestFile/montecarlo_campaign.py가
+      수행한다. BattleResult.final_player_atb는 그 값을 읽고 싶은 호출부를
+      위해 노출만 해둔 것으로, 현재 이 필드를 실제로 읽어 다음 전투에 넣는
+      운영 호출자는 없다(TestFile/test_balance_patch_3.py의 단위 테스트만
+      존재) — BALANCE_PATCH_3.md 참고.
     """
 
     def __init__(

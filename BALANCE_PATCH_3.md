@@ -4,9 +4,22 @@
 
 감사에서 의도적으로 미뤄둔 두 항목을 구현하고 실측 검증했다.
 
-1. 시뮬레이터의 cross-battle ATB 이월 — **채택**
+1. 시뮬레이터의 cross-battle ATB **입출력 통로**(`EntitySnapshot.atb_remainder`
+   → `ATBSystem` → `BattleResult.final_player_atb`) 구현 — **채택**.
+   ★ 정확한 표현: 실전 `ai/Battlesession.py`의 전투 간 자동 이월은 이번
+   작업 이전부터 이미 완전하게 동작하고 있었다(손댄 적 없음). 이번에 새로
+   추가한 건 별개의 시뮬레이터 레이어(`ai/battle/Engine.py`의
+   `BattleEngine`)가 이 값을 입력받고 반환할 수 있게 만든 것 — **여러
+   전투를 자동으로 이어 붙이는 커넥터 코드는 의도적으로 만들지 않았다**
+   (몬테카를로 독립 시행 전제를 지키기 위해). 이 구분과 근거는 아래
+   A/F/G에 명시했다 — 코덱스 2차 검증에서 정확히 이 지점을 지적했고,
+   타당한 지적이라 문서 표현을 정정하고 관련 테스트/코드를 보강했다.
 2. `MultiBattleSimulator`를 `BalanceHook` 자동 밸런싱 파이프라인에 연결 —
    **부분 채택** (버그 수정은 유지, 실전 연결은 **철회**)
+
+이 문서는 코덱스의 1차 검증(초안 채택/철회 판정) 이후, 같은 코덱스의 **2차
+검증**(정확성 재점검)에서 나온 지적사항을 직접 코드로 재확인하고 반영한
+개정판이다 — 개정 내역은 각 절에 표시했다.
 
 ---
 
@@ -49,6 +62,22 @@
   `BattleSimulator.run()`의 for 루프는 손대지 않았다(템플릿의 atb_remainder는
   "이 플레이어가 실제로 갖고 있는 값"을 모든 시행이 공유하는 것이지, 시행
   간에 값을 넘기는 게 아니다).
+- **두 개의 서로 다른 ATB 이월 경로 (2차 검증에서 명확히 구분 요구됨)**:
+  1) **실전 경로 — `ai/Battlesession.py`의 `BattleSession`**: `Player.atb_remainder`
+     (EntitySnapshot이 아니라 진짜 `Player` 객체의 필드) + `player_original`
+     인자로 이미 완전히 자동 연결돼 있음(이번 세션 이전부터). 실제 게임과
+     `TestFile/montecarlo_campaign.py`의 캠페인 검증 둘 다 **이 경로**를 쓴다.
+  2) **시뮬레이터 경로 — `ai/battle/Engine.py`의 `BattleEngine`**: 이번에
+     추가한 `EntitySnapshot.atb_remainder`/`BattleResult.final_player_atb`가
+     속한 경로. `core/Balance_Hook.py._player_to_snap()`이 실제 플레이어의
+     현재 ATB를 1회성으로 읽어 시뮬 입력에 반영하는 데만 쓰인다 —
+     **`BattleResult.final_player_atb`를 읽어서 "다음 전투의"
+     `EntitySnapshot.atb_remainder`에 자동으로 넣어주는 호출부는 존재하지
+     않는다**(의도적 — 이런 커넥터가 실전에서 쓰일 자리 자체가 없다,
+     `BattleSimulator`의 반복은 통계적으로 독립이어야 하므로). 이 필드는
+     "값을 노출해둔 것"이지 "자동 이월 기능"이 아니다 — 필요하면
+     `TestFile/test_balance_patch_3.py`의 `test_manual_battle_to_battle_chain()`이
+     증명하듯 수동으로 이어붙일 수 있다는 뜻만 보장한다.
 - 그룹 튜닝: `hook.get_encounter()`를 신설해 1단계(개별 튜닝 재사용) +
   2단계(그룹 보정 배율 이진탐색, `MultiBattleSimulator`로 실측)로 설계했다.
   **이 설계 자체는 구조적으로는 맞았지만, 2단계의 통계적 방법이 검증 과정에서
@@ -60,15 +89,15 @@
 
 | 파일 | 변경 내용 | 필요한 이유 |
 |---|---|---|
-| `ai/battle/Entity.py` | `EntitySnapshot.atb_remainder: float = 0.0` 필드 추가 | 시뮬레이터가 이월값을 표현할 필드가 없었음 |
+| `ai/battle/Entity.py` | `EntitySnapshot.atb_remainder: float = 0.0` 필드 추가; **`from_player()`도 이 필드를 복사하도록 수정**(2차 검증에서 누락 발견 — `_player_to_snap()`은 복사하는데 `from_player()`는 안 하는 불일치) | 시뮬레이터가 이월값을 표현할 필드가 없었음; 생성 경로별 동작 불일치 제거 |
 | `ai/battle/ATB.py` | `ATBSystem.__init__(player_start=0.0)` 추가 | 적은 항상 0, 플레이어만 이월값으로 시작 |
-| `ai/battle/Engine.py` | `BattleEngine`이 `atb_remainder`를 초기 ATB로 사용, `BattleResult.final_player_atb` 노출 | 시뮬 결과에서 종료 ATB를 읽어 연속 시뮬에 넘길 수 있게 |
-| `core/Balance_Hook.py` | `_player_to_snap()`에 `atb_remainder` 반영 (**채택**); `get_encounter()`/`_start_group_tuning()`/`_get_group_scale()`/그룹 캐시 필드 신설 (구현·테스트는 유지, **app/Map.py 연결은 철회**) | 실제 플레이어 ATB를 시뮬 입력에 반영; 그룹 튜닝 인프라는 향후 재작업 근거로 보존 |
-| `ai/Simulator.py` | `StatTuner._scale_enemy()`를 `scale_entity_snapshot()` 순수함수로 추출(중복 제거, 동작 불변 확인); `MultiBattleSimulator._decide_player_action()`의 `enemy_count` 미전달 버그 수정(**채택**); `apply_group_correction()` 신설(선형 보정, get_encounter 전용, **미사용 상태로 보존**) | 리팩터·독립 버그 수정은 그룹 튜닝 채택 여부와 무관하게 유효 |
+| `ai/battle/Engine.py` | `BattleEngine`이 `atb_remainder`를 초기 ATB로 사용, `BattleResult.final_player_atb` 노출 | 시뮬 결과에서 종료 ATB를 읽을 수 있게(자동 연결 커넥터는 의도적으로 없음 — A 참고) |
+| `core/Balance_Hook.py` | `_player_to_snap()`에 `atb_remainder` 반영(**채택**, 캐시가 레벨업 시에만 무효화됨을 명시하는 주석 추가); `get_encounter()`/`_start_group_tuning()`/`_get_group_scale()`/그룹 캐시 필드 신설 (구현·테스트는 유지, **app/Map.py 연결은 철회** — docstring에 미연결 상태 명시) | 실제 플레이어 ATB를 시뮬 입력에 반영; 그룹 튜닝 인프라는 향후 재작업 근거로 보존 |
+| `ai/Simulator.py` | `StatTuner._scale_enemy()`를 `scale_entity_snapshot()` 순수함수로 추출(중복 제거, 동작 불변 확인); `MultiBattleSimulator._decide_player_action()`의 `enemy_count` 미전달 버그 수정(**채택**); `apply_group_correction()` 신설(선형 보정, get_encounter 전용, **미사용 상태로 보존**); **`BattleSimulator` 클래스 docstring의 "ATB 이월 미모델링" 서술이 구현 후에도 안 고쳐져 있던 걸 발견해 정정**(2차 검증 지적) | 리팩터·독립 버그 수정은 그룹 튜닝 채택 여부와 무관하게 유효; 문서-코드 불일치 제거 |
 | `app/Map.py` | `_make_enemies()`를 **원래 코드로 완전 복원**(개별 `get_enemy()` 루프 + 호출부 `STAT_SCALE`) — 그룹 튜닝 연결 철회 사유를 문서화한 주석만 추가 | 실전 검증 결과 그룹 튜닝이 신뢰할 수 없어 원복 |
 | `TestFile/montecarlo.py` | 몬스터 생성 경로를 `hook.get_enemy()`(실전 `app.Map._make_enemies`/`_make_elite_encounter` 재사용)로 확장 — **채택**, 상시 유지 | 기존 스윕이 `BalanceHook`을 건너뛰던 걸 실전과 일치시킴 |
-| `TestFile/montecarlo_campaign.py` (신규) | 연속 전투 캠페인 시뮬레이터 — ATB 이월 단독 효과 측정 | 메인 스윕은 독립 시행이라 이월 효과 자체는 측정 못 함 |
-| `TestFile/test_balance_patch_3.py` (신규) | ATB 필드·엔진 배선·독립시행 보장·그룹튜닝 캐시키/폴백 회귀 테스트 23건 | — |
+| `TestFile/montecarlo_campaign.py` (신규) | 연속 전투 캠페인 시뮬레이터 — ATB 이월 단독 효과 측정. **2차 검증 후 수정**: (1) `early_bonus_rate` 분모를 `N×BATTLES`(패배 조기종료 무시)에서 실제 시도 전투 수로 정정, (2) carryover=True/False 조건마다 시드를 다시 걸어 더 공정한 비교로 변경, (3) 매 전투 HP/MP/아이템이 리셋된다는 단순화를 docstring에 명시 | 통계 정확성 문제(과소평가된 비율, 편향된 시드 공유) 수정 |
+| `TestFile/test_balance_patch_3.py` (신규) | ATB 필드·엔진 배선·독립시행 보장·그룹튜닝 캐시키/폴백 회귀 테스트. **2차 검증 후 2건 추가(총 25건)**: 전투1 종료 ATB→전투2 시작 ATB가 정확히 일치하는지 수동 체인 검증, `from_player()`가 `atb_remainder`를 복사하는지 검증 | 2차 검증에서 "종료값=다음 시작값" 자체를 검사하는 테스트가 없다는 지적을 반영 |
 
 ---
 
@@ -76,7 +105,7 @@
 
 - 실행 명령: `for f in TestFile/test_*.py; do python3 "$f"; done`
 - 기존 17개 테스트 파일: **전부 통과** (총 통과 항목 수 변화 없음, 회귀 없음)
-- 신규 `test_balance_patch_3.py`: **23/23 통과**
+- 신규 `test_balance_patch_3.py`: **25/25 통과** (2차 검증 반영 후 2건 추가)
 - 실패/미실행 테스트: 없음
 - `python3 -m compileall App.py app DB ai core game TestFile`: 통과
 - `python3 -c "from app import create_app; create_app()"`: 통과
@@ -127,20 +156,38 @@ n=96셀)의 before/after 차이 분포는 평균 -0.19%p, 표준편차 2.0%p, �
 
 ### D-2. ATB 이월 캠페인 비교 (`TestFile/montecarlo_campaign.py`, N=150, BATTLES=6, LEVEL=10)
 
-| 직업 | 이월 有 평균 승전투 | 이월 無 평균 승전투 | 차이 | 이월 有 평균 총턴 | 이월 無 평균 총턴 | "즉시 보너스행동" 비율(이월 有) |
-|---|---:|---:|---:|---:|---:|---:|
-| 전사 | 2.93 | 2.56 | +14.5% | 36.97 | 34.87 | 11.0% |
-| 마법사 | 6.00 | 6.00 | ±0% | 17.49 | 17.56 | 15.7% |
-| 탱커 | 5.84 | 5.45 | +7.2% | 133.33 | 144.82 | 18.1% |
-| 도적 | 1.68 | 1.35 | **+24.2%** | 23.36 | 20.52 | 7.3% |
+**개정**: 2차 검증에서 "시드를 한 번만 걸어 carryover=True가 먼저 난수를
+소비하고 carryover=False가 그 나머지를 이어받는" 편향과 "패배 조기종료 시
+`early_bonus_rate` 분모가 실제 전투 수보다 과대(N×BATTLES 고정)"라는 통계
+버그 두 개를 지적받아 수정한 뒤 **재실행한 최종 수치**다(아래 표) — 최초
+버전(도적 +24.2%로 가장 크게 개선)은 이 두 버그의 영향을 받은 값이라
+철회하고 이 표로 교체한다.
 
-4개 직업 전부 이월이 있을 때 캠페인당 생존 전투 수가 늘거나 동일했고,
-**도적(가장 높은 SPD)의 개선폭이 가장 컸다** — "고SPD 직업일수록 이월
-이점이 크다"는 가설과 방향이 일치한다. 다만 "전투 시작 즉시 보너스 행동"
-발생률 자체는 도적이 1위가 아니었다(탱커·마법사가 더 높음) — 이월이
-생존력에 기여하는 경로가 "즉시 보너스"뿐 아니라 "전투 중반 추가 행동
-타이밍이 앞당겨짐" 등 더 복합적일 가능성이 있다. 두 지표 모두 있는 그대로
-보고한다.
+| 직업 | 이월 有 평균 승전투 | 이월 無 평균 승전투 | 차이 | 이월 有 평균 총턴 | 이월 無 평균 총턴 | 실제 시도 전투 수(有/無) | "즉시 보너스행동" 비율(이월 有) |
+|---|---:|---:|---:|---:|---:|---:|---:|
+| 전사 | 2.76 | 2.80 | -1.4% | 35.89 | 36.47 | 531 / 535 | 14.5% |
+| 마법사 | 6.00 | 6.00 | ±0% | 17.55 | 17.61 | 900 / 900 | 16.2% |
+| 탱커 | 5.67 | 5.56 | +2.0% | 133.69 | 146.40 | 865 / 856 | 18.4% |
+| 도적 | 1.41 | 1.56 | **-9.8%** | 21.67 | 22.25 | 353 / 376 | 18.1% |
+
+**정정된 해석**: 시드 편향을 제거하자 "생존 전투 수(캠페인당 승리 횟수)"
+차이는 4개 직업 모두 ±10% 이내로 작아졌고, 방향도 일관되지 않는다(전사·
+도적은 오히려 이월 無 쪽이 근소 우위, 탱커만 이월 有 우위, 마법사는
+차이 없음). **애초에 "도적이 가장 큰 이득을 본다"는 결론은 지지되지
+않는다** — 최초 버전의 그 결과는 시드 편향 때문이었다. 한 가지 일관된
+신호는 있다: **평균 총턴 수는 4개 직업 모두(전사·마법사·도적은 근소하게,
+탱커는 뚜렷하게 -8.7%) 이월 有 쪽이 더 짧았다** — 캠페인이 승리로 끝나든
+패배로 끝나든, 이월이 있으면 개별 전투가 평균적으로 조금 더 빨리
+끝난다는 뜻으로 해석할 수 있다(전투 시작 시 추가 행동권을 더 자주 갖게
+되므로 — "즉시 보너스행동" 비율도 이월 有에서만 0보다 크게 관측됨, 설계상
+당연). 다만 이 총턴 감소가 "생존력"으로 뚜렷이 전환되지는 않았다 —
+표본(특히 도적은 실제 353~376전투로 다른 직업의 40% 수준)이 작아
+승전투 지표의 신뢰구간이 넓은 탓일 수 있다. **결론: ATB 이월이 개별 전투
+템포를 살짝 앞당긴다는 신호는 일관되게 관측되지만, "고SPD 직업이 이월로
+크게 더 유리해진다"는 애초 가설은 이번 실측으로 뒷받침되지 않는다** —
+item 1의 채택 여부 자체는 이 결과와 무관하다(A 참고: 채택 근거는 "실전이
+이미 하고 있는 동작을 시뮬레이터도 표현할 수 있게 한 것"이지 "이 효과가
+크다는 걸 입증하는 것"이 아니었다).
 
 ---
 
@@ -160,7 +207,7 @@ n=96셀)의 before/after 차이 분포는 평균 -0.19%p, 표준편차 2.0%p, �
 
 | 항목 | 판정 |
 |---|---|
-| 1. 시뮬레이터 cross-battle ATB 이월 (`EntitySnapshot.atb_remainder` → `BattleEngine`/`BattleResult`/`_player_to_snap`) | **채택** |
+| 1. 시뮬레이터 cross-battle ATB **입출력 통로** (`EntitySnapshot.atb_remainder` → `ATBSystem`/`BattleEngine` → `BattleResult.final_player_atb`), `_player_to_snap()`/`from_player()` 반영 | **채택** — 단, 여러 전투를 자동으로 이어 붙이는 커넥터는 의도적 미구현(실전은 `ai/Battlesession.py`의 별도 경로가 이미 전담, A 참고) |
 | 2. `MultiBattleSimulator._decide_player_action()`의 `enemy_count` 미전달 버그 수정 | **채택** |
 | 3. `scale_entity_snapshot()` 순수함수 추출(중복 제거 리팩터) | **채택** |
 | 4. `TestFile/montecarlo.py`를 `BalanceHook` 실전 경로로 확장 | **채택** |
@@ -212,6 +259,20 @@ n=96셀)의 before/after 차이 분포는 평균 -0.19%p, 표준편차 2.0%p, �
 - **엘리트 노드는 이번 작업 범위 밖** — 리더(패턴)+호위 구성이 복잡해
   처음부터 제외하기로 했고(사용자 확인), `_make_elite_encounter()`는
   전혀 건드리지 않았다.
+- **`BattleResult.final_player_atb`를 읽어 다음 전투에 자동으로 넘기는
+  운영 커넥터는 없다**(2차 검증 지적, A에서 상세 설명) — 값을 노출해둔
+  것뿐이고, `TestFile/test_balance_patch_3.py`가 "이 값을 수동으로 다음
+  `EntitySnapshot.atb_remainder`에 넣으면 정확히 일치한다"는 관계식만
+  검증한다. 실전 이월은 여전히 `ai/Battlesession.py`의 별도 경로
+  (`Player.atb_remainder`+`player_original`)가 전담하며 이건 이번 세션
+  이전부터 이미 정상 동작 중이었다. 만약 향후 "시뮬레이터에서 완전
+  자동화된 다전투 캠페인"이 필요해지면 그때 커넥터를 추가하면 되고,
+  지금은 그럴 운영 호출자가 없어 만들지 않았다.
+- **`montecarlo_campaign.py`는 HP/MP/아이템을 전투마다 리셋한다** —
+  ATB 이월 효과만 격리해서 보려는 의도적 단순화이지 실제 소모전(휴식
+  노드 전까지 피해 누적)을 재현하지 않는다. carryover=True/False 두
+  조건에 동일하게 적용되므로 비교 자체는 공정하지만, 절대적인 "생존
+  전투 수" 수치를 실제 플레이 체감과 동일시하면 안 된다.
 - **실전(`ai/battle_session/*`)과 시뮬레이터(`ai/battle/Engine.py`)는
   여전히 서로 다른 턴 진행 방식을 쓴다** — 실전은 "라운드마다 SPD 내림차순
   큐를 다시 짜고, ATB 100 이상이면 추가 행동권"인 반면 시뮬레이터의

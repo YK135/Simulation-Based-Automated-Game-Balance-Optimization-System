@@ -116,6 +116,13 @@ def _player_to_snap(player, item_list: list) -> EntitySnapshot:
         # PlayerPowerIndex가 HP/MP/아이템 등 다른 실시간 상태를 반영하는 것과
         # 같은 원칙). PlayerPowerIndex.calc() 자체는 건드리지 않아 목표 승률
         # 산정식은 그대로 유지된다.
+        # ★ 캐시 정책: _monster_cache는 (enemy_type, chapter) 키로 레벨업
+        #   시에만 무효화된다(on_level_up()) — HP/MP/아이템 비율과 마찬가지로
+        #   ATB 잔여값도 "튜닝 시점의 순간값"이 캐시에 고정되고, 그 뒤 전투
+        #   중 값이 바뀌어도 다음 레벨업 전까지는 재사용된다. 이건 새로
+        #   생긴 정책이 아니라 이 캐시가 원래부터 갖고 있던 정책을 ATB에도
+        #   동일하게 적용한 것 — 매 순간 재튜닝하면 배경 시뮬레이션 비용이
+        #   감당 불가능해진다.
         atb_remainder=float(getattr(player, "atb_remainder", 0.0)),
     )
 

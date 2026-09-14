@@ -79,6 +79,38 @@ def test_atb_field_and_engine_wiring():
           and result.final_player_atb >= 0.0, str(result.final_player_atb))
 
 
+def test_manual_battle_to_battle_chain():
+    """코덱스 2차 검증 지적사항: '전투1 종료 ATB → 전투2 시작 ATB'를 실제로
+    검사하는 테스트가 없었다. 자동 연결 코드는 의도적으로 없지만(각 MC 시행은
+    독립적이어야 함 — BattleSimulator 자체 문서 참고), EntitySnapshot.atb_remainder
+    → ATBSystem → BattleResult.final_player_atb 관계 자체는 수동으로 이어붙였을
+    때 정확히 성립해야 한다. 그 관계를 직접 검증한다."""
+    print("\n[3b] 수동 전투1→전투2 ATB 체인 (자동 커넥터는 없음 — 관계식만 검증)")
+    e = make_snap(name="적", hp=1_000_000, maxhp=1_000_000, arm=999)  # 죽지 않는 적 — 1턴만 관찰
+
+    p_battle1 = make_snap(atb_remainder=0.0, spd=30.0)
+    eng1 = BattleEngine(p_battle1, e)
+    result1 = eng1.run(PlayerAI("balanced"), EnemyAI())
+    end_atb_1 = result1.final_player_atb
+
+    p_battle2 = make_snap(atb_remainder=end_atb_1, spd=30.0)
+    eng2 = BattleEngine(p_battle2, e)
+    check("전투1 종료 ATB를 전투2 EntitySnapshot.atb_remainder에 그대로 넣으면"
+          " 전투2 시작 player_pt와 정확히 같음",
+          abs(eng2.atb.player_pt - end_atb_1) < 1e-9,
+          f"end_atb_1={end_atb_1}, eng2.atb.player_pt={eng2.atb.player_pt}")
+
+    print("\n[3c] EntitySnapshot.from_player()가 atb_remainder를 복사하는지")
+    class _FakePlayer:
+        name = "가짜플레이어"; hp = 100; maxhp = 100; mp = 50; maxmp = 50
+        stg = 10; arm = 5; sparm = 5; sp = 8; luc = 5; lv = 3; spd = 12.0
+        job = "전사"; atb_remainder = 77.0
+        learned_skills = []
+    snap = EntitySnapshot.from_player(_FakePlayer())
+    check("from_player()가 atb_remainder를 복사함(값 일치)",
+          snap.atb_remainder == 77.0, str(snap.atb_remainder))
+
+
 def test_independent_trials_not_chained():
     print("\n[4] BattleSimulator — 독립 시행 보장 (템플릿 atb_remainder 불변)")
     p = make_snap(atb_remainder=50.0)
@@ -199,6 +231,7 @@ def main():
     print(" 밸런스 3차 회귀 테스트 — ATB 이월 + 그룹 튜닝")
     print("=" * 56)
     test_atb_field_and_engine_wiring()
+    test_manual_battle_to_battle_chain()
     test_independent_trials_not_chained()
     test_multibattle_enemy_count_fix()
     test_scale_entity_snapshot_matches_documented_formula()

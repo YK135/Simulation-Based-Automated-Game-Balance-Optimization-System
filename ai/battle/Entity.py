@@ -350,6 +350,7 @@ class EntitySnapshot:
             spd=getattr(player, "spd", 10.0),
             learned_skills=skills,
             job=getattr(player, "job", ""),  # 직업별 패시브 발동용
+            atb_remainder=float(getattr(player, "atb_remainder", 0.0)),
         )
 
     @classmethod
