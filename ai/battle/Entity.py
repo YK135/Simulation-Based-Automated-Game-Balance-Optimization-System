@@ -142,6 +142,12 @@ class EntitySnapshot:
     status_effects: list = field(default_factory=list)
     attack_element: str = ""
 
+    # ── 밸런스 3차: cross-battle ATB 이월 (시뮬레이터용) ──
+    # 실전(ai/Battlesession.py)은 이미 Player.atb_remainder로 전투 간 ATB를
+    # 이월한다 — 이 필드는 그 값을 ai/battle/Engine.py의 BattleEngine(1v1
+    # 시뮬레이터)에도 전달하기 위한 것. 기본 0.0이라 기존 호출부는 영향 없음.
+    atb_remainder: float = 0.0
+
     # 하위 호환 property
     @property
     def element_aura(self) -> str:

@@ -12,6 +12,7 @@ N회 반복 배틀 시뮬레이션 + 승률 기반 몬스터 스탯 역산.
 
 from typing import Tuple
 import copy
+import math
 import statistics
 from dataclasses import dataclass
 
@@ -393,14 +394,19 @@ class MultiBattleSimulator:
     @staticmethod
     def _decide_player_action(session, player_ai) -> str:
         """
-        PlayerAI는 1대1 기준이므로 살아있는 첫 번째 적을 defender로 사용.
+        살아있는 적 중 현재 타깃을 defender로 사용, 살아있는 적 수를
+        enemy_count로 넘겨 AoE 스킬(슬래시 등)의 다대일 가치가 실제로
+        스코어링에 반영되게 한다 — 이전엔 enemy_count 없이 호출돼 항상
+        1v1 취급되어(_skill_efficiency의 aoe 배수가 적용 안 됨) 다대일
+        전투에서 광역기 선택 확률이 실전보다 과소평가됐다.
         반환된 Action을 BattleSession이 받는 action 문자열로 변환.
         """
         target = session._current_target()
         if target is None:
             return "attack"  # 폴백 — 사실 호출 전에 done 체크되어 도달 안 함
 
-        action_obj = player_ai(session.player, target)
+        alive = sum(1 for e in session.enemies if e.hp > 0)
+        action_obj = player_ai.decide(session.player, target, enemy_count=max(1, alive))
 
         if action_obj.action_type == "attack":
             return "attack"
@@ -414,6 +420,92 @@ class MultiBattleSimulator:
 # ────────────────────────────────────────────
 # 스탯 역산기 — 플레이어 상태 반영 버전
 # ────────────────────────────────────────────
+
+def scale_entity_snapshot(base: EntitySnapshot, scale: float, enemy_type: str) -> EntitySnapshot:
+    """
+    몬스터 종족별로 스케일링 축을 다르게 적용한 사본을 반환.
+    같은 hp/stg만 조정하면 슬라임/골렘/유령 등 특수 몬스터의 난이도가
+    '같은 스탯으로 접히는' 현상이 발생 → 역할별 축 차별화.
+
+    공통 (모든 몬스터):
+      hp:  e.hp * (0.60 + 0.30 * scale)   — 초반 HP 폭등 방지
+      stg: e.stg * sqrt(scale)            — sqrt(8.0)=2.83배까지
+      arm: e.arm * min(scale, 2.5)        — 강한 ARM 차별화 (1.8→2.5)
+      luc: e.luc * min(scale, 2.5)        — 회피·크리 변수 (1.8→2.5)
+    scale 상한 5.0→8.0 확장에 맞춰 ARM/LUC 캡도 함께 완화.
+
+    역할 추가 축:
+      슬라임 (저항형): sparm/sp 도 조정 → 마법 약점 활용시 난이도 차이 보장
+      골렘  (탱커형): arm 가중치 추가 + sparm 강화 → 마법 면역 강조
+      유령  (회피형): spd/luc 강화 → 회피·선공 난이도 차이
+      암살자 (속도형): stg/spd/luc 강화 (기존)
+      박쥐  (유리대포): sp 강화 → 마법 데미지 변수
+      고블린 (표준): 공통 축만
+
+    ★ StatTuner._scale_enemy()가 base_enemy(단일 몬스터 템플릿)에 쓰는 것과
+      동일한 축을 core/Balance_Hook.py의 그룹 튜닝(get_encounter)이 "이미
+      개별 튜닝된" 몬스터 위에 보정 배율을 한 번 더 얹을 때도 재사용한다 —
+      로직을 두 곳에 복제하지 않기 위해 순수 함수로 뽑아둔 것.
+    """
+    e = copy.deepcopy(base)
+    et = enemy_type
+
+    # ── 공통 스케일링 ──
+    e.hp = max(1.0, e.hp * (0.60 + 0.30 * scale))
+    e.maxhp = e.hp
+    e.stg   = max(1.0, e.stg * math.sqrt(scale))
+    e.arm   = max(0.0, e.arm * min(scale, 2.5))   # 1.8 → 2.5
+    e.luc   = max(0.0, e.luc * min(scale, 2.5))   # 1.8 → 2.5
+
+    # ── 역할별 추가 축 ──
+    if et == "슬라임":
+        # 저항형: 마법 약점 활용 시 난이도 분리
+        e.sparm = max(0.0, e.sparm * min(math.sqrt(scale) * 1.1, 2.2))
+        e.sp    = max(0.0, e.sp * math.sqrt(scale))
+    elif et == "골렘":
+        # 탱커형: arm 한 번 더 + sparm
+        e.arm   = max(0.0, e.arm * min(scale * 0.15 + 1.0, 1.5))   # +up to 50%
+        e.sparm = max(0.0, e.sparm * min(math.sqrt(scale) * 1.1, 2.2))
+    elif et == "유령":
+        # 회피형: spd/luc 강화 (회피 메커니즘과 시너지)
+        e.spd = max(0.0, e.spd * min(math.sqrt(scale) * 1.05, 1.8))
+        e.luc = max(0.0, e.luc * min(scale * 0.1 + 1.0, 1.5))
+    elif et == "암살자":
+        # 속도/선공형: spd 추가
+        e.spd = max(0.0, e.spd * min(math.sqrt(scale) * 1.05, 1.8))
+    elif et == "박쥐":
+        # 유리대포: sp 강화
+        e.sp = max(0.0, e.sp * math.sqrt(scale))
+    # 고블린: 공통 축만 (표준형)
+
+    return e
+
+
+def apply_group_correction(tuned: EntitySnapshot, factor: float) -> EntitySnapshot:
+    """
+    이미 개별 튜닝이 끝난(1v1 기준으로 확정된) 스냅샷에 그룹 보정 배율을
+    "선형으로 곧바로" 곱한다.
+
+    ★ scale_entity_snapshot()과 다른 이유: 그 함수는 base_enemy(튜닝 전
+      원본 grade='중' 템플릿) 대비 곡선형(hp는 affine 0.6+0.3*scale, stg는
+      sqrt(scale) 등) 공식으로 "처음부터 다시" 스탯을 계산하도록 설계됐다.
+      이미 그 함수로 한 번 튜닝이 끝난 스냅샷에 같은 함수를 또 적용하면
+      곡선이 두 번 합성돼(예: hp가 (0.6+0.3*s1)*(0.6+0.3*s2)로 곱해짐)
+      "보정 배율 하나를 얹는다"는 의도와 다른, 예측 불가능한 결과가 나온다
+      (BALANCE_PATCH_3 첫 구현에서 이 실수로 그룹 승률이 수렴하지 않고
+      이진탐색이 범위 끝(0.7)에 붙어버리는 문제가 실측으로 확인됨). 여기서는
+      이미 확정된 최종 스탯 위에 factor를 그대로 곱하기만 한다.
+    """
+    e = copy.deepcopy(tuned)
+    factor = max(0.3, factor)
+    e.hp    = max(1.0, e.hp * factor)
+    e.maxhp = e.hp
+    e.stg   = max(1.0, e.stg * factor)
+    e.sp    = max(0.0, e.sp * factor)
+    e.arm   = max(0.0, e.arm * factor)
+    e.sparm = max(0.0, e.sparm * factor)
+    return e
+
 
 class StatTuner:
     """
@@ -556,59 +648,11 @@ class StatTuner:
         return best_enemy, final_sim
 
     def _scale_enemy(self, scale: float) -> EntitySnapshot:
+        """몬스터 종족별로 스케일링 축을 다르게 적용 — 실제 로직은
+        scale_entity_snapshot()로 추출됨(그룹 튜닝에서도 재사용하기 위함).
         """
-        몬스터 종족별로 스케일링 축을 다르게 적용.
-        같은 hp/stg만 조정하면 슬라임/골렘/유령 등 특수 몬스터의 난이도가
-        '같은 스탯으로 접히는' 현상이 발생 → 역할별 축 차별화.
-
-        공통 (모든 몬스터):
-          hp:  e.hp * (0.60 + 0.30 * scale)   — 초반 HP 폭등 방지
-          stg: e.stg * sqrt(scale)            — sqrt(8.0)=2.83배까지
-          arm: e.arm * min(scale, 2.5)        — 강한 ARM 차별화 (1.8→2.5)
-          luc: e.luc * min(scale, 2.5)        — 회피·크리 변수 (1.8→2.5)
-        scale 상한 5.0→8.0 확장에 맞춰 ARM/LUC 캡도 함께 완화.
-
-        역할 추가 축:
-          슬라임 (저항형): sparm/sp 도 조정 → 마법 약점 활용시 난이도 차이 보장
-          골렘  (탱커형): arm 가중치 추가 + sparm 강화 → 마법 면역 강조
-          유령  (회피형): spd/luc 강화 → 회피·선공 난이도 차이
-          암살자 (속도형): stg/spd/luc 강화 (기존)
-          박쥐  (유리대포): sp 강화 → 마법 데미지 변수
-          고블린 (표준): 공통 축만
-        """
-        import math
-        e = copy.deepcopy(self.base_enemy)
-        et = getattr(e, "enemy_type", "") or e.name
-
-        # ── 공통 스케일링 ──
-        e.hp = max(1.0, e.hp * (0.60 + 0.30 * scale))
-        e.maxhp = e.hp
-        e.stg   = max(1.0, e.stg * math.sqrt(scale))
-        e.arm   = max(0.0, e.arm * min(scale, 2.5))   # 1.8 → 2.5
-        e.luc   = max(0.0, e.luc * min(scale, 2.5))   # 1.8 → 2.5
-
-        # ── 역할별 추가 축 ──
-        if et == "슬라임":
-            # 저항형: 마법 약점 활용 시 난이도 분리
-            e.sparm = max(0.0, e.sparm * min(math.sqrt(scale) * 1.1, 2.2))
-            e.sp    = max(0.0, e.sp * math.sqrt(scale))
-        elif et == "골렘":
-            # 탱커형: arm 한 번 더 + sparm
-            e.arm   = max(0.0, e.arm * min(scale * 0.15 + 1.0, 1.5))   # +up to 50%
-            e.sparm = max(0.0, e.sparm * min(math.sqrt(scale) * 1.1, 2.2))
-        elif et == "유령":
-            # 회피형: spd/luc 강화 (회피 메커니즘과 시너지)
-            e.spd = max(0.0, e.spd * min(math.sqrt(scale) * 1.05, 1.8))
-            e.luc = max(0.0, e.luc * min(scale * 0.1 + 1.0, 1.5))
-        elif et == "암살자":
-            # 속도/선공형: spd 추가
-            e.spd = max(0.0, e.spd * min(math.sqrt(scale) * 1.05, 1.8))
-        elif et == "박쥐":
-            # 유리대포: sp 강화
-            e.sp = max(0.0, e.sp * math.sqrt(scale))
-        # 고블린: 공통 축만 (표준형)
-
-        return e
+        et = getattr(self.base_enemy, "enemy_type", "") or self.base_enemy.name
+        return scale_entity_snapshot(self.base_enemy, scale, et)
 
 
 # ────────────────────────────────────────────

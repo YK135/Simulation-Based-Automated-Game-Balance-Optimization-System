@@ -39,6 +39,9 @@ class BattleResult:
     player_name: str
     enemy_name: str
     final_player_items: list = field(default_factory=list)
+    # 밸런스 3차: 전투 종료 시점 플레이어 잔여 ATB — 연속 전투 시뮬레이터가
+    # 다음 전투 입력(EntitySnapshot.atb_remainder)으로 넘길 수 있게 노출.
+    final_player_atb: float = 0.0
 
 
 # ────────────────────────────────────────────
@@ -68,7 +71,10 @@ class BattleEngine:
         self.player = copy.deepcopy(player)
         self.enemy = copy.deepcopy(enemy)
         self.logs: list[TurnLog] = []
-        self.atb = ATBSystem(spd_multiplier)
+        # 밸런스 3차: 실전(ai/Battlesession.py)이 이미 하는 cross-battle ATB
+        # 이월을 시뮬레이터에도 반영 — EntitySnapshot.atb_remainder(기본 0.0)를
+        # 시작 ATB로 사용. 적은 항상 0에서 시작(실전과 동일 규칙).
+        self.atb = ATBSystem(spd_multiplier, player_start=getattr(player, "atb_remainder", 0.0))
         self.tick_count = 0
         self.action_count = 0
         # ★ 실전(ai/battle_session/Enemy_Actions.py)은 챕터별 몬스터 킷
@@ -389,6 +395,7 @@ class BattleEngine:
             player_name=self.player.name,
             enemy_name=self.enemy.name,
             final_player_items=list(self.player.items),
+            final_player_atb=self.atb.player_pt,
         )
 
 

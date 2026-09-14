@@ -154,7 +154,18 @@ def _make_enemies(hook, n: int, grade_pool: dict, chapter: int = 1, layer: int =
     BalanceHook 캐시 조회). 엘리트 노드는 _make_elite_encounter()가 따로 처리한다.
 
     ※ 구 방식(플레이어 레벨 min_lv 기반 hook.pick_random_enemy_type)은 폐기 —
-      챕터+노드 구간 기준 고정 풀(CHAPTER_TIER_POOL)에서만 출현."""
+      챕터+노드 구간 기준 고정 풀(CHAPTER_TIER_POOL)에서만 출현.
+
+    ※ BALANCE_PATCH_3에서 hook.get_encounter() 기반 그룹 튜닝을 여기 연결해
+      다대일 스탯도 개별 1v1 대신 실제 그룹 승률로 튜닝해봤으나, 검증
+      과정에서 승률-배율 곡선이 가파른(cliff형) 조합에 대해 이진탐색이
+      n=150 표본으로는 재현 불가능한 값에 수렴하는 문제가 확인됐다 — 같은
+      조합/목표를 두 번 다시 튜닝하면 배율이 0.15↔0.385처럼 서로 다르게
+      나오고, 그 값을 그대로 다시 측정하면 목표(약 67%)와 무관하게 6%~93%
+      사이 아무 값이나 나온다. 그래서 연결을 철회했다(BALANCE_PATCH_3.md
+      참고). get_encounter() 자체와 MultiBattleSimulator의 enemy_count
+      버그 수정은 남겨뒀지만 이 함수는 다시 개별 get_enemy() + 호출부의
+      STAT_SCALE로 돌아간다."""
     tier = _node_tier(layer)
     pool = CHAPTER_TIER_POOL.get((chapter, tier)) or CHAPTER_TIER_POOL[(2, "late")]
 

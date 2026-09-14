@@ -17,7 +17,8 @@ import platform
 
 from ai.battle  import BattleEngine, EntitySnapshot, BattleResult
 from ai.Auto_AI        import PlayerAI, EnemyAI
-from ai.Simulator      import MonsterFactory
+from ai.Simulator      import (MonsterFactory, StatTuner, MultiBattleSimulator,
+                               apply_group_correction)
 from ai.LOG_Manager    import LogManager
 from ai.FeedBack       import FeedbackEngine
 from ai.Visualizer     import Visualizer
@@ -110,6 +111,12 @@ def _player_to_snap(player, item_list: list) -> EntitySnapshot:
         spd=getattr(player, "spd", 10.0),  # SPD 반영 (도적 등 고SPD 직업 대응)
         learned_skills=skills,
         items=list(item_list),
+        # 밸런스 3차: 실제 플레이어의 살아있는 ATB 잔여값을 시뮬 입력에 반영
+        # (가짜 평균값이 아니라 지금 이 플레이어가 실제로 들고 있는 값 — 이미
+        # PlayerPowerIndex가 HP/MP/아이템 등 다른 실시간 상태를 반영하는 것과
+        # 같은 원칙). PlayerPowerIndex.calc() 자체는 건드리지 않아 목표 승률
+        # 산정식은 그대로 유지된다.
+        atb_remainder=float(getattr(player, "atb_remainder", 0.0)),
     )
 
 
@@ -260,6 +267,14 @@ class BalanceHook:
         # 백그라운드 시뮬 작업 추적 — 위와 동일하게 (enemy_type, chapter) 키
         self._sim_threads = {}   # {(enemy_type, chapter): True} — _SIM_EXECUTOR에 제출됐음을 표시(멤버십 전용)
         self._sim_ready   = {}   # {(enemy_type, chapter): threading.Event}
+
+        # ── 밸런스 3차: 1v2/1v3 그룹 튜닝 캐시 (get_encounter 전용) ──
+        # 몬스터 "종류" 조합이 아니라 "난이도 구성"으로만 정규화한 키를 쓴다
+        # — 챕터당 몬스터 6~9종 × 난이도 3단계를 조합별로 캐시하면 1v2만
+        # 수백 개, 1v3는 수천 개 캐시 항목이 생겨 서버가 감당 못 한다.
+        # 키: (chapter, tuple(sorted(difficulty, ...))) — 예: (1, ("hard","normal"))
+        self._group_scale_cache = {}   # {key: float} — 개별 튜닝 스탯 위에 곱할 보정 배율
+        self._group_ready       = {}   # {key: threading.Event}
 
         # ★ 레벨업(on_level_up)은 _sim_threads/_sim_ready를 비우고 새로 시작만
         #   할 뿐, 이미 돌고 있던 이전 스레드는 취소/join하지 않는다(파이썬
@@ -466,6 +481,148 @@ class BalanceHook:
                 if self.verbose:
                     print(f"  [AI] {e}")
 
+    # ── 1b. 밸런스 3차: 1v2/1v3 그룹 튜닝 (★ 미연결 — 아래 참고) ─────
+
+    def get_encounter(self, composition: list, chapter: int = 1):
+        """
+        일반(비엘리트) 1v2/1v3 전투용 — composition은
+        [(enemy_type, difficulty), ...] (difficulty: "hard"/"normal"/"easy").
+        길이 1은 호출하지 말 것(이 메서드는 다대일 전용).
+
+        반환: (enemies: list[EntitySnapshot], applied: bool)
+          applied=True  → 그룹 튜닝(보정 배율)이 실제로 적용된 결과.
+          applied=False → 튜닝 미완료(첫 조우) 또는 큐 포화 — 개별
+                          get_enemy() 결과 그대로 반환.
+
+        ★★★ 미연결 상태(BALANCE_PATCH_3, ai/Simulator.py의 MultiBattleSimulator와
+          같은 처지): app/Map.py의 _make_enemies()가 예전엔 이 메서드를 썼지만,
+          검증(montecarlo.py 전체 스윕 + 개별 재현 테스트) 도중 승률-배율
+          곡선이 가파른(cliff형) 조합에서 아래 _start_group_tuning()의
+          이진탐색이 신뢰할 수 없는 값에 수렴하는 문제가 확인돼 연결을
+          철회했다 — 같은 조합/목표를 두 번 튜닝해도 배율이 0.15↔0.385처럼
+          서로 다르게 나오고, 그 "수렴한" 값을 독립적으로 다시 측정하면
+          목표(약 67%)와 무관하게 6%~93% 사이 아무 값이나 나온다(n=150 단발
+          표본으로 스텝형 목적함수를 이진탐색하면 생기는 전형적인 문제 —
+          StatTuner의 1v1 튜닝은 승률 곡선이 훨씬 완만해서 같은 표본수로도
+          문제가 없었다). 이 메서드/이진탐색 자체는 테스트로 검증된 상태로
+          남겨뒀지만(캐시 키 정규화, 이중할인 방지 로직은 정상) 실전에
+          연결하려면 이진탐색을 후보값마다 여러 번 반복 측정해 평균내는 식의
+          분산 감소 설계가 먼저 필요하다 — BALANCE_PATCH_3.md의 "남은 한계"
+          참고.
+
+        ★ 엘리트는 범위 밖 — 리더(패턴)+호위 구성이 복잡해 별도 한계로 남김.
+        """
+        if len(composition) < 2:
+            raise ValueError("get_encounter()는 1v2 이상 다대일 전용입니다")
+
+        individually_tuned = [
+            self.get_enemy(t, difficulty=d, chapter=chapter) for t, d in composition
+        ]
+
+        key = (chapter, tuple(sorted(d for _, d in composition)))
+        group_scale = self._get_group_scale(key)
+
+        if group_scale is None:
+            # 이 난이도 구성을 처음 만남 — 지금 들어온 composition을 대표
+            # 표본으로 삼아 백그라운드 튜닝 시작(같은 난이도 구성이면 몬스터
+            # 종류가 달라도 같은 보정 배율을 재사용 — 종류별 세부 차이는 이미
+            # 1단계 개별 튜닝에 반영돼 있어, 그룹 보정은 "2~3마리를 동시에
+            # 상대할 때"라는 2차 효과만 담당하면 충분하다는 전제. 근거 없는
+            # 표본 대체가 아니라 실제 이번 조우의 스냅샷을 그대로 쓴다).
+            self._start_group_tuning(
+                key,
+                sample_snaps=individually_tuned,
+                difficulties=[d for _, d in composition],
+                chapter=chapter,
+            )
+            return individually_tuned, False
+
+        scaled = [
+            apply_group_correction(s, group_scale)
+            for s in individually_tuned
+        ]
+        return scaled, True
+
+    def _get_group_scale(self, key):
+        with self._cache_lock:
+            if key in self._group_scale_cache:
+                return self._group_scale_cache[key]
+        event = self._group_ready.get(key)
+        if event:
+            ready = event.wait(timeout=2.0)
+            if ready:
+                with self._cache_lock:
+                    if key in self._group_scale_cache:
+                        return self._group_scale_cache[key]
+        return None
+
+    def _start_group_tuning(self, key, sample_snaps, difficulties, chapter):
+        if key in self._group_ready:
+            return  # 이미 진행 중
+
+        event = threading.Event()
+        self._group_ready[key] = event
+        gen = self._sim_generation
+
+        def _run():
+            try:
+                p_snap = _player_to_snap(self.player, self.item_list)
+                # 그룹 목표 승률 = 구성원 각자의 기본 목표 승률 평균.
+                # 몬스터별 특례 테이블(_TARGET_BY_NAME)은 캐시 키에 종류가
+                # 없어 특정할 수 없으므로 DEFAULT_TARGET만 사용 — 이미 1단계
+                # 개별 튜닝에서 몬스터별 특성(예: 박쥐 유리대포)이 반영된
+                # 스탯을 입력으로 받으므로, 그룹 보정은 표준 목표선만 따라가도
+                # 충분하다는 전제.
+                target = sum(StatTuner.DEFAULT_TARGET[d] for d in difficulties) / len(difficulties)
+
+                # 이미 개별 튜닝된(1v1 기준 확정) 스탯 위에 선형 보정 배율
+                # 하나만 얹는다 — apply_group_correction() 참고(이중 곡선
+                # 합성 버그 수정, ai/Simulator.py 문서 참고).
+                # ★ 탐색 범위: 처음엔 "1.0 근처의 좁은 보정"이면 충분할
+                #   거라 가정해 0.5~1.5로 좁혔었는데, 실측(BALANCE_PATCH_3)
+                #   결과 저레벨 다대일처럼 개별 튜닝 스탯을 단순히 곱해
+                #   쌓으면 승률이 0%/100% 근처의 급경사(cliff)를 그리는
+                #   조합이 실제로 존재해 — 좁은 범위에서 이진탐색이 경계값
+                #   (0.5 또는 1.5)에 붙어버리고 수렴하지 못했다(대표 사례:
+                #   마법사 Lv5 대비 고블린 easy/easy/normal 1v3 — 필요한
+                #   보정 배율이 ~0.39, 원래 범위 밖). 0.15~2.0으로 넓혀
+                #   급경사 구간도 이진탐색이 실제로 찾아낼 수 있게 했다.
+                lo, hi = 0.15, 2.0
+                best_scale = 1.0
+                for _ in range(12):
+                    mid = (lo + hi) / 2
+                    trial = [
+                        apply_group_correction(s, mid)
+                        for s in sample_snaps
+                    ]
+                    sim = MultiBattleSimulator(p_snap, trial, n=150).run()
+                    if abs(sim.win_rate - target) <= 0.04:
+                        best_scale = mid
+                        break
+                    if sim.win_rate > target:
+                        lo = mid   # 그룹이 너무 약함 → 배율 올림
+                    else:
+                        hi = mid   # 그룹이 너무 강함 → 배율 내림
+                    best_scale = mid
+
+                with self._cache_lock:
+                    if gen == self._sim_generation:
+                        self._group_scale_cache[key] = best_scale
+            except Exception as e:
+                if self.verbose:
+                    print(f"  [AI] 그룹 튜닝 오류 {key}: {e}")
+            finally:
+                event.set()
+
+        submitted = _SIM_EXECUTOR.submit(_run)
+        if submitted:
+            pass  # _group_ready[key]가 이미 진행 중 표시 역할을 겸함
+        else:
+            # 큐 포화 — 다음 호출이 재시도할 수 있게 흔적 정리
+            self._group_ready.pop(key, None)
+            if self.verbose:
+                print(f"  [AI] 그룹 튜닝 {key} 제출 실패 — 큐 포화, 개별 튜닝 결과로 폴백")
+
     # ── 2. 전투 후: 로그 저장 + 복기 ────────
 
     def after_battle(self, result: BattleResult):
@@ -518,11 +675,13 @@ class BalanceHook:
 
         with self._cache_lock:
             self._monster_cache.clear()
+            self._group_scale_cache.clear()
             # ★ 세대를 올려서 이 시점에 이미 돌고 있던(취소 불가능한) 이전
             #   스레드들이 나중에 끝나도 옛 레벨 결과로 캐시를 못 덮어쓰게 한다.
             self._sim_generation += 1
         self._sim_threads.clear()
         self._sim_ready.clear()
+        self._group_ready.clear()
         self._last_lv = self.player.lv
 
         # 즉시 백그라운드 재시뮬 시작

@@ -6,8 +6,10 @@ from __future__ import annotations
 class ATBSystem:
     THRESHOLD = 100
 
-    def __init__(self, spd_multiplier: float = 1.0):
-        self.player_pt: float = 0.0
+    def __init__(self, spd_multiplier: float = 1.0, player_start: float = 0.0):
+        # player_start: cross-battle ATB 이월(EntitySnapshot.atb_remainder) 시작값.
+        # 적(enemy_pt)은 항상 0에서 시작 — 실전 규칙과 동일.
+        self.player_pt: float = float(player_start)
         self.enemy_pt: float = 0.0
         self.x = spd_multiplier
 
