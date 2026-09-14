@@ -9,9 +9,28 @@ class ATBSystem:
     def __init__(self, spd_multiplier: float = 1.0, player_start: float = 0.0):
         # player_start: cross-battle ATB 이월(EntitySnapshot.atb_remainder) 시작값.
         # 적(enemy_pt)은 항상 0에서 시작 — 실전 규칙과 동일.
-        self.player_pt: float = float(player_start)
+        self.player_pt: float = self._sanitize_start(player_start)
         self.enemy_pt: float = 0.0
         self.x = spd_multiplier
+
+    @staticmethod
+    def _sanitize_start(value) -> float:
+        """player_start 방어적 정제 (BALANCE_PATCH_3 3차 검증 지적).
+
+        atb_remainder는 Player.to_dict()/from_dict()를 거쳐 Redis/DB에
+        저장·복원되므로(app/Shared.py의 세션 스냅샷 경유) 이론상 손상된
+        세션 데이터가 여기까지 흘러들 수 있다 — None/문자열/NaN/무한대/
+        음수를 안전한 값으로 정리한다. 상한은 두지 않는다: 100 이상이면
+        tick()이 이미 초과분만 이월하는 정상 로직을 그대로 타므로(위 tick()
+        주석 참고) 굳이 클램프할 필요가 없다 — 오직 "비교 연산 자체가
+        깨지는" NaN/None/음수/무한대만 막는다."""
+        try:
+            v = float(value)
+        except (TypeError, ValueError):
+            return 0.0
+        if v != v or v in (float("inf"), float("-inf")):  # v != v → NaN
+            return 0.0
+        return max(0.0, v)
 
     def tick(self, player_spd: float, enemy_spd: float) -> list[str]:
         self.player_pt += max(1.0, player_spd * self.x)

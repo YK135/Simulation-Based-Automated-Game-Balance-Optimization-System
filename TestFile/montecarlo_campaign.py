@@ -33,6 +33,15 @@ player_original=player)를 매 전투마다 사용) 여러 전투를 연속으�
      조건마다 달라지면 그 이후 소비되는 난수 위치도 갈라짐), 하지만 적어도
      "이월 조건이 나중에 실행돼서 이월 없음 조건이 이미 소비한 난수를
      이어받는" 이전 버전의 편향은 제거했다.
+  4) (job, LEVEL)당 하나의 hook을 carryover=True(먼저 실행)/False(나중
+     실행)가 공유한다 — 이전 버전은 이 hook의 몬스터 튜닝 캐시를 전혀
+     미리 데우지 않아서, True 조건 초반 캠페인들은 튜닝 미완료(폴백 스탯)
+     상태를 일부 겪고 False 조건은 이미 다 튜닝된 캐시만 보는 비대칭이
+     있었다(3차 검증 지적). `_prewarm_hook()`으로 두 조건 시작 전에
+     이 레벨에서 나올 수 있는 모든 적 종류의 튜닝을 미리 끝내둬서
+     제거했다 — 다만 시뮬레이션 스레드가 전역 random을 공유하는 구조적
+     한계(BALANCE_PATCH_3.md 참고)까지 없앤 건 아니라서 "완벽한" paired
+     comparison이라고 주장하지는 않는다.
 
 실행: python3 TestFile/montecarlo_campaign.py
 환경변수: N(캠페인 반복수, 기본 300), BATTLES(캠페인당 전투수, 기본 6),
@@ -81,13 +90,36 @@ def player_snap(p, items):
         items=list(items), job=p.job)
 
 
+_POOL_BY_CHAPTER = {
+    1: ["고블린", "박쥐", "슬라임"],
+    2: ["박쥐", "화염 슬라임", "사제", "암살자"],
+}
+
+
+def _prewarm_hook(hook, level, timeout=60.0):
+    """carryover=True/False 두 조건이 시작하기 전에 이 (job, level) hook이
+    마주칠 수 있는 모든 적 종류의 튜닝을 미리 끝내둔다.
+
+    ★ 왜 필요한가(2차 검증 이후 코덱스 3차 검증 지적): 예전엔 hook 하나를
+      만든 뒤 carryover=True 조건을 먼저 150회 돌렸는데, 그 도중에 각
+      적 종류의 백그라운드 튜닝이 처음 완료된다 — 즉 True 조건 초반
+      캠페인들은 (튜닝 미완료 → 폴백 스탯)과 (튜닝 완료 → 실제 튜닝 스탯)이
+      섞여서 나오고, 나중에 도는 False 조건은 전부 이미 튜닝된 스탯만
+      본다. 두 조건이 "같은 몬스터 강도 분포"를 보도록 먼저 전부 데워둔다."""
+    chapter = 1 if level < 8 else 2
+    for enemy_type in _POOL_BY_CHAPTER[chapter]:
+        hook.get_enemy(enemy_type, difficulty="normal", chapter=chapter)
+        event = hook._sim_ready.get((enemy_type, chapter))
+        if event:
+            event.wait(timeout=timeout)
+
+
 def run_one_battle(p, hook, level, ai):
     """1v1 전투 1회 — app/Battle.py._start_battle()와 동일 패턴
     (player_original=p → 실전 그대로 ATB 이월). 반환: (win, turns)."""
     chapter = 1 if level < 8 else 2
     diff = choice(["easy", "normal", "hard"])
-    pool = ["고블린", "박쥐", "슬라임"] if chapter == 1 else ["박쥐", "화염 슬라임", "사제", "암살자"]
-    enemy_type = choice(pool)
+    enemy_type = choice(_POOL_BY_CHAPTER[chapter])
     snap = hook.get_enemy(enemy_type, difficulty=diff, chapter=chapter)
     origin = hook.make_battle_unit(snap)
 
@@ -158,6 +190,7 @@ def main():
         # 안 될 정도로 느려진다(파일럿 실측: 1회당 십수 초).
         hook = BalanceHook(build_player(job, LEVEL), start_items(LEVEL),
                            show_graph=False, verbose=False, auto_prewarm=False)
+        _prewarm_hook(hook, LEVEL)
         for carryover in (True, False):
             # 조건마다 시드를 다시 걸어 carryover=True/False가 같은
             # 초기조건(같은 몬스터 롤 시퀀스 시작점)에서 갈라지게 한다 —

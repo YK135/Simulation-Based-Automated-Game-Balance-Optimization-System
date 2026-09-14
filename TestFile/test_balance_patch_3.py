@@ -70,6 +70,17 @@ def test_atb_field_and_engine_wiring():
     check("player_start=95 + spd20 → 즉시 행동권 획득", "player" in actors, str(actors))
     check("100 초과분만 차감(95+20-100=15)", abs(atb.player_pt - 15.0) < 1e-6, str(atb.player_pt))
 
+    print("\n[2b] ATBSystem.player_start 방어적 정제 (손상된 세션 데이터 대비)")
+    check("NaN → 0.0", ATBSystem(player_start=float("nan")).player_pt == 0.0)
+    check("+inf → 0.0", ATBSystem(player_start=float("inf")).player_pt == 0.0)
+    check("-inf → 0.0", ATBSystem(player_start=float("-inf")).player_pt == 0.0)
+    check("음수 → 0.0으로 클램프", ATBSystem(player_start=-42.0).player_pt == 0.0)
+    check("None → 0.0", ATBSystem(player_start=None).player_pt == 0.0)
+    check("문자열(숫자 아님) → 0.0", ATBSystem(player_start="garbage").player_pt == 0.0)
+    check("정상 유한값은 그대로 통과", ATBSystem(player_start=37.5).player_pt == 37.5)
+    check("100 이상 유한값은 클램프 없이 통과(tick()이 초과분을 처리)",
+          ATBSystem(player_start=250.0).player_pt == 250.0)
+
     print("\n[3] BattleResult.final_player_atb 노출")
     p2 = make_snap(atb_remainder=0.0, hp=500, maxhp=500)
     weak_enemy = make_snap(name="약체", hp=1, maxhp=1, stg=1, arm=0, sparm=0)
