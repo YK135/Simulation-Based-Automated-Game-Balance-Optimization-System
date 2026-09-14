@@ -13,24 +13,34 @@ class ATBSystem:
         self.enemy_pt: float = 0.0
         self.x = spd_multiplier
 
+    # 정상 시나리오에서 이월값이 이 이상으로 커질 이유가 없다(매 tick 증가폭은
+    # SPD 수준의 한 자릿수~두 자릿수, 초과분 이월도 THRESHOLD 단위) — 넉넉히
+    # 10배로 잡아 상한을 둔다. 이 이상은 손상된 값으로 간주해 0으로 되돌린다.
+    MAX_SANE_START = 1000.0
+
     @staticmethod
     def _sanitize_start(value) -> float:
-        """player_start 방어적 정제 (BALANCE_PATCH_3 3차 검증 지적).
+        """player_start 방어적 정제 (BALANCE_PATCH_3 3~4차 검증 지적).
 
         atb_remainder는 Player.to_dict()/from_dict()를 거쳐 Redis/DB에
         저장·복원되므로(app/Shared.py의 세션 스냅샷 경유) 이론상 손상된
-        세션 데이터가 여기까지 흘러들 수 있다 — None/문자열/NaN/무한대/
-        음수를 안전한 값으로 정리한다. 상한은 두지 않는다: 100 이상이면
-        tick()이 이미 초과분만 이월하는 정상 로직을 그대로 타므로(위 tick()
-        주석 참고) 굳이 클램프할 필요가 없다 — 오직 "비교 연산 자체가
-        깨지는" NaN/None/음수/무한대만 막는다."""
+        세션 데이터가 여기까지 흘러들 수 있다 — None, 숫자로 변환할 수
+        없는 값(예: "abc" — "37.5"처럼 숫자 형태 문자열은 float()가 정상
+        변환하므로 그대로 허용됨), NaN, 무한대, 음수를 0.0으로 되돌린다.
+        ★ 4차 검증 지적: 매우 큰 유한값(예: 1e308)은 애초 구현이 안 막고
+        있었다 — float64 정밀도 한계상 `1e308 - THRESHOLD(100)`은 반올림
+        오차로 그대로 1e308이 돼(관측 확인), tick()의 "초과분만 이월"
+        로직이 사실상 무력화되고 매 tick 플레이어가 계속 행동 가능한
+        상태가 된다. MAX_SANE_START로 상한도 함께 막는다."""
         try:
             v = float(value)
         except (TypeError, ValueError):
             return 0.0
         if v != v or v in (float("inf"), float("-inf")):  # v != v → NaN
             return 0.0
-        return max(0.0, v)
+        if v < 0.0 or v > ATBSystem.MAX_SANE_START:
+            return 0.0
+        return v
 
     def tick(self, player_spd: float, enemy_spd: float) -> list[str]:
         self.player_pt += max(1.0, player_spd * self.x)

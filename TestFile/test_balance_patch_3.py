@@ -76,10 +76,17 @@ def test_atb_field_and_engine_wiring():
     check("-inf → 0.0", ATBSystem(player_start=float("-inf")).player_pt == 0.0)
     check("음수 → 0.0으로 클램프", ATBSystem(player_start=-42.0).player_pt == 0.0)
     check("None → 0.0", ATBSystem(player_start=None).player_pt == 0.0)
-    check("문자열(숫자 아님) → 0.0", ATBSystem(player_start="garbage").player_pt == 0.0)
+    check("숫자로 변환 불가능한 문자열 → 0.0", ATBSystem(player_start="garbage").player_pt == 0.0)
+    check("숫자 형태 문자열은 정상 변환(float()와 동일 동작)",
+          ATBSystem(player_start="37.5").player_pt == 37.5)
     check("정상 유한값은 그대로 통과", ATBSystem(player_start=37.5).player_pt == 37.5)
-    check("100 이상 유한값은 클램프 없이 통과(tick()이 초과분을 처리)",
+    check("100 이상이어도 상한(MAX_SANE_START=1000) 이내면 클램프 없이 통과"
+          "(tick()이 초과분을 처리)",
           ATBSystem(player_start=250.0).player_pt == 250.0)
+    check("극단적으로 큰 유한값(1e308)은 상한 초과로 0.0 — float64 정밀도상"
+          " 1e308-100이 그대로 1e308이라 tick()의 초과분 이월이 무력화되는"
+          " 걸 막음(4차 검증 지적)",
+          ATBSystem(player_start=1e308).player_pt == 0.0)
 
     print("\n[3] BattleResult.final_player_atb 노출")
     p2 = make_snap(atb_remainder=0.0, hp=500, maxhp=500)

@@ -105,13 +105,35 @@ def _prewarm_hook(hook, level, timeout=60.0):
       적 종류의 백그라운드 튜닝이 처음 완료된다 — 즉 True 조건 초반
       캠페인들은 (튜닝 미완료 → 폴백 스탯)과 (튜닝 완료 → 실제 튜닝 스탯)이
       섞여서 나오고, 나중에 도는 False 조건은 전부 이미 튜닝된 스탯만
-      본다. 두 조건이 "같은 몬스터 강도 분포"를 보도록 먼저 전부 데워둔다."""
+      본다. 두 조건이 "같은 몬스터 강도 분포"를 보도록 먼저 전부 데워둔다.
+
+    ★ 4차 검증 지적: 최초 구현은 event.wait()의 반환값을 확인하지 않아서
+      — 튜닝이 타임아웃 내에 안 끝나거나(느린 머신) 큐 포화로 event 자체가
+      없어져도(_start_background_sim이 제출 실패 시 정리함) 그대로 측정을
+      시작해버렸다. 그러면 이 함수가 막으려던 콜드/웜 비대칭이 조용히
+      되살아난다 — 실패를 삼키지 않고 즉시 예외로 멈춘다(이 스크립트는
+      일회성 벤치마크라 "일단 진행"보다 "잘못된 전제로 측정하지 않는 것"이
+      항상 낫다)."""
     chapter = 1 if level < 8 else 2
     for enemy_type in _POOL_BY_CHAPTER[chapter]:
+        key = (enemy_type, chapter)
         hook.get_enemy(enemy_type, difficulty="normal", chapter=chapter)
-        event = hook._sim_ready.get((enemy_type, chapter))
-        if event:
-            event.wait(timeout=timeout)
+        if key in hook._monster_cache:
+            continue  # 이미 캐시됨(동일 hook 재사용 등) — 대기 불필요
+
+        event = hook._sim_ready.get(key)
+        if event is None:
+            raise RuntimeError(
+                f"_prewarm_hook: {enemy_type}(chapter={chapter}) 튜닝 작업이 "
+                f"제출되지 못함(큐 포화) — 콜드/웜 비대칭을 방지할 수 없어 중단.")
+        if not event.wait(timeout=timeout):
+            raise RuntimeError(
+                f"_prewarm_hook: {enemy_type}(chapter={chapter}) 튜닝이 "
+                f"{timeout}초 내에 끝나지 않음 — 중단.")
+        if key not in hook._monster_cache:
+            raise RuntimeError(
+                f"_prewarm_hook: {enemy_type}(chapter={chapter}) 튜닝 작업이 "
+                f"완료 신호는 보냈지만 캐시에 없음(백그라운드 작업 중 예외 발생) — 중단.")
 
 
 def run_one_battle(p, hook, level, ai):
