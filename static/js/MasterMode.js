@@ -151,10 +151,13 @@ async function _masterStartBoss(which) {
 
 async function _masterStartElite() {
     if (state.inBattle || _masterActionProcessing) return;
+    const chapterSel = document.getElementById('master-elite-chapter-select');
+    const chapter = chapterSel ? parseInt(chapterSel.value, 10) : 1;
+
     _masterActionProcessing = true;
     refreshMasterPanel();
     try {
-        const r = await api('/master/battle/elite', {});
+        const r = await api('/master/battle/elite', { chapter });
         if (!r.ok) { toast(r.error || '전투 시작 실패', 'error'); return; }
         logLine(`⚔ 엘리트 ${r.enemy?.name || '몬스터'}이(가) 나타났다!`, 'crit');
         _masterEnterBattle(r);

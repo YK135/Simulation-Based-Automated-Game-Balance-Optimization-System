@@ -12,8 +12,8 @@ MASTER_MODE 설정일 때만 이 블루프린트를 등록한다 — RENDER 환�
   POST /api/master/battle/boss    — { "boss": "mid" | "final" } 보스 즉시 전투
   POST /api/master/battle/monster — { "monster_type": "고블린", "grade": "상" }
                                      지정 몬스터 즉시 전투
-  POST /api/master/battle/elite   — 현재 챕터 엘리트 풀에서 랜덤 리더(+동료)
-                                     즉시 전투
+  POST /api/master/battle/elite   — { "chapter": 1|2 } (생략 시 현재 챕터) 엘리트
+                                     풀에서 랜덤 리더(+동료) 즉시 전투
 """
 from __future__ import annotations
 
@@ -151,9 +151,23 @@ def master_battle_elite():
 
     from .Map import _make_elite_encounter, _apply_stat_scale, _early_game_multi_scale, ELITE_STAT_SCALE
 
-    hook    = gs["hook"]
-    chapter = gs.get("chapter", 1)
-    layer   = gs.get("battle_map_layer") or 1
+    data    = _get_json_body()
+    chapter = data.get("chapter")
+    if chapter is None:
+        # 맵 생성 전(new_game 직후)엔 gs["chapter"]가 None이라 or로 폴백 —
+        # 생략 시 "현재 챕터"를 그대로 쓰는 기존 동작을 유지한다.
+        chapter = gs.get("chapter") or 1
+    try:
+        chapter = int(chapter)
+    except (TypeError, ValueError):
+        return jsonify({"ok": False, "error": "chapter는 숫자여야 합니다."}), 400
+    if chapter not in (1, 2):
+        return jsonify({"ok": False, "error": "chapter는 1 또는 2여야 합니다."}), 400
+
+    # ★ 실제 진행도(gs["chapter"])는 건드리지 않는다 — 이건 어떤 챕터의 엘리트
+    #   풀에서 뽑을지만 결정하는 테스트용 오버라이드.
+    hook  = gs["hook"]
+    layer = gs.get("battle_map_layer") or 1
     enemies, _grades = _make_elite_encounter(hook, chapter=chapter, layer=layer)
 
     # 실제 노드맵 엘리트 스폰(app/Map.py choose_node)과 동일한 다대일 보정 —
