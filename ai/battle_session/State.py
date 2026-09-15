@@ -35,6 +35,79 @@ class StateMixin:
             ],
         }
 
+    # ── 피해/회복 수치 팝업용 (UI 데미지 숫자) ──────────────────
+    # 프론트가 한글 메시지 문자열에서 숫자를 파싱하지 않도록, step() 한 번 동안
+    # 각 대상의 HP/실드 변화량을 구조화해서 내려준다.
+    #   ※ step() 경계의 스냅샷 차분이라 "대상별 합계 1개"까지만 정확하다 —
+    #     연속공격(hits>1)이나 AoE의 타별 분해는 하지 않는다(그건 타격 사이트
+    #     전부를 계측해야 하는 별개 작업). UI도 한 행동당 대상별 숫자 1개를
+    #     띄우므로 현재 표시 수준과 일치한다.
+    def _hp_snapshot(self) -> dict:
+        """대상별 (hp, shield) 스냅샷 — step() 진입 시 호출."""
+        def pair(e):
+            return (float(getattr(e, "hp", 0.0)), float(getattr(e, "shield", 0.0)))
+        return {
+            "player": pair(self.player),
+            "enemies": [pair(en) for en in self.enemies],
+            "log_len": len(self.logs),
+        }
+
+    def _hits_from_snapshot(self, before: dict) -> list:
+        """스냅샷 대비 변화량을 UI용 hit 이벤트 리스트로 변환.
+        kind: damage(피해, 실드로 흡수된 분 포함) / heal(회복) / shield(실드 획득)"""
+        if not before:
+            return []
+
+        # 이번 step 동안 추가된 로그에서 크리티컬 여부 판정.
+        #   로그에는 대상 슬롯 정보가 없어서, 피해를 입은 적이 1마리일 때만
+        #   플레이어의 크리를 그 적에게 귀속시킨다(AoE 다중 대상은 미표시).
+        new_logs = self.logs[before.get("log_len", 0):]
+        player_crit = any(getattr(l, "actor", "") == "player" and getattr(l, "is_crit", False)
+                          for l in new_logs)
+        enemy_crit  = any(getattr(l, "actor", "") == "enemy" and getattr(l, "is_crit", False)
+                          for l in new_logs)
+
+        def events(entity, prev, target, slot):
+            prev_hp, prev_shield = prev
+            hp     = float(getattr(entity, "hp", 0.0))
+            shield = float(getattr(entity, "shield", 0.0))
+            out = []
+            dmg = max(0.0, prev_hp - hp) + max(0.0, prev_shield - shield)
+            if int(round(dmg)) > 0:
+                out.append({"target": target, "slot": slot,
+                            "amount": int(round(dmg)), "kind": "damage"})
+            heal = max(0.0, hp - prev_hp)
+            if int(round(heal)) > 0:
+                out.append({"target": target, "slot": slot,
+                            "amount": int(round(heal)), "kind": "heal"})
+            gained_shield = max(0.0, shield - prev_shield)
+            if int(round(gained_shield)) > 0:
+                out.append({"target": target, "slot": slot,
+                            "amount": int(round(gained_shield)), "kind": "shield"})
+            return out
+
+        hits = events(self.player, before["player"], "player", -1)
+        for h in hits:
+            if h["kind"] == "damage":
+                h["crit"] = bool(enemy_crit)
+
+        prev_enemies = before.get("enemies", [])
+        enemy_hits = []
+        for i, en in enumerate(self.enemies):
+            if i >= len(prev_enemies):
+                continue                      # 전투 중 새로 생긴 개체(분열/부활)
+            enemy_hits.append(events(en, prev_enemies[i], "enemy", i))
+
+        damaged = [e for group in enemy_hits for e in group if e["kind"] == "damage"]
+        for e in damaged:
+            e["crit"] = bool(player_crit) and len(damaged) == 1
+        for group in enemy_hits:
+            hits.extend(group)
+
+        for h in hits:
+            h.setdefault("crit", False)
+        return hits
+
     def _live_inventory_dict(self) -> dict:
         """전투 중 self.items(원본 평탄 리스트 — 문자열)로부터 구조화 인벤토리
         breakdown을 만들어 반환 — app/Shared.py._player_dict()의 비-Inventory
@@ -175,6 +248,10 @@ class StateMixin:
             "done":       self.done,
             "winner":     self.winner,
             "messages":   messages or [],
+            # ★ 데미지 숫자 팝업용 — 실제 값은 step()이 채운다(스냅샷 차분이라
+            #   _step_core 내부에서는 아직 알 수 없음). 여기서 빈 리스트로 키를
+            #   항상 만들어 두면 프론트가 존재 여부를 따지지 않아도 된다.
+            "hits":       [],
             # ★ A1 응답 분리 — 다음 행동자 정보
             "next_actor":         next_actor,
             "acting_enemy_idx":   acting_enemy_idx,

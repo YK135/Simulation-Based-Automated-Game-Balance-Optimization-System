@@ -135,6 +135,96 @@ function _scheduleSetState(target, state, delay) {
     setTimeout(() => setCharState(target, state), delay);
 }
 
+
+/* ═══════════════════════════════════════════════════════════
+   데미지 숫자 팝업 + 피격 플래시
+   ───────────────────────────────────────────────────────────
+   서버 응답의 구조화 필드 bs.hits를 그대로 쓴다 (한글 메시지 파싱 없음).
+     hits: [{target:'player'|'enemy', slot, amount, kind, crit}]
+     kind: 'damage' | 'heal' | 'shield'
+   호출 시점은 BattleSequencer의 "데미지 적용 + hurt" 단계 — hurt 시트가
+   시작되는 그 프레임에 숫자와 플래시가 같이 뜬다.
+   ═══════════════════════════════════════════════════════════ */
+
+// 슬롯 DOM 조회 — CharSprite.js의 id 규칙과 동일하게 유지해야 함.
+function _hitHostElement(target, slot) {
+    if (target === 'player') {
+        const art = document.getElementById('player-combatant-art-img')
+                 || document.getElementById('player-combatant-art');
+        return art ? art.parentElement : null;
+    }
+    const ids = ['enemy-slot-1', 'enemy-slot-2', 'enemy-slot-3'];
+    return document.getElementById(ids[slot] || ids[0]);
+}
+
+const _HIT_STYLE = {
+    damage: { cls: 'dmg',    sign: '',  color: null },
+    heal:   { cls: 'heal',   sign: '+', color: null },
+    shield: { cls: 'shield', sign: '+', color: null },
+};
+
+/** 숫자 하나를 슬롯 위에 띄움 (CSS 애니메이션으로 상승+페이드) */
+function showDamagePopup(target, slot, amount, kind, isCrit, index) {
+    const host = _hitHostElement(target, slot);
+    if (!host || !amount) return;
+
+    const style = _HIT_STYLE[kind] || _HIT_STYLE.damage;
+    const el = document.createElement('div');
+    el.className = 'dmg-popup ' + style.cls + (isCrit ? ' crit' : '');
+    el.textContent = style.sign + amount;
+
+    // 여러 숫자가 겹치지 않게 흩뿌림 — 좌우는 번갈아, 세로는 인덱스마다 더 높이.
+    //   (좌우만 벌리면 같은 높이에 나란히 떠서 서로 가린다)
+    //   세로 간격은 치명타 글자(38px)가 아래 숫자를 덮지 않을 만큼 벌린다.
+    const spread = (index % 2 === 0 ? 1 : -1) * (10 + index * 6);
+    el.style.setProperty('--dx', spread + 'px');
+    el.style.top = (-12 - index * 34) + 'px';
+    el.style.animationDelay = (index * 90) + 'ms';
+
+    host.appendChild(el);
+    setTimeout(function () {
+        if (el.parentElement) el.parentElement.removeChild(el);
+    }, 1200 + index * 90);
+}
+
+/** 피격 플래시 — 스프라이트가 있으면 실루엣 마스크, 없으면 CSS 클래스 폴백 */
+function flashHitOn(target, slot, isCrit) {
+    const charTarget = (target === 'player') ? 'player_battle' : ('enemy_battle:' + slot);
+    const masked = (typeof flashHitMask === 'function')
+        ? flashHitMask(charTarget, { color: isCrit ? '#ffe9a8' : '#ffffff', duration: isCrit ? 200 : 140 })
+        : false;
+
+    if (masked) return;
+
+    // 이모지 폴백 — 마스크할 알파가 없으므로 슬롯 전체를 짧게 때린다.
+    //   ★ filter로 하면 .combatant-art에 이미 걸린 drop-shadow(발광)를
+    //     덮어써서 사라지므로, 두 filter를 합성해 둔 CSS 클래스를 쓴다.
+    const host = _hitHostElement(target, slot);
+    if (!host) return;
+    host.classList.remove('hit-punch');
+    void host.offsetWidth;            // reflow — 연속 피격에도 매번 재생
+    host.classList.add('hit-punch');
+    setTimeout(function () { host.classList.remove('hit-punch'); }, 260);
+}
+
+/** bs.hits 전체를 재생 (숫자 + 플래시). 대상별로 index를 나눠 겹침 방지 */
+function playHitFeedback(hits, filterTarget) {
+    if (!Array.isArray(hits) || hits.length === 0) return;
+
+    const perHost = {};
+    for (const h of hits) {
+        if (!h || !h.amount) continue;
+        if (filterTarget && h.target !== filterTarget) continue;
+
+        const key = h.target + ':' + h.slot;
+        perHost[key] = (perHost[key] || 0);
+        showDamagePopup(h.target, h.slot, h.amount, h.kind, h.crit, perHost[key]);
+        perHost[key]++;
+
+        if (h.kind === 'damage') flashHitOn(h.target, h.slot, h.crit);
+    }
+}
+
 // ※ 예전엔 여기 _updateBattleSprite(raw img.src 갱신)가 있었는데, 스프라이트시트
 //   메타({src,type:'sheet',...})를 문자열로 착각해 깨진 src를 만들고 이모지
 //   폴백을 잠깐 보여주는 버그가 있었음. BattleRender.js가 이제 CharSprite.js의

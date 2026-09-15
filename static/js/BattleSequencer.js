@@ -217,6 +217,13 @@ async function playBattleSequence(action, bs) {
         await _seqSleep(SEQ_TIMING.PASSIVE_MSG);
     }
 
+    // 공격 모션 중 "타격이 꽂히는" 지점 비율 — 모션이 다 끝난 뒤에 피격을
+    // 처리하면 버튼을 누르고 모션 전체가 흐른 다음에야 숫자가 떠서 반응이
+    // 느리게 느껴진다. 실제 게임처럼 모션 중간에 임팩트를 넣고, 남은 모션
+    // 시간은 피격 단계가 이어서 소화한다(전체 페이싱 총합은 거의 동일).
+    const IMPACT_RATIO = 0.55;
+    let motionRemainder = 0;
+
     // ── 2. 플레이어 행동 + 모션 ──
     if (groups.player.length > 0 || isItem || isEscape) {
         const job = (window.state && window.state.player) ? window.state.player.job : '';
@@ -245,8 +252,15 @@ async function playBattleSequence(action, bs) {
             logLine(m, _msgCls(m));
         }
 
-        // 모션 시간만큼 대기
-        await _seqSleep(actionTime);
+        // 임팩트 지점까지만 대기 — 나머지 모션 시간은 피격 단계로 넘긴다.
+        //   아이템/도주는 캐릭터 모션이 없으니 그대로 전체 대기.
+        if (isItem || isEscape) {
+            await _seqSleep(actionTime);
+        } else {
+            const impactWait = Math.round(actionTime * IMPACT_RATIO);
+            motionRemainder = actionTime - impactWait;
+            await _seqSleep(impactWait);
+        }
     }
 
     // ── 3. 데미지 적용 + 적 hurt ──
@@ -280,12 +294,21 @@ async function playBattleSequence(action, bs) {
             }
         }
 
+        // ★ 데미지 숫자 + 피격 플래시 — hurt 시트가 시작되는 이 프레임에 같이 띄운다.
+        //   값은 서버의 구조화 필드(bs.hits)에서 가져오므로 메시지 문자열을
+        //   파싱하지 않는다. 적 대상만 여기서 재생하고, 플레이어 피격 숫자는
+        //   아래 "6. 플레이어 피격" 단계에서 그 타이밍에 맞춰 따로 재생한다.
+        if (typeof playHitFeedback === 'function') {
+            playHitFeedback(bs.hits, 'enemy');
+        }
+
         // 메시지 출력
         for (const m of groups.damage) {
             logLine(m, _msgCls(m));
         }
 
-        await _seqSleep(hurtWait);
+        // 피격 모션과, 위에서 넘겨받은 공격 모션 잔여 시간 중 긴 쪽만큼 대기
+        await _seqSleep(Math.max(hurtWait, motionRemainder));
     }
 
     // ── 4. 적 사망 처리 ──
@@ -341,8 +364,11 @@ async function playBattleSequence(action, bs) {
                 logLine(m, _msgCls(m));
             }
 
-            // 모션 시간 대기
-            await _seqSleep(motionTime);
+            // 임팩트 지점까지만 대기 (플레이어 공격과 같은 규칙 — 대칭 유지).
+            //   남은 모션 시간은 아래 피격 단계가 이어서 소화한다.
+            const enemyImpactWait = Math.round(motionTime * IMPACT_RATIO);
+            const enemyMotionRemainder = motionTime - enemyImpactWait;
+            await _seqSleep(enemyImpactWait);
 
             // ── 6. 플레이어 피격 (적 행동 결과) ──
             // 플레이어 HP 메시지가 있으면 피격
@@ -355,8 +381,19 @@ async function playBattleSequence(action, bs) {
                     setCharState('player_battle', 'hurt', { duration: hurtTime });
                     setCharState('player_panel', 'hurt', { duration: hurtTime + 100 });
                 }
+                // 플레이어 피격 숫자 + 플래시 (적별 순차 재생이라 이 타이밍에)
+                //   ★ 한 step에 적이 여러 마리 때려도 bs.hits의 플레이어 항목은
+                //     합계 1개다(스냅샷 차분). 첫 피격 때만 띄우고 소비 처리해
+                //     같은 숫자가 적마다 반복되지 않게 한다.
+                if (typeof playHitFeedback === 'function' && bs.hits) {
+                    playHitFeedback(bs.hits, 'player');
+                    bs.hits = bs.hits.filter(h => h.target !== 'player');
+                }
                 logLine(playerHurtMsg, _msgCls(playerHurtMsg));
-                await _seqSleep(hurtTime);
+                await _seqSleep(Math.max(hurtTime, enemyMotionRemainder));
+            } else {
+                // 피격이 없었으면(회피/버프 등) 남은 모션 시간을 여기서 소화
+                await _seqSleep(enemyMotionRemainder);
             }
 
             // 다음 적 전환 대기 (다대일)

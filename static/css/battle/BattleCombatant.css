@@ -264,3 +264,100 @@ img.combatant-art {
     30%  { box-shadow: 0 0 18px rgba(255, 255, 255, 0.85); border-color: rgba(255, 255, 255, 0.9);  }
     100% { box-shadow: 0 0 2px  rgba(215, 221, 229, 0.0);  border-color: rgba(190, 200, 210, 0.1);  }
 }
+/* ═══════════════════════════════════════════════════════════
+   데미지 숫자 팝업 + 피격 플래시
+   ─────────────────────────────────────────────────────────── */
+
+/* 피격 실루엣 마스크 레이어 (CharSprite.js flashHitMask가 동적 생성)
+   위치, 크기, mask 속성, 애니메이션은 전부 인라인으로 주입된다.
+   여기서는 합성 방식과 초기 불투명도만 정의. */
+.hit-mask-layer {
+    position: absolute;
+    pointer-events: none;
+    z-index: 4;
+    opacity: 0.9;
+    mix-blend-mode: screen;   /* 어두운 배경 위에서 발광처럼 보이게 */
+    will-change: opacity;
+}
+
+/* 스프라이트가 없는(이모지 폴백) 슬롯용 — 짧은 스케일 펀치 + 붉은 기
+   ★ .combatant-art에 이미 걸린 drop-shadow(발광)를 유지해야 하므로
+     filter를 덮어쓰지 않고 두 효과를 합성한 값으로 다시 선언한다. */
+.combatant.hit-punch .combatant-art {
+    animation: hitPunch 0.26s ease-out;
+}
+.combatant.enemy.hit-punch .combatant-art {
+    filter: drop-shadow(0 0 10px rgba(251, 146, 60, 0.5)) brightness(1.9) saturate(1.4);
+}
+.combatant.player.hit-punch .combatant-art {
+    filter: drop-shadow(0 0 12px rgba(45, 212, 191, 0.5)) brightness(1.9) saturate(1.4);
+}
+@keyframes hitPunch {
+    0%   { transform: scale(1)     translateX(0);    }
+    25%  { transform: scale(1.12)  translateX(-4px); }
+    55%  { transform: scale(0.97)  translateX(3px);  }
+    100% { transform: scale(1)     translateX(0);    }
+}
+
+/* ── 숫자 팝업 ── */
+.dmg-popup {
+    position: absolute;
+    left: 50%;
+    /* 스프라이트 머리 위 — TARGET 배지(.combatant 상단)와 겹치지 않게 띄운다.
+       같은 슬롯에 숫자가 여러 개면 JS가 인덱스별로 top을 더 올린다. */
+    top: -12px;
+    z-index: 6;
+    pointer-events: none;
+    font-family: 'Cinzel', Georgia, serif;
+    font-weight: 700;
+    font-size: 26px;
+    line-height: 1;
+    font-variant-numeric: tabular-nums;
+    white-space: nowrap;
+    text-shadow:
+        0 0 3px rgba(0, 0, 0, 0.95),
+        0 2px 5px rgba(0, 0, 0, 0.8);
+    animation: dmgFloat 1.05s cubic-bezier(0.22, 1, 0.36, 1) forwards;
+    --dx: 0px;
+}
+
+.dmg-popup.dmg    { color: #fff3e0; }
+.dmg-popup.heal   { color: #86e08a; }
+.dmg-popup.shield { color: #a8d4f0; }
+
+/* 치명타 — 더 크고 금색, 살짝 기울여 강조 */
+.dmg-popup.crit {
+    font-size: 38px;
+    color: #ffd76a;
+    text-shadow:
+        0 0 4px rgba(0, 0, 0, 0.95),
+        0 0 14px rgba(255, 190, 60, 0.85),
+        0 2px 6px rgba(0, 0, 0, 0.85);
+    animation-name: dmgFloatCrit;
+}
+
+@keyframes dmgFloat {
+    0%   { transform: translate(calc(-50% + var(--dx)), 0)     scale(0.55); opacity: 0; }
+    18%  { transform: translate(calc(-50% + var(--dx)), -10px) scale(1.25); opacity: 1; }
+    32%  { transform: translate(calc(-50% + var(--dx)), -16px) scale(1);    opacity: 1; }
+    100% { transform: translate(calc(-50% + var(--dx)), -52px) scale(0.92); opacity: 0; }
+}
+
+@keyframes dmgFloatCrit {
+    0%   { transform: translate(calc(-50% + var(--dx)), 0)     scale(0.5)  rotate(-8deg); opacity: 0; }
+    16%  { transform: translate(calc(-50% + var(--dx)), -12px) scale(1.45) rotate(4deg);  opacity: 1; }
+    34%  { transform: translate(calc(-50% + var(--dx)), -20px) scale(1.08) rotate(-2deg); opacity: 1; }
+    100% { transform: translate(calc(-50% + var(--dx)), -64px) scale(0.95) rotate(0deg);  opacity: 0; }
+}
+
+/* 모션 최소화 설정 존중 — 상승/스케일 없이 짧게 표시만 */
+@media (prefers-reduced-motion: reduce) {
+    .dmg-popup { animation: dmgFadeOnly 0.9s ease-out forwards; }
+    .dmg-popup.crit { animation-name: dmgFadeOnly; }
+    .combatant.hit-punch .combatant-art { animation: none; }
+    @keyframes dmgFadeOnly {
+        0%   { transform: translate(-50%, -14px); opacity: 0; }
+        20%  { transform: translate(-50%, -14px); opacity: 1; }
+        100% { transform: translate(-50%, -14px); opacity: 0; }
+    }
+}
