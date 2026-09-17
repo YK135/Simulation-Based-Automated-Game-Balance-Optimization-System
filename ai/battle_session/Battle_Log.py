@@ -176,7 +176,9 @@ class BattleLogMixin:
             "e_shield": [getattr(e, "shield", 0.0) for e in self.enemies],
             "e_alive": [e.hp > 0 for e in self.enemies],
         }
-        return {"state": state_t, "action": action_t, "prev": prev}
+        # log_len: 이번 step에 새로 추가된 TurnLog만 골라내기 위한 경계 (_rl_post)
+        return {"state": state_t, "action": action_t, "prev": prev,
+                "log_len": len(self.logs)}
 
     # 원소 반응 라벨 → 반응명 (Elements.REACTION_EFFECTS의 label과 짝맞춤)
     _REACTION_LABEL_TO_NAME = {"융해": "melt", "파쇄": "shatter", "과부하": "overload"}
@@ -213,10 +215,24 @@ class BattleLogMixin:
 
         return {"damage_type": "", "element_type": "", "buffs_applied": [], "debuffs_applied": []}
 
+    def _rl_no_action_kind(self, msgs: list) -> str:
+        """이번 step에 행동자의 TurnLog가 하나도 없을 때의 행동 종류.
+        실측(무작위 실전 2,034 step)으로는 1.5%가 여기 해당한다 —
+          paralyzed : 마비로 행동에 실패 (차례는 소비, 선택한 행동 없음)
+          ritual    : 엘리트 사제 부활 의식 준비/완성 (TurnLog를 남기지 않는 행동)
+          none      : 그 외 — DoT로 행동 전에 사망, 죽은 적의 차례를 건너뜀 등"""
+        override = getattr(self, "_fx_override", None)
+        if override and override.get("stype") == "ritual":
+            return "ritual"
+        if any("마비로 행동에 실패" in m for m in msgs):
+            return "paralyzed"
+        return "none"
+
     def _rl_post(self, pre: Optional[dict], out: dict) -> None:
         if pre is None:
             return
         prev = pre.pop("prev")
+        new_logs = self.logs[pre.pop("log_len", 0):]
         msgs = out.get("messages", []) or []
 
         dmg_dealt = sum(max(0.0, prev["e_hp"][i] - max(0.0, e.hp))
@@ -228,14 +244,24 @@ class BattleLogMixin:
         kills = sum(1 for i, e in enumerate(self.enemies)
                     if i < len(prev["e_alive"]) and prev["e_alive"][i] and e.hp <= 0)
 
-        # ── 적 턴이면 실제 사용한 행동(공격/스킬명)을 TurnLog에서 보강 ──
-        #    (_rl_pre 시점엔 적이 아직 행동을 결정하지 않아 "auto"/"" 로만 채워짐)
+        # ── 이번 step에 "이 행동자"가 남긴 로그만 본다 ──
+        #    예전엔 self.logs[-1]을 썼는데, 새 로그가 없는 step(마비 실패·DoT 사망·
+        #    부활 의식)에서 직전 step의 행동과 크리·회피가 그대로 복제됐다.
+        #    도적 회피 반격(counter, actor=player)은 적 차례에 끼어드는 로그라
+        #    행동자 판정에서 뺀다.
         action_t = pre["action"]
-        last_log = self.logs[-1] if self.logs else None
-        if action_t.get("actor") == "enemy" and last_log is not None:
-            action_t["type"] = "skill" if last_log.action == "skill" else (
-                "attack" if last_log.action == "attack" else last_log.action)
-            action_t["detail"] = last_log.action_detail
+        actor = action_t.get("actor")
+        act_log = next((l for l in reversed(new_logs)
+                        if getattr(l, "actor", "") == actor
+                        and getattr(l, "action", "") != "counter"), None)
+        if act_log is None:
+            action_t["type"] = self._rl_no_action_kind(msgs)
+            action_t["detail"] = ""
+        elif actor == "enemy":
+            # 적 턴은 _rl_pre 시점에 행동이 아직 결정되지 않아 "auto"/""로만 채워져 있다
+            action_t["type"] = "skill" if act_log.action == "skill" else (
+                "attack" if act_log.action == "attack" else act_log.action)
+            action_t["detail"] = act_log.action_detail
 
         reaction_name = None
         for label, name in self._REACTION_LABEL_TO_NAME.items():
@@ -244,8 +270,8 @@ class BattleLogMixin:
                 break
 
         act_meta = self._rl_derive_action_meta(action_t)
-        if last_log is not None and last_log.debuff_applied and not act_meta["debuffs_applied"]:
-            act_meta["debuffs_applied"] = [last_log.debuff_applied]
+        if act_log is not None and act_log.debuff_applied and not act_meta["debuffs_applied"]:
+            act_meta["debuffs_applied"] = [act_log.debuff_applied]
 
         result_t = {
             # 스키마 잠금: damage(총) = hp_damage + shield_damage (행동자가 준 피해)
@@ -260,11 +286,11 @@ class BattleLogMixin:
             "reaction_name": reaction_name,
             "damage_type": act_meta["damage_type"],
             "element_type": act_meta["element_type"],
-            "crit": bool(getattr(last_log, "is_crit", False)) if last_log is not None else False,
-            "evade": bool(getattr(last_log, "is_dodge", False)) if last_log is not None else False,
+            "crit": bool(getattr(act_log, "is_crit", False)) if act_log is not None else False,
+            "evade": bool(getattr(act_log, "is_dodge", False)) if act_log is not None else False,
             "buffs_applied": act_meta["buffs_applied"],
             "debuffs_applied": act_meta["debuffs_applied"],
-            "status_applied": any(k in m for m in msgs for k in ("🩸", "빙결", "감전", "화상", "🌀")),
+            "status_applied": any(k in m for m in msgs for k in ("🩸", "빙결", "감전", "화상", "🌀", "균열")),
             "battle_done": bool(getattr(self, "done", False)),
             "winner": getattr(self, "winner", None) if getattr(self, "done", False) else None,
         }

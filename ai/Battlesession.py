@@ -261,11 +261,12 @@ class BattleSession(
             if hasattr(self.player, "tick_status_effects"):
                 for m in self.player.tick_status_effects():
                     msgs.append(m)
-            # 점화로 사망
+            # 상태이상 지속 피해로 사망 (점화 / 출혈 / 균열)
             if self.player.hp <= 0:
                 self.done = True
                 self.winner = "enemy"
-                msgs.append(f"🔥 {self.player.name}이(가) 점화 데미지로 쓰러졌다...")
+                msgs.append(f"{self._dot_label(self.player)} {self.player.name}이(가) "
+                            f"{self._dot_name(self.player)} 데미지로 쓰러졌다...")
                 return self._state(messages=msgs, next_actor="done")
 
             # ── 마비 행동 실패 ──
@@ -390,7 +391,8 @@ class BattleSession(
                 #   플레이어 사망으로 오판되어, 승리 직후 플레이어 스프라이트가
                 #   함께 사망 포즈로 굳는(setDeadState('player_battle')가
                 #   잘못 호출되는) 버그가 있었다.
-                msgs.append(f"🔥 {enemy.name}을(를) 점화 데미지로 처치했다!")
+                msgs.append(f"{self._dot_label(enemy)} {enemy.name}을(를) "
+                            f"{self._dot_name(enemy)} 데미지로 처치했다!")
                 self._check_elite_death(enemy, msgs)   # 분열/부활취소 — 직접피해 경로와 동일하게 처리
                 if not self._alive_enemies():
                     self.done = True
@@ -475,6 +477,17 @@ class BattleSession(
 
         # 폴백 (도달 X)
         return self._state(messages=msgs, next_actor="player")
+
+    # 지속 피해 사망 메시지용 — 어느 상태이상이 마지막 피해를 줬는지는 표시 태그
+    # (last_hit_element, tick_status_effects가 찍는다)로만 안다. 표시 문구에만 쓴다.
+    _DOT_NAME  = {"fire": "점화", "bleed": "출혈", "physical": "균열"}
+    _DOT_LABEL = {"fire": "🔥",   "bleed": "🩸",   "physical": "🌑"}
+
+    def _dot_name(self, ent) -> str:
+        return self._DOT_NAME.get(getattr(ent, "last_hit_element", ""), "점화")
+
+    def _dot_label(self, ent) -> str:
+        return self._DOT_LABEL.get(getattr(ent, "last_hit_element", ""), "🔥")
 
     def get_skills(self) -> list:
         """사용 가능한 스킬 목록 반환"""
