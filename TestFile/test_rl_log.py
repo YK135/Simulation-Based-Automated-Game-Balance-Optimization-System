@@ -12,16 +12,32 @@ test_rl_log.py — RL/행동 로그 (state, action, result) 회귀 테스트
 
 실행: python3 test_rl_log.py
 """
-import sys, os
+import sys, os, tempfile
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
+# ★ 프로젝트 모듈을 import하기 전에 DB를 임시 파일로 격리한다.
+#   DB/__init__.py가 DATABASE_URL을 import 시점에 한 번만 읽으므로, 아래
+#   import들(app.Shared → DB)보다 반드시 먼저 설정돼야 한다.
+#   이유: [5]가 "_save_rl_log 후 새 BattleLog row가 정확히 1개"를 단정하는데,
+#   로컬 개발 서버(python3 App.py)가 같은 ai_rpg.db에 붙어 전투를 끝내면
+#   그쪽도 BattleLog를 써서 row가 2개가 되고 이 테스트만 간헐 실패한다
+#   (실제로 발생 — 브라우저로 전투를 돌리면서 스위트를 함께 실행했을 때).
+#   격리하면 개발 서버와 무관하게 결정적이고, 로컬 ai_rpg.db에 테스트
+#   데이터가 한 줄도 남지 않는다.
+_TMP_DB_FD, _TMP_DB_PATH = tempfile.mkstemp(prefix="rl_log_test_", suffix=".db")
+os.close(_TMP_DB_FD)
+os.environ["DATABASE_URL"] = "sqlite:///" + _TMP_DB_PATH
+
 import json
 import sys
 
 from ai.Battlesession import BattleSession
 from ai.battle import EntitySnapshot, Buff
 from app.Shared import _save_rl_log
-from DB import get_session as db_session
+from DB import get_session as db_session, init_db
 from DB.Models import BattleLog
+
+init_db()          # 임시 DB에 테이블 생성 (격리된 파일이라 매번 새로 만든다)
 
 PASS = 0
 FAIL = 0
@@ -146,11 +162,15 @@ def main():
                   "email" not in blob and "nickname" not in blob)
         new_row_ids = [r.id for r in new_rows]
 
-    # 정리 — 이 테스트가 실제로 만든 BattleLog row를 지운다(안 지우면 반복
-    # 실행마다 로컬 개발 DB에 테스트용 로그가 계속 쌓인다).
+    # 정리 — 임시 DB 파일 자체를 지운다. (row 단위 정리는 이제 불필요하지만,
+    # 격리가 어떤 이유로 안 걸렸을 때의 보험으로 row 삭제도 남겨 둔다)
     if new_row_ids:
         with db_session() as db:
             db.query(BattleLog).filter(BattleLog.id.in_(new_row_ids)).delete(synchronize_session=False)
+    try:
+        os.remove(_TMP_DB_PATH)
+    except OSError:
+        pass
 
     print("\n" + "=" * 52)
     print(f" 결과: {PASS} 통과 / {FAIL} 실패")
