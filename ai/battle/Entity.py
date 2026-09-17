@@ -123,6 +123,13 @@ class EntitySnapshot:
     is_summoned: bool = False          # 분열로 생성된 개체
     reward_eligible: bool = True       # False면 처치해도 경험치/보상 제외
 
+    # ── 보스 패턴 (ai/battle/BossKit.py) — 엘리트 필드와 섞지 않는다 ──
+    boss_phase: int = 0            # 0=아직 동기화 전, 1/2/3 (midboss_sync_phase가 HP로 올린다)
+    boss_cycle: int = 0            # 「대지 균열」 주기 카운터 — 예고·발동 행동은 세지 않음
+    boss_telegraph_at: int = -1    # 예고를 세운 시점의 플레이어 행동 횟수, -1이면 예약 없음.
+                                   # 발동 조건: 플레이어 행동 횟수 > 이 값 (예고 보장 규칙)
+    boss_frost_regrow: int = 0     # 서리 갑주(ice) 재부착 카운트다운
+
     # ── 직업 식별자 (플레이어 전용) ──
     # 직업별 패시브 발동에 사용:
     #   "전사":   적 공격(일반공격/공격형 스킬) 3회마다 maxhp 10% 회복

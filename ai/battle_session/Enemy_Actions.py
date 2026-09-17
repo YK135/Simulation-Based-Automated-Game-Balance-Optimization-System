@@ -11,6 +11,7 @@ from ai.battle import (
 from ai.battle.EliteKit import (
     ASSASSIN_MARK_BONUS, ICE_SLIME_ARMOR_REDUCTION,
 )
+from ai.battle.BossKit import is_midboss
 
 
 class EnemyActionsMixin:
@@ -73,15 +74,23 @@ class EnemyActionsMixin:
             # EnemyAI를 거치지 않는 전용 분기.
             self._elite_golem_action(enemy, msgs)
         else:
-            # ── 엘리트 사전 처리 (버프/스택/즉시효과) — 결정 전에 실행 ──
-            if getattr(enemy, "elite_leader", False):
-                self._elite_pre_action(enemy, msgs)
+            if is_midboss(enemy):
+                # 중간 보스 — 페이즈·예고·「대지 균열」은 Boss_Actions가 결정한다.
+                # None이면 예고/균열을 이미 처리·로그한 것이고, 나머지 행동
+                # (일반공격/몸통박치기2/관망)은 아래 공통 경로를 그대로 탄다.
+                action = self._midboss_pre_action(enemy, msgs)
+            else:
+                # ── 엘리트 사전 처리 (버프/스택/즉시효과) — 결정 전에 실행 ──
+                if getattr(enemy, "elite_leader", False):
+                    self._elite_pre_action(enemy, msgs)
 
-            # ── 일반 몬스터 행동 (기존 로직) ──
-            chapter = (getattr(self, "battle_meta", {}) or {}).get("chapter", 1)
-            action = self._enemy_ai(enemy, self.player, chapter=chapter)
+                # ── 일반 몬스터 행동 (기존 로직) ──
+                chapter = (getattr(self, "battle_meta", {}) or {}).get("chapter", 1)
+                action = self._enemy_ai(enemy, self.player, chapter=chapter)
 
-            if action.action_type == "attack":
+            if action is None:
+                pass
+            elif action.action_type == "attack":
                 dmg, dodge, crit = DamageCalc.physical(
                     enemy.effective_stg(), enemy.luc,
                     self.player.effective_arm(), self.player.luc,

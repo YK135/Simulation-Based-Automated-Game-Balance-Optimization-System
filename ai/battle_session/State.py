@@ -12,6 +12,9 @@ from ai.battle.EliteKit import (
     GOLEM_PHASE_GUARD, GOLEM_PHASE_CHARGE, GOLEM_PHASE_STRIKE,
     PRIEST_PHASE_PREPARING,
 )
+from ai.battle.BossKit import (
+    is_midboss, MIDBOSS_PHASE_LABEL, MIDBOSS_RIFT_INTERVAL,
+)
 from game.Inventory import Inventory
 
 # ── 엘리트 패턴 UI 배지 정의 (표시 전용) ───────────────────────
@@ -37,6 +40,8 @@ _GOLEM_PHASE_LABEL = {
 # 골렘 그로기: 일반공격 2연타로 방어력을 깎고, 충전 중이면 강타까지 취소된다
 # (Player_Actions._update_golem_groggy). 엘리트가 아닌 골렘에게도 있다.
 _GROGGY_HITS_REQUIRED = 2
+# 중간 보스 페이즈 배지의 상태 — 3페이즈(붕괴)만 경고색으로 강조
+_BOSS_PHASE_STATE = {1: "idle", 2: "charging", 3: "armed"}
 
 
 class StateMixin:
@@ -53,6 +58,7 @@ class StateMixin:
 
         배지 하나: {kind, label, cur, max, state}
           kind  : telegraph(예고형) | stack(스택형) | cycle(골렘) | groggy(플레이어측 게이지)
+                  | phase(보스 페이즈)
           state : armed(다음 행동에 발동) | charging(진행 중) | idle
         """
         et      = getattr(en, "enemy_type", "")
@@ -101,6 +107,27 @@ class StateMixin:
                 "cur":   1, "max": 1,
                 "state": "armed",
             })
+
+        # 중간 보스 — 페이즈(1/2/3)와 「대지 균열」 예고 카운터 (ai/battle/BossKit.py 필드를 읽기만)
+        if is_midboss(en):
+            bphase = getattr(en, "boss_phase", 0) or 1
+            badges.append({
+                "kind":  "phase",
+                "label": MIDBOSS_PHASE_LABEL[bphase],
+                "cur":   bphase,
+                "max":   len(MIDBOSS_PHASE_LABEL),
+                "state": _BOSS_PHASE_STATE[bphase],
+            })
+            interval = MIDBOSS_RIFT_INTERVAL.get(bphase)
+            if getattr(en, "boss_telegraph_at", -1) >= 0:
+                # 예약된 예고 — 페이즈 3으로 넘어가 주기가 없어졌어도 한 번은 발동한다
+                full = interval or MIDBOSS_RIFT_INTERVAL[2]
+                badges.append({"kind": "telegraph", "label": "대지 균열",
+                               "cur": full, "max": full, "state": "armed"})
+            elif interval:
+                badges.append({"kind": "telegraph", "label": "대지 균열",
+                               "cur": min(getattr(en, "boss_cycle", 0), interval),
+                               "max": interval, "state": "charging"})
 
         # 골렘 그로기는 엘리트 여부와 무관 — 플레이어가 쌓는 게이지라 항상 보여준다
         if et == "골렘":

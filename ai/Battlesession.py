@@ -30,6 +30,7 @@ from ai.battle_session.Rewards        import RewardsMixin
 from ai.battle_session.Player_Actions import PlayerActionsMixin
 from ai.battle_session.Enemy_Actions  import EnemyActionsMixin
 from ai.battle_session.Elite_Actions  import EliteActionsMixin
+from ai.battle_session.Boss_Actions   import BossActionsMixin
 from ai.battle_session.State          import StateMixin
 from ai.battle_session.Battle_Log     import BattleLogMixin
 
@@ -41,6 +42,7 @@ class BattleSession(
     PlayerActionsMixin,
     EnemyActionsMixin,
     EliteActionsMixin,
+    BossActionsMixin,
     StateMixin,
     BattleLogMixin,
 ):
@@ -159,6 +161,12 @@ class BattleSession(
         # 카운트는 Player_Actions._count_warrior_attack()에서만 증가 (아이템/버프/힐 제외)
         # 새 전투(BattleSession 생성)마다 0으로 초기화
         self._warrior_attack_count = 0
+
+        # 플레이어 행동 횟수 — 보스 예고 보장 규칙의 기준 (ai/battle/BossKit.py).
+        # _player_action()이 실제로 호출된 차례만 센다: 상태 조회·마비 실패는 안 세고,
+        # MP 부족·알 수 없는 행동은 엔진이 차례를 소비하므로 센다(무효 요청 반복으로
+        # 예고를 영원히 보류시키는 악용 차단).
+        self._player_action_count = 0
 
         # ★ 행동 큐 (SPD 내림차순 턴제) — 라운드 시작 시 채워짐
         # 큐 형식: [(actor_type, idx), ...]  actor_type: "player" | "enemy"
@@ -287,6 +295,7 @@ class BattleSession(
 
             # 플레이어 행동 처리
             p_result = self._player_action(action, msgs)
+            self._player_action_count += 1       # 보스 예고 카운터 (위 __init__ 주석)
             # 신속물약: 행동 후 ATB 추가 획득
             if self._pending_atb_bonus > 0:
                 self.player_atb += float(self._pending_atb_bonus)

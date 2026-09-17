@@ -89,6 +89,7 @@ class PlayerActionsMixin:
                 msgs.append("🛡 실드가 깨졌다!")
         self._update_golem_groggy(target, is_basic_attack, msgs)
         self._check_elite_death(target, msgs)
+        self._check_boss_phase(target, msgs)     # 중간 보스: HP 구간을 넘었으면 이 step 안에서 전환
 
         return hp_damage
 

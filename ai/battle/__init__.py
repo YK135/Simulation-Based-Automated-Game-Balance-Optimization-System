@@ -5,7 +5,8 @@ Battle 패키지 — 전투 시스템 (Battle_Engine.py 분리본)
   Entity / ATB / Actions / EliteKit (→ Actions만)  (의존 없음/최소)
   Elements / Damage       → Entity
   Elements                → EliteKit (엘리트 원소 반응 후처리)
-  Skills                  → Entity, Damage, Elements, EliteKit
+  BossKit                 → Actions (Skills는 함수 안에서 지연 import — 상수는 Skills가 읽는다)
+  Skills                  → Entity, Damage, Elements, EliteKit, BossKit
   Items                   → Entity, Elements
   Engine                  → 전부
 """

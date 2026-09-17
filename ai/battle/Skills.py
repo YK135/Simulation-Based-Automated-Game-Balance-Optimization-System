@@ -3,10 +3,11 @@ from __future__ import annotations
 
 from random import randint, random, uniform
 
-from .Entity import EntitySnapshot, Debuff, Buff
+from .Entity import EntitySnapshot, Debuff, Buff, StatusEffect
 from .Damage import DamageCalc
 from .Elements import apply_element_and_react
 from .EliteKit import BAT_SCREAM_SPD_AMOUNT, BAT_SCREAM_TURNS
+from .BossKit import MIDBOSS_RIFT_MULT, MIDBOSS_RIFT_ARM_PEN, RIFT_STATUS
 
 SKILL_META = {
     "약화1": {
@@ -280,6 +281,18 @@ MONSTER_SKILL_META = {
         "debuff_amount": (BAT_SCREAM_SPD_AMOUNT, BAT_SCREAM_SPD_AMOUNT),
         "debuff_turns": (BAT_SCREAM_TURNS, BAT_SCREAM_TURNS),
     },
+    # 중간 보스 전용 — 「대지 균열」 (ai/battle/BossKit.py). 예고(관망) 뒤 다음 행동에 발동.
+    #   arm_pen       : 플레이어 ARM을 이 비율만큼 무시 (0.5 = 절반 관통)
+    #   on_hit_status : 명중(피해 > 0)했을 때 대상에게 거는 상태이상 — 전용 타입 rift
+    #   _강화는 페이즈 2 이후 계수 (1.8 → 2.1), 나머지는 같다
+    "대지 균열": {
+        "mp": 0, "type": "physical", "mult": MIDBOSS_RIFT_MULT[1], "hits": 1,
+        "arm_pen": MIDBOSS_RIFT_ARM_PEN, "on_hit_status": RIFT_STATUS,
+    },
+    "대지 균열_강화": {
+        "mp": 0, "type": "physical", "mult": MIDBOSS_RIFT_MULT[2], "hits": 1,
+        "arm_pen": MIDBOSS_RIFT_ARM_PEN, "on_hit_status": RIFT_STATUS,
+    },
 }
 
 
@@ -384,7 +397,7 @@ def execute_single_hit(
         raw, dodge, crit = DamageCalc.physical(
             attacker.effective_stg(),
             attacker.luc,
-            defender.effective_arm(),
+            defender.effective_arm() * (1.0 - meta.get("arm_pen", 0.0)),   # ARM 관통 (대지 균열)
             defender.luc,
             skill_mult=meta.get("mult", 1.0),
             attacker=attacker,
@@ -523,7 +536,7 @@ def execute_skill(
             raw, _, _ = DamageCalc.physical(
                 attacker.effective_stg(),
                 attacker.luc,
-                defender.effective_arm(),
+                defender.effective_arm() * (1.0 - meta.get("arm_pen", 0.0)),   # ARM 관통 (대지 균열)
                 defender.luc,
                 skill_mult=meta.get("mult", 1.0),
                 attacker=attacker,
@@ -569,6 +582,12 @@ def execute_skill(
     extra_msgs: list = []
     if total > 0 or element:
         total = apply_element_and_react(attacker, defender, element, total, extra_msgs)
+    # ── 명중 시 부여하는 상태이상 (중간 보스 「대지 균열」의 균열) ──
+    #    total 0 = 회피(또는 무효)이므로 걸리지 않는다. 실드에 전부 흡수돼도 명중은 명중이다.
+    #    적용 규칙(중첩 없이 남은 턴 갱신)은 apply_status_effect가 그대로 담당.
+    on_hit = meta.get("on_hit_status")
+    if on_hit and total > 0 and hasattr(defender, "apply_status_effect"):
+        defender.apply_status_effect(StatusEffect(**on_hit))
     info = skill_name if extra_msgs else (skill_name if "debuff_stat" in meta else "")
     return total, False, (info + "|" + "|".join(extra_msgs)) if extra_msgs else info
 
