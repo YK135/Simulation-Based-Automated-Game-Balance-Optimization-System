@@ -355,6 +355,32 @@ class PlayerAI:
     DICE_REROLL_BELOW = 3       # 패 고치기: 저장된 눈이 이 값 미만이면 재굴림
     HARVEST_STACKS = 3          # 피의 수확: 스택이 다 찼거나 그 피해로 처치 가능할 때
 
+    @staticmethod
+    def _lifesteal_buff_profit(attacker: EntitySnapshot, defender: EntitySnapshot, skill: str,
+                               enemy_count: int) -> float:
+        """흡혈 버프(피의 격노·피의 맹세)의 기대 손익 = 기대 회수량 − HP 지불 (양수일 때만 쓸 가치가 있다).
+        문서 수치 그대로 두기로 한 결정(2026-09-17)에 맞춘 측정용 판단:
+          · 3턴 버프는 시전 행동에서 1턴이 줄어 실제로는 (turns − 1)회 행동을 덮는다
+          · 회수 = 타격당 min(피해 × 비율, maxHP 4%) × 타수(광역이면 × 적 수), 시전당 maxHP 12% 상한
+          · 지불 = 현재 HP × 비율 (격노는 즉시, 맹세는 만료 시 — 둘 다 현재 HP 기준으로 어림)"""
+        from ai.battle.Damage import LIFESTEAL_HIT_CAP_RATIO, LIFESTEAL_CAST_CAP_RATIO
+        meta = SKILL_META.get(skill) or {}
+        ratio = meta.get("buff_amount", 0.0)
+        actions = max(0, meta.get("buff_turns", 0) - 1)
+        base = attacker.effective_stg() * 200 / (100 + max(0.0, defender.effective_arm()))
+        hit_cap = attacker.maxhp * LIFESTEAL_HIT_CAP_RATIO
+        best = min(base * ratio, hit_cap)                                  # 일반공격 1타
+        for sk in attacker.learned_skills:
+            m = SKILL_META.get(sk) or {}
+            if m.get("type") != "physical" or attacker.mp < m.get("mp", 0) * 2:
+                continue
+            per_hit = min(base * m.get("mult", 1.0) * ratio, hit_cap)
+            hits = m.get("hits", 1) * (max(1, enemy_count) if m.get("aoe") else 1)
+            best = max(best, per_hit * hits)
+        per_action = min(best, attacker.maxhp * LIFESTEAL_CAST_CAP_RATIO)
+        cost = attacker.hp * meta.get("hp_cost_ratio", meta.get("expire_hp_cost", 0.0))
+        return per_action * actions - cost
+
     def _reactive_new_skills(self, attacker: EntitySnapshot, defender: EntitySnapshot,
                              hp_ratio: float, mp_ratio: float, enemy_count: int) -> Action | None:
         skills = attacker.learned_skills
@@ -375,33 +401,43 @@ class PlayerAI:
                 return Action("skill", "패 고치기")
         telegraph = _enemy_telegraphing(defender)
         enemy_hp = defender.hp / defender.maxhp if defender.maxhp > 0 else 0.0
+        summon = bool(getattr(defender, "is_summoned", False))      # 그림자·분열체 — 오래 버티지 않는 대상
+        lifesteal_on = any(b.stat in ("lifesteal", "lifesteal_oath") for b in attacker.buffs)
+        # 흡혈 버프가 덮는 (turns−1)회 행동이 공격이 되려면 강화가 먼저 걸려 있어야 한다(없으면 다음 행동이 강화 시전)
+        stg_ready = _self_has_buff(attacker, "stg") or _best_buff_skill(attacker, stat="stg") is None
 
         # ── 남은 신규 스킬 11종 (2차 8번) ──
         if job == "전사":
             if ok("불굴"):                                           # HP 35% 이하 · 전투당 1회
                 return Action("skill", "불굴")
-            if ok("철벽 의지") and (telegraph or hp_ratio < 0.6) and not _self_has_buff(attacker, "dmg_reduction"):
+            if ok("철벽 의지") and (telegraph or hp_ratio < 0.45) and not _self_has_buff(attacker, "dmg_reduction"):
                 return Action("skill", "철벽 의지")
-            if ok("피의 맹세") and not _self_has_buff(attacker, "lifesteal_oath") \
-                    and hp_ratio >= 0.5 and enemy_hp >= 0.4:
+            if ok("피의 맹세") and not lifesteal_on and stg_ready and not summon \
+                    and hp_ratio >= 0.5 and enemy_hp >= 0.4 \
+                    and self._lifesteal_buff_profit(attacker, defender, "피의 맹세", enemy_count) > 0:
                 return Action("skill", "피의 맹세")
         elif job == "마법사":
             if ok("마나 장막") and telegraph and not _self_has_buff(attacker, "mana_veil") and mp_ratio >= 0.4:
                 return Action("skill", "마나 장막")
-            if ok("서리 결계") and not _self_has_buff(attacker, "frost_ward") \
-                    and enemy_hp >= 0.5 and mp_ratio >= 0.5:
+            # 서리 결계 — 원소가 비어 있는 오래 버틸 적에게 ice를 심어 화염으로 융해를 노릴 때만
+            has_fire = any((SKILL_META.get(k) or {}).get("element") == "fire" for k in attacker.learned_skills)
+            if ok("서리 결계") and not _self_has_buff(attacker, "frost_ward") and has_fire and not summon \
+                    and not getattr(defender, "element_queue", None) and enemy_hp >= 0.5 and mp_ratio >= 0.5:
                 return Action("skill", "서리 결계")
         elif job == "도적":
             if ok("연막") and telegraph and not _self_has_buff(attacker, "dodge"):
                 return Action("skill", "연막")
-            if ok("약점 표식") and not _enemy_has_debuff(defender, "vulnerable") and enemy_hp >= 0.4:
+            # 약점 표식의 3턴은 대상의 행동으로 줄어든다 — 내가 대상보다 느리면 유지에 행동을 더 쓰게 되어 손해
+            if ok("약점 표식") and not _enemy_has_debuff(defender, "vulnerable") and enemy_hp >= 0.4 and not summon \
+                    and attacker.effective_spd() >= defender.effective_spd():
                 return Action("skill", "약점 표식")
 
         if job == "전사":
             # 피의 격노 — 흡혈 버프가 없고, HP 지불이 안전하고, 적이 아직 오래 남았을 때
-            if ok("피의 격노") and not _self_has_buff(attacker, "lifesteal") \
+            if ok("피의 격노") and not lifesteal_on and stg_ready and not summon \
                     and hp_ratio >= self.RAGE_HP_MIN \
-                    and (defender.hp / defender.maxhp if defender.maxhp > 0 else 0) >= self.RAGE_ENEMY_HP_MIN:
+                    and (defender.hp / defender.maxhp if defender.maxhp > 0 else 0) >= self.RAGE_ENEMY_HP_MIN \
+                    and self._lifesteal_buff_profit(attacker, defender, "피의 격노", enemy_count) > 0:
                 return Action("skill", "피의 격노")
             # 방패치기 — 상대가 나보다 빨라 추가 행동권을 자주 얻을 때(템포 억제), 상한이 남았을 때만
             if ok("방패치기") and defender.effective_spd() >= attacker.effective_spd() * 1.2 \

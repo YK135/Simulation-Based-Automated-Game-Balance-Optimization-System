@@ -82,6 +82,8 @@ def test_state_always_has_hits():
 
 def test_player_hit_produces_enemy_damage_event():
     print("\n[2] 플레이어 공격 → 적 슬롯 damage 이벤트")
+    # ★ 결정적으로 — 시드 없이 한 번만 때리면 고블린 회피(약 2%)에 걸릴 때 이벤트가 없어 간헐 실패했다
+    seed(20260917)
     s = _make_session()
     hp_before = s.enemies[0].hp
     with contextlib.redirect_stdout(io.StringIO()):

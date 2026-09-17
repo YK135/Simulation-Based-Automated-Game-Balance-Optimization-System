@@ -15,7 +15,8 @@ action_detail("종언" / "심연의 손아귀")로 센다 — 패턴이 없던 �
 대상: 그림자가 살아 있으면 HP가 가장 낮은 그림자부터(montecarlo.py pick_target과 같은 규칙).
 
 실행:  python3 TestFile/final_boss_measure.py     (N=200, LEVELS="20,25", SKILL_PICK=new 기본)
-       AI_RPG_ROOT=<다른 트리> OUT=<파일> python3 TestFile/final_boss_measure.py
+       AI_RPG_ROOT=<다른 트리> TREE_LABEL=<커밋> OUT=<파일> python3 TestFile/final_boss_measure.py
+       ★ 다른 트리를 잴 때는 AI_RPG_ROOT가 필수다 — 없으면 이 스크립트 파일이 있는 트리의 코드를 불러온다.
 로컬 ai_rpg.db는 건드리지 않는다(DATABASE_URL을 임시 파일로). 이름이 test_로 시작하지 않아 회귀 스위트에 안 걸린다.
 """
 import os, sys, io, tempfile, random, contextlib, subprocess, statistics
@@ -50,6 +51,9 @@ SHADOW = "심연의 그림자"
 
 
 def git_rev():
+    """측정한 트리 표시 — git 밖에서(git archive로 꺼낸 트리) 돌릴 때는 TREE_LABEL로 적어 준다."""
+    if os.environ.get("TREE_LABEL"):
+        return os.environ["TREE_LABEL"]
     try:
         return subprocess.check_output(["git", "-C", ROOT, "rev-parse", "--short", "HEAD"],
                                        stderr=subprocess.DEVNULL).decode().strip()

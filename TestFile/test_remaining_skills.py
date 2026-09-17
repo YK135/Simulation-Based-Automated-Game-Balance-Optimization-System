@@ -387,11 +387,19 @@ rr = PlayerAI("reactive")
 w = ent(job="전사", skills=["불굴", "강타1"]); w.hp = 300
 check("reactive 전사: HP 30%면 불굴", rr.decide(w, dummy()).detail == "불굴")
 w = ent(job="전사", skills=["피의 맹세", "강타1"])
-check("reactive 전사: 여유 있으면 피의 맹세", rr.decide(w, dummy()).detail == "피의 맹세")
+check("reactive 전사: 단일 타격뿐이면 맹세는 손해(지불 200 > 회수 80) → 강타1", rr.decide(w, dummy()).detail == "강타1")
+w = ent(job="전사", skills=["피의 맹세", "광풍 베기"]); w.hp = 600
+check("reactive 전사: 광역 3대상이면 이득(회수 240 > 지불 120) → 피의 맹세",
+      rr.decide(w, dummy(), enemy_count=3).detail == "피의 맹세")
+check("_lifesteal_buff_profit 부호", PlayerAI._lifesteal_buff_profit(w, dummy(), "피의 맹세", 3) > 0
+      > PlayerAI._lifesteal_buff_profit(ent(skills=["피의 맹세"]), dummy(), "피의 맹세", 1))
 mg = ent(job="마법사", skills=["서리 결계", "파이어볼1"])
 check("reactive 마법사: 서리 결계 선행", rr.decide(mg, dummy()).detail == "서리 결계")
 rg = ent(job="도적", skills=["약점 표식", "급소찌르기1"])
 check("reactive 도적: 표식 없으면 약점 표식", rr.decide(rg, dummy()).detail == "약점 표식")
+check("reactive 도적: 대상이 더 빠르면 표식을 쓰지 않음", rr.decide(rg, dummy(spd=80)).detail == "급소찌르기1")
+sh = dummy(); sh.is_summoned = True
+check("reactive 도적: 소환체에는 표식을 쓰지 않음", rr.decide(rg, sh).detail == "급소찌르기1")
 tt = dummy(); execute_skill("약점 표식", ent(job="도적", skills=["약점 표식"]), tt)
 check("reactive 도적: 이미 표식이면 공격", rr.decide(rg, tt).detail == "급소찌르기1")
 bb = PlayerAI("balanced")

@@ -290,7 +290,10 @@ w = ent(skills=["강타1", "연속공격1", "방패치기", "피의 격노"], mp
 fast = dummy(spd=80.0)
 b, rr = PlayerAI("balanced"), PlayerAI("reactive")
 check("balanced 전사: 신규 스킬을 고르지 않는다(연속공격1)", b.decide(w, fast).detail == "연속공격1")
-check("reactive 전사: 흡혈 버프 없고 안전하면 피의 격노", rr.decide(w, fast).detail == "피의 격노")
+# 피의 격노 손익(2026-09-17 결정 — 수치 유지, AI만 손익 판단): 만피(2000)면 지불 300 > 회수 160 → 안 씀
+check("reactive 전사: 만피에선 격노가 손해라 쓰지 않음", rr.decide(w, fast).detail != "피의 격노")
+w.hp = 1000                                   # 지불 150 < 회수(연속공격1 2타 × 40 × 2행동 = 160)
+check("reactive 전사: 지불이 회수보다 작으면 피의 격노", rr.decide(w, fast).detail == "피의 격노")
 from ai.battle import Buff
 w.apply_buff(Buff(stat="lifesteal", amount=0.25, turns=3, name="피의 격노"))
 check("reactive 전사: 버프 중 + 상대가 빠르면 방패치기", rr.decide(w, fast).detail == "방패치기")
