@@ -8,6 +8,7 @@ from ai.battle import (
     apply_element_and_react, ITEM_META, Debuff, roll_multi_hit_count,
     DamageCalc, execute_skill, SKILL_META, TurnLog,
     execute_single_hit, consume_skill_mp, mage_resonance_mult,
+    LifestealCast, lifesteal_heal, StatusEffect, BLEED_RATE_PER_STACK,
 )
 
 
@@ -58,10 +59,7 @@ class PlayerActionsMixin:
             self.player_atb += 20.0
             msgs.append("⚡ ATB +20!")
         if dice_info["bleed"] and target is not None and hasattr(target, "apply_status_effect"):
-            from ai.battle.Entity import StatusEffect
-            target.apply_status_effect(StatusEffect(
-                effect_type="bleed", turns=3, name="출혈"))
-            msgs.append(f"🩸 {target.name}에게 출혈! (3턴, 매턴 최대체력 4~7%)")
+            self._apply_bleed(target, msgs)
         return dmg
 
     def _end_rogue_dice(self):
@@ -70,6 +68,32 @@ class PlayerActionsMixin:
             self.player._suppress_crit = False
 
     _ATTACK_SKILL_TYPES = ("physical", "magical", "tank_attack", "counter", "multi_hit")
+
+    def _apply_bleed(self, target, msgs: list | None = None) -> int:
+        """출혈 부여(주사위 3·6, 칼날 폭풍 등) — 스택 규칙은 apply_status_effect가 담당(10-4).
+        반환: 적용 후 스택 수. msgs가 있으면 스택·틱 비율을 한 줄 남긴다."""
+        eff = target.apply_status_effect(StatusEffect(effect_type="bleed", turns=3, name="출혈"))
+        if msgs is not None:
+            msgs.append(f"🩸 {target.name}에게 출혈! (×{eff.stacks}, 매 행동 maxHP "
+                        f"{int(round(BLEED_RATE_PER_STACK * eff.stacks * 100))}%)")
+        return eff.stacks
+
+    def _new_lifesteal_cast(self) -> None:
+        """행동(시전) 1회의 흡혈 예산을 새로 연다 — _player_action 진입과 도적 반격에서."""
+        self._lifesteal_cast = LifestealCast(self.player)
+
+    def _player_hit(self, target, dmg, msgs: list, is_basic_attack: bool = False):
+        """플레이어가 적에게 주는 피해 — 실드 경유 적용(_apply_dmg_shielded) + 흡혈(10-4).
+        흡혈 기준은 실제 HP 감소 + 실드 감소(초과 피해 제외), 상한은 Damage.lifesteal_heal.
+        반환: HP에 실제로 들어간 피해 (기존 _apply_dmg_shielded와 같은 값)."""
+        hp_before, sh_before = target.hp, getattr(target, "shield", 0.0)
+        hp_dmg = self._apply_dmg_shielded(target, dmg, msgs, is_basic_attack=is_basic_attack)
+        basis = (hp_before - target.hp) + (sh_before - getattr(target, "shield", 0.0))
+        cast = getattr(self, "_lifesteal_cast", None)
+        healed = lifesteal_heal(self.player, basis, cast)
+        if healed > 0:
+            msgs.append(f"🩸 흡혈 +{int(healed)} HP")
+        return hp_dmg
 
     # ─────────────────────────────────────────
     # 공통: 실드 경유 피해 적용 (Player/Enemy_Actions 공용 — mixin이라 self 공유)
@@ -208,10 +232,7 @@ class PlayerActionsMixin:
                     msgs.append("⚡ ATB +20!")
                     dice_atb_done = True
                 if dice_info["bleed"] and not bleed_done and hasattr(cur, "apply_status_effect"):
-                    from ai.battle.Entity import StatusEffect
-                    cur.apply_status_effect(StatusEffect(
-                        effect_type="bleed", turns=3, name="출혈"))
-                    msgs.append(f"🩸 {cur.name} 출혈!")
+                    self._apply_bleed(cur, msgs)
                     bleed_done = True
 
             # ── 원소 부착/반응 (타격마다 — 재타겟 시 새 대상 큐 기준) ──
@@ -221,9 +242,9 @@ class PlayerActionsMixin:
                 dmg, reaction_msgs)
             msgs.extend(reaction_msgs)
 
-            # ── 실드 흡수 → HP 적용 ──
+            # ── 실드 흡수 → HP 적용 (+ 흡혈) ──
             sh_before = getattr(cur, "shield", 0.0)
-            hp_dmg = self._apply_dmg_shielded(cur, dmg, msgs)
+            hp_dmg = self._player_hit(cur, dmg, msgs)
             sh_absorbed = max(0.0, sh_before - getattr(cur, "shield", 0.0))
             total_hp_dmg += hp_dmg
             total_shield_dmg += sh_absorbed
@@ -335,6 +356,7 @@ class PlayerActionsMixin:
         if target is None:
             # 모든 적 사망 (이론상 도달 불가 - step에서 먼저 체크)
             return "ok"
+        self._new_lifesteal_cast()      # 흡혈 시전 상한(maxHP 12%)은 행동 1회 단위 (10-4)
 
         # ═══════════════════════════════════════════════════════════
         # 기본 공격
@@ -362,7 +384,7 @@ class PlayerActionsMixin:
                 if dice_info:
                     actual = self._apply_rogue_dice(actual, dice_info, target, msgs)
                     crit = crit or dice_info["force_crit"]
-                dmg = self._apply_dmg_shielded(target, actual, msgs, is_basic_attack=True)
+                dmg = self._player_hit(target, actual, msgs, is_basic_attack=True)
                 tag = " (치명타!)" if crit else ""
                 msgs.append(f"{self.player.name} → 공격{tag} | {dmg} 데미지")
                 msgs.append(f"{target.name} HP: {max(0, int(target.hp))}")
@@ -425,7 +447,7 @@ class PlayerActionsMixin:
                     dmg = self._apply_rogue_dice(dmg, dice_info, first, msgs)
 
                 hit_targets = 1 if dmg > 0 else 0   # 명중(비회피) 카운트 — 실드용 (흡수와 무관)
-                dmg = self._apply_dmg_shielded(first, dmg, msgs)
+                dmg = self._player_hit(first, dmg, msgs)
                 msgs.append(f"{skill_name} (전체 공격!) → {first.name}에게 {dmg} 데미지")
                 msgs.append(f"{first.name} HP: {max(0, int(first.hp))}")
                 total_dmg = dmg
@@ -477,11 +499,9 @@ class PlayerActionsMixin:
                             if dice_info["force_crit"]:
                                 raw = int(raw * 1.5)
                             if dice_info["bleed"] and hasattr(tgt, "apply_status_effect"):
-                                from ai.battle.Entity import StatusEffect
-                                tgt.apply_status_effect(StatusEffect(
-                                    effect_type="bleed", turns=3, name="출혈"))
+                                self._apply_bleed(tgt, msgs)
                         hit_targets += 1   # 명중 기준 (흡수와 무관)
-                        raw = self._apply_dmg_shielded(tgt, raw, msgs)
+                        raw = self._player_hit(tgt, raw, msgs)
                         msgs.append(f"  └ {tgt.name}에게 {raw} 데미지")
                         msgs.append(f"     {tgt.name} HP: {max(0, int(tgt.hp))}")
                         total_dmg += raw
@@ -594,7 +614,7 @@ class PlayerActionsMixin:
                     # ── 주사위 배율/크리/출혈 (최종 피해 기준) ──
                     if dice_info:
                         dmg = self._apply_rogue_dice(dmg, dice_info, target, msgs)
-                    dmg = self._apply_dmg_shielded(target, dmg, msgs)
+                    dmg = self._player_hit(target, dmg, msgs)
                     msgs.append(f"{skill_name} 사용 → {dmg} 데미지")
                     msgs.append(f"{target.name} HP: {max(0, int(target.hp))}")
                     self.logs.append(TurnLog(

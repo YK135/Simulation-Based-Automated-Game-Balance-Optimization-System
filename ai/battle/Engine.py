@@ -7,7 +7,7 @@ from random import randint, random
 
 from .Entity import EntitySnapshot
 from .ATB import ATBSystem
-from .Damage import DamageCalc, _apply_damage_with_shield
+from .Damage import DamageCalc, _apply_damage_with_shield, LifestealCast, deal_damage_with_lifesteal
 from .Skills import SKILL_META, execute_skill, _resolve_meta, skill_atb_drain
 from .Items import use_item
 from .Elements import apply_element_and_react
@@ -91,6 +91,12 @@ class BattleEngine:
     _ATTACK_SKILL_TYPES = ("physical", "magical", "tank_attack", "counter", "multi_hit")
     _ROGUE_DICE_MULT = {1: 0.75, 2: 0.90, 3: 1.00, 4: 1.15, 5: 1.25, 6: 1.00}
 
+    @staticmethod
+    def _hit(attacker, defender, dmg, cast) -> int:
+        """실드 경유 피해 + 공격자 흡혈 — 실전 Player_Actions._player_hit와 같은 Damage 함수."""
+        hp_dmg, _healed = deal_damage_with_lifesteal(attacker, defender, int(dmg), cast)
+        return hp_dmg
+
     def _is_attack_action(self, action) -> bool:
         """일반공격 또는 공격형 스킬인지 (전사 카운트/도적 주사위 대상)."""
         if action.action_type == "attack":
@@ -172,6 +178,7 @@ class BattleEngine:
             player_pt=self.atb.player_pt,
             enemy_pt=self.atb.enemy_pt,
         )
+        cast = LifestealCast(attacker)     # 흡혈 시전 예산 — 행동 1회 단위 (10-4)
 
         if action.action_type == "attack":
             # ── 도적 주사위 (플레이어 공격, 게임 규칙과 동일) ──
@@ -199,7 +206,7 @@ class BattleEngine:
                         from .Entity import StatusEffect
                         defender.apply_status_effect(StatusEffect(
                             effect_type="bleed", turns=3, name="출혈"))
-            actual = 0 if is_dodge else _apply_damage_with_shield(defender, dmg)
+            actual = 0 if is_dodge else self._hit(attacker, defender, dmg, cast)
             log.damage_dealt = actual
             log.hp_after = defender.hp
             log.is_dodge = is_dodge
@@ -223,7 +230,7 @@ class BattleEngine:
                     attacker=defender, defender=attacker,
                 )
                 if not c_dodge:
-                    _apply_damage_with_shield(attacker, c_dmg)
+                    self._hit(defender, attacker, c_dmg, LifestealCast(defender))   # 반격도 공격 1회
                 self.atb.player_pt += float(defender.effective_spd())
                 self.logs.append(TurnLog(
                     turn=self.action_count, actor="player",
@@ -271,7 +278,7 @@ class BattleEngine:
                         _d = apply_element_and_react(
                             attacker, defender,
                             _meta.get("element", "") or "physical", _d, _rm)
-                        _total_hp += _apply_damage_with_shield(defender, _d)
+                        _total_hp += self._hit(attacker, defender, _d, cast)
                     # 스킬 전체 1회 효과 (주사위 6 ATB / 출혈, 집중물약 소진)
                     if dice is not None:
                         if dice == 6:
@@ -336,7 +343,7 @@ class BattleEngine:
                         _gained = attacker.maxhp * _msh
                         attacker.shield = min(_cap2, attacker.shield + _gained)
                 if dmg > 0:
-                    actual = _apply_damage_with_shield(defender, dmg)
+                    actual = self._hit(attacker, defender, dmg, cast)
                     log.damage_dealt = actual
                     log.hp_after = defender.hp
 
@@ -359,7 +366,7 @@ class BattleEngine:
                     attacker=attacker,
                     defender=defender,
                 )
-                actual = 0 if is_dodge else _apply_damage_with_shield(defender, dmg)
+                actual = 0 if is_dodge else self._hit(attacker, defender, dmg, cast)
                 log.action = "attack"
                 log.action_detail = "attack(mp_fallback)"
                 log.damage_dealt = actual

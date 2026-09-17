@@ -23,6 +23,7 @@ function statusEmojiList(entity) {
         else if (e.type === 'frostbite') emojis.push('❄');
         else if (e.type === 'paralyze')  emojis.push('⚡');
         else if (e.type === 'rift')      emojis.push('🌑');
+        else if (e.type === 'bleed')     emojis.push('🩸' + ((e.stacks || 1) > 1 ? '×' + e.stacks : ''));
     });
 
     // 일반 디버프/버프
@@ -42,6 +43,7 @@ function getStatusIconKeys(entity) {
         else if (e.type === 'frostbite') keys.push('frostbite');
         else if (e.type === 'paralyze')  keys.push('paralyze');
         else if (e.type === 'rift')      keys.push('rift');
+        else if (e.type === 'bleed')     keys.push('bleed');
     });
     if ((entity.debuffs || []).length > 0) keys.push('debuff');
     if ((entity.buffs   || []).length > 0) keys.push('buff');
@@ -51,7 +53,8 @@ function getStatusIconKeys(entity) {
 // STATUS_ICONS(State.js)에 아직 항목이 없는 상태이상의 이모지 폴백 —
 // 이미지 에셋이 들어오면 State.js 쪽 표에 넣고 여기는 그대로 둬도 된다(표가 우선).
 const _STATUS_ICON_FALLBACK = {
-    rift: { icon: '🌑' },   // 중간 보스 「균열」 (ai/battle/Entity.py rift)
+    rift:  { icon: '🌑' },   // 중간 보스 「균열」 (ai/battle/Entity.py rift)
+    bleed: { icon: '🩸' },   // 도적 출혈 — 스택은 renderNameWithStatus가 ×n으로 덧붙인다
 };
 
 function renderNameWithStatus(el, entity) {
@@ -72,6 +75,17 @@ function renderNameWithStatus(el, entity) {
             iconsWrap.appendChild(renderIconWithFallback(meta, 'status-icon'));
         } else {
             iconsWrap.textContent += (meta.icon || '');
+        }
+        // 출혈 스택(bs.*.status_effects[].stacks — 10-4): 2스택부터 ×n을 아이콘 뒤에 붙인다
+        if (key === 'bleed') {
+            const bleed = (entity.status_effects || []).find(e => e.type === 'bleed');
+            if (bleed && (bleed.stacks || 1) > 1) {
+                const n = document.createElement('span');
+                n.className = 'status-stack';
+                n.textContent = '×' + bleed.stacks;
+                n.title = `출혈 ${bleed.stacks}스택 — 매 행동 최대 HP ${bleed.stacks * 3}%`;
+                iconsWrap.appendChild(n);
+            }
         }
     });
 

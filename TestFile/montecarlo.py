@@ -14,7 +14,7 @@ app/Map.py의 실제 라우트 함수(_make_enemies, _make_elite_encounter)를 �
 항상 최신 app/Map.py를 그대로 재사용하므로 특별한 스위치 없이 자동으로
 개별 튜닝+STAT_SCALE 경로만 탄다. 자세한 내용은 BALANCE_PATCH_3.md 참고.)
 """
-import sys, io, os, json, time, contextlib
+import sys, io, os, json, time, contextlib, re
 from random import choice, seed
 from collections import defaultdict
 
@@ -40,6 +40,8 @@ MAIN_STAT = {"전사": "stg", "마법사": "sp", "탱커": "arm", "도적": "stg
 AI_MODE = os.environ.get("AI_MODE", "balanced")
 
 # 2차 콘텐츠 발동 카운터 — 메시지 부분 문자열로 센다 (없는 판에서는 0으로 남는다).
+_BLEED_TICK = re.compile(r"출혈(?: ×\d+)? -(\d+)")
+
 MESSAGE_KEYWORDS = {
     "goblin_pack":    "무리 전술",          # 고블린 무리 전술 발동/갱신
     "goblin_flee":    "달아났다",           # 겁쟁이 도주 성공
@@ -50,6 +52,7 @@ MESSAGE_KEYWORDS = {
     "execute":        "처형",               # 강타 처형
     "resonance":      "공명",               # 마법사 원소 공명
     "bleed_vital":    "출혈 급소",          # 급소찌르기 출혈 보너스
+    "lifesteal":      "🩸 흡혈 +",          # 플레이어 흡혈 회복
 }
 
 _PLAYER_CACHE = {}
@@ -175,9 +178,9 @@ def run_one(job, level, btype, stats):
             d = int(m.split("주사위:")[1].strip().rstrip("!"))
             stats[f"dice_{d}"] += 1
         if "[도적 반격]" in m: stats["counter"] += 1
-        if "출혈 -" in m:
-            try: stats["bleed_dmg"] += int(m.split("출혈 -")[1].split()[0]); stats["bleed_ticks"] += 1
-            except Exception: pass
+        _bl = _BLEED_TICK.search(m)          # "출혈 -N" / "출혈 ×2 -N" (2차 5번 스택 표기)
+        if _bl:
+            stats["bleed_dmg"] += int(_bl.group(1)); stats["bleed_ticks"] += 1
         if "🩸" in m and "출혈!" in m: stats["bleed_apply"] += 1
         if "융해" in m and "발동" in m: stats["melt"] += 1
         if "과부하" in m and "발동" in m: stats["overload"] += 1

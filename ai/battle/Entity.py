@@ -23,8 +23,8 @@ class Debuff:
 @dataclass
 class Buff:
     """
-    stat   : "stg" | "arm" | "spd" | "mp_efficiency"
-    amount : 증가 비율 (0.0~1.0)
+    stat   : "stg" | "arm" | "spd" | "mp_efficiency" | "lifesteal"
+    amount : 증가 비율 (0.0~1.0) — lifesteal은 준 피해 대비 회복 비율 (Damage.lifesteal_heal)
     turns  : 남은 지속 행동 수
     name   : 버프 스킬명
     """
@@ -38,6 +38,13 @@ class Buff:
 # StatusEffect (원소 기반 행동 제어형 상태이상)
 # ────────────────────────────────────────────
 
+# ── 출혈 스택 (Combat Content Brief 10-4 · 11-1 2차 5번) ──
+#   최대 3스택, 스택당 매 행동 maxHP 3% 확정(1스택 3% / 2스택 6% / 3스택 9%).
+#   다시 걸면 지속 갱신 + 스택 +1 — 예전의 uniform(0.04, 0.07) 난수는 제거(계획 가능해야 수확이 의미를 가진다).
+BLEED_STACK_MAX = 3
+BLEED_RATE_PER_STACK = 0.03
+
+
 @dataclass
 class StatusEffect:
     """
@@ -45,7 +52,8 @@ class StatusEffect:
     effect_type: "ignite" | "frostbite" | "paralyze" | "bleed" | "rift"
     turns   : 남은 지속 행동 수
     dot_rate: 점화/균열 데미지 비율 (기본 maxhp 4%)
-              bleed는 dot_rate 대신 매턴 uniform(0.04, 0.07) 랜덤 적용
+    stacks  : 출혈 스택(1~BLEED_STACK_MAX) — 출혈만 쓴다. 매 행동 maxHP 3% × stacks.
+              apply_status_effect()가 같은 타입을 다시 받으면 지속 갱신 + 스택 +1
     rift    : 중간 보스 「대지 균열」의 지속 피해. 전용 타입인 이유 —
               apply_status_effect()가 effect_type으로 동일 효과를 판정하므로
               ignite를 재사용하면 기존 화상과 하나로 합쳐진다
@@ -57,6 +65,7 @@ class StatusEffect:
     name: str
     dot_rate: float = 0.04
     fail_prob: int  = 40
+    stacks: int = 1
 
 
 # ────────────────────────────────────────────
@@ -148,6 +157,11 @@ class EntitySnapshot:
     #             (Player_Actions/Enemy_Actions/Damage._suppress_crit)
     job: str = ""
 
+    # ── 흡혈 (ai/battle/Damage.py lifesteal_heal) — 기본 0, 스킬 버프(stat "lifesteal")로만 붙는 값 ──
+    #   준 피해(실제 HP 감소 + 실드 감소)의 비율만큼 회복, 타격당 maxHP 4% · 시전당 12% 두 겹 상한.
+    #   박쥐의 흡혈은 별도(MonsterKit.bat_lifesteal_amount) — 이 필드를 쓰지 않는다.
+    lifesteal: float = 0.0
+
     # ── 마법사 원소 공명 (ai/battle/Elements.py mage_resonance_*) — 플레이어(마법사) 전용 ──
     resonance_element: str = ""      # 마지막으로 시전한 원소 마법의 원소
     resonance_stack: int = 0         # 같은 원소 연속 시전 수 (1~3) — 2단계 +10% / 3단계 +20%
@@ -226,6 +240,10 @@ class EntitySnapshot:
         if any(e.effect_type == "frostbite" for e in self.status_effects):
             base *= 0.5
         return max(1.0, base)
+
+    def effective_lifesteal(self) -> float:
+        """기본 흡혈 + 흡혈 버프(피의 격노 등)의 합 — 0이면 흡혈 없음."""
+        return max(0.0, self.lifesteal + sum(b.amount for b in self.buffs if b.stat == "lifesteal"))
 
     def mp_cost_multiplier(self) -> float:
         # buff 기반 효율 (효율성 스킬 등 한정 시간 효과)
@@ -327,14 +345,21 @@ class EntitySnapshot:
         self.buffs = alive
 
     # ── 원소 상태이상 ──
-    def apply_status_effect(self, effect: "StatusEffect") -> None:
-        """상태이상 적용. 같은 타입은 남은 턴 갱신(중복 허용X)."""
+    def apply_status_effect(self, effect: "StatusEffect") -> "StatusEffect":
+        """상태이상 적용. 같은 타입은 남은 턴 갱신(중복 허용X) — 출혈은 여기에 스택 +1(최대 3).
+        반환: 실제로 목록에 있는 효과 객체 (호출부가 스택 수를 읽을 수 있게)."""
         for existing in self.status_effects:
             if existing.effect_type == effect.effect_type:
                 existing.turns = max(existing.turns, effect.turns)
-                return
+                if effect.effect_type == "bleed":
+                    existing.stacks = min(BLEED_STACK_MAX, existing.stacks + 1)
+                return existing
         import copy as _copy
-        self.status_effects.append(_copy.copy(effect))
+        new = _copy.copy(effect)
+        if new.effect_type == "bleed":
+            new.stacks = max(1, min(BLEED_STACK_MAX, new.stacks))
+        self.status_effects.append(new)
+        return new
 
     def _record_hit(self, kind: str, amount: float, via: str = "",
                     element: str | None = None, reaction: str | None = None) -> None:
@@ -381,14 +406,14 @@ class EntitySnapshot:
                 self._record_hit("damage", before - self.hp, via="dot")
                 msgs.append(f"🔥 [{self.name}] 점화 -{dmg} HP")
             elif eff.effect_type == "bleed":
-                # 도적 주사위 출혈: 매턴 maxhp의 4~7% 랜덤 데미지 (크리 미적용)
-                rate = uniform(0.04, 0.07)
-                dmg = max(1, int(self.maxhp * rate))
+                # 도적 출혈: 스택당 매 행동 maxhp 3% 확정 (크리 미적용, 난수 없음 — 10-4)
+                dmg = max(1, int(self.maxhp * BLEED_RATE_PER_STACK * eff.stacks))
                 before = self.hp
                 self.hp = max(0.0, self.hp - dmg)
                 self._stamp_last_hit("bleed", via="dot")  # UI 숫자 색 (표시 전용)
                 self._record_hit("damage", before - self.hp, via="dot")
-                msgs.append(f"🩸 [{self.name}] 출혈 -{dmg} HP")
+                stack_tag = f" ×{eff.stacks}" if eff.stacks > 1 else ""
+                msgs.append(f"🩸 [{self.name}] 출혈{stack_tag} -{dmg} HP")
             elif eff.effect_type == "rift":
                 # 균열 — 점화와 같은 고정 비율 DoT. 물리 공격의 여파라 숫자 색은 physical.
                 dmg = max(1, int(self.maxhp * eff.dot_rate))

@@ -176,5 +176,53 @@ def _apply_damage_with_shield(defender: EntitySnapshot, dmg: int) -> int:
 
 
 # ────────────────────────────────────────────
+# 흡혈 (Combat Content Brief 10-4 · 11-1 2차 5번)
+#   기준 피해 = 실제 HP 감소량 + 실제 실드 감소량 (초과 피해 불인정, 실드 흡수분 인정)
+#   상한 = 타격당 maxHP 4% + 시전당 maxHP 12% (연타 4타·광역 3대상이 각각 회수하면
+#          탱커의 무한 회복을 재현하므로 두 겹으로 잠근다)
+#   DoT(출혈·점화)·아이템 피해는 흡혈 기준이 아니다 — "공격해서 회복"(딜 의존) 원칙.
+#   실전 세션(Player_Actions._player_hit)과 튜너 엔진(Engine._hit)이 같은 함수를 쓴다.
+# ────────────────────────────────────────────
+LIFESTEAL_HIT_CAP_RATIO = 0.04
+LIFESTEAL_CAST_CAP_RATIO = 0.12
+
+
+class LifestealCast:
+    """시전 1회의 흡혈 예산 — 시전(행동)마다 새로 만든다."""
+    __slots__ = ("pool",)
+
+    def __init__(self, attacker: EntitySnapshot):
+        self.pool = float(attacker.maxhp) * LIFESTEAL_CAST_CAP_RATIO
+
+
+def lifesteal_heal(attacker: EntitySnapshot, basis: float, cast: "LifestealCast | None") -> float:
+    """basis(실제 HP+실드 감소량)의 effective_lifesteal() 비율만큼 회복. 반환: 실제 회복량."""
+    ratio = attacker.effective_lifesteal()
+    if ratio <= 0 or basis <= 0:
+        return 0.0
+    heal = min(basis * ratio, attacker.maxhp * LIFESTEAL_HIT_CAP_RATIO)
+    if cast is not None:
+        heal = min(heal, cast.pool)
+    heal = min(heal, max(0.0, attacker.maxhp - attacker.hp))
+    if heal <= 0:
+        return 0.0
+    attacker.hp += heal
+    if cast is not None:
+        cast.pool -= heal
+    if getattr(attacker, "hit_ledger", None) is not None:   # 표시 전용 장부
+        attacker._record_hit("heal", heal, via="lifesteal")
+    return heal
+
+
+def deal_damage_with_lifesteal(attacker: EntitySnapshot, defender: EntitySnapshot,
+                               dmg: int, cast: "LifestealCast | None") -> tuple:
+    """실드 경유 피해 적용 + 공격자 흡혈. 반환 (HP 피해, 흡혈 회복량)."""
+    hp_before, sh_before = defender.hp, defender.shield
+    hp_dmg = _apply_damage_with_shield(defender, int(dmg))
+    basis = (hp_before - defender.hp) + (sh_before - defender.shield)
+    return hp_dmg, lifesteal_heal(attacker, basis, cast)
+
+
+# ────────────────────────────────────────────
 # 전투 엔진
 # ────────────────────────────────────────────

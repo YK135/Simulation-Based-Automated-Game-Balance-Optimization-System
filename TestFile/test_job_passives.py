@@ -179,7 +179,7 @@ def test_rogue():
     ratio = statistics.mean(cd) / statistics.mean(nd)
     check("방무 삭제: 크리 배율 순수 1.5x (1.4~1.6)", 1.40 < ratio < 1.60, f"ratio={ratio:.3f}")
 
-    # 5. 출혈: 3턴, 매턴 maxhp 4~7%
+    # 5. 출혈: 3턴, 매턴 maxhp 3% × 스택 확정 (2차 5번 출혈 스택 — 옛 4~7% 난수는 제거됨)
     tgt = mk("골렘2")
     tgt.apply_status_effect(StatusEffect(effect_type="bleed", turns=3, name="출혈"))
     ticks = 0
@@ -190,10 +190,10 @@ def test_rogue():
         d = before - tgt.hp
         if d > 0:
             ticks += 1
-            if not (40 <= d <= 70):
+            if d != int(tgt.maxhp * 0.03):
                 ok_range = False
     check("출혈: 정확히 3턴 발동", ticks == 3, f"ticks={ticks}")
-    check("출혈: 매턴 maxhp 4~7% 범위", ok_range)
+    check("출혈: 매턴 maxhp 3% 확정(1스택)", ok_range)
 
     # 6. Damage.py에 구 방무 코드 없음 (소스 검사)
     import ai.battle.Damage as DMod

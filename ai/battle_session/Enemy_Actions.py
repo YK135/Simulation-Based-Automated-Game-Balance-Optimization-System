@@ -46,7 +46,8 @@ class EnemyActionsMixin:
             msgs.append(f"  └ {enemy.name}이(가) 반격을 회피했다!")
         else:
             actual = apply_element_and_react(self.player, enemy, "physical", actual, msgs)
-            actual = self._apply_dmg_shielded(enemy, actual, msgs)
+            self._new_lifesteal_cast()          # 반격도 공격 1회 — 자기 흡혈 예산
+            actual = self._player_hit(enemy, actual, msgs)
             tag = " (치명타!)" if crit else ""
             msgs.append(f"  └ {enemy.name}에게{tag} {actual} 데미지")
             msgs.append(f"     {enemy.name} HP: {max(0, int(enemy.hp))}")

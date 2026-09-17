@@ -184,7 +184,8 @@ class StateMixin:
             "element_aura": _current_element(entity),
             "element_queue": list(getattr(entity, "element_queue", [])),
             "status_effects": [
-                {"type": s.effect_type, "name": s.name, "turns": s.turns}
+                {"type": s.effect_type, "name": s.name, "turns": s.turns,
+                 "stacks": getattr(s, "stacks", 1)}      # 출혈 스택 (그 외는 1)
                 for s in getattr(entity, "status_effects", [])
             ],
         }

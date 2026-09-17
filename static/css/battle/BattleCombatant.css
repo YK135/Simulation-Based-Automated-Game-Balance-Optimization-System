@@ -207,6 +207,13 @@ img.combatant-art {
 }
 
 /* ── 상태이상 이모지 ── */
+/* 출혈 스택 수(×2·×3) — 상태 아이콘 바로 뒤, 작은 글씨 */
+.name-status-icons .status-stack {
+    font-size: 0.7em;
+    margin-left: 1px;
+    opacity: 0.9;
+}
+
 .name-status-icons {
     margin-left: 6px;
     font-size: 0.85em;

@@ -10,10 +10,10 @@ Battle 패키지 — 전투 시스템 (Battle_Engine.py 분리본)
   Items                   → Entity, Elements
   Engine                  → 전부
 """
-from .Entity import EntitySnapshot, Debuff, Buff, StatusEffect
+from .Entity import EntitySnapshot, Debuff, Buff, StatusEffect, BLEED_STACK_MAX, BLEED_RATE_PER_STACK
 from .ATB import ATBSystem
 from .Actions import Action
-from .Damage import DamageCalc, _apply_damage_with_shield
+from .Damage import DamageCalc, _apply_damage_with_shield, LifestealCast, lifesteal_heal
 from .Elements import (
     REACTIONS, REACTION_EFFECTS, ELEMENT_STATUS,
     ELEMENT_STATUS_TURNS, ELEMENT_STATUS_LABEL, SAME_ELEMENT_STATUS_BONUS,
@@ -32,8 +32,8 @@ from .MonsterKit import MONSTER_KITS, get_monster_kit
 from .EliteKit import elite_forced_action
 
 __all__ = [
-    "EntitySnapshot", "Debuff", "Buff", "StatusEffect",
-    "ATBSystem", "Action", "DamageCalc", "_apply_damage_with_shield",
+    "EntitySnapshot", "Debuff", "Buff", "StatusEffect", "BLEED_STACK_MAX", "BLEED_RATE_PER_STACK",
+    "ATBSystem", "Action", "DamageCalc", "_apply_damage_with_shield", "LifestealCast", "lifesteal_heal",
     "REACTIONS", "REACTION_EFFECTS", "ELEMENT_STATUS",
     "ELEMENT_STATUS_TURNS", "ELEMENT_STATUS_LABEL", "SAME_ELEMENT_STATUS_BONUS",
     "REACTION_TABLE", "_current_element", "apply_element_and_react",
