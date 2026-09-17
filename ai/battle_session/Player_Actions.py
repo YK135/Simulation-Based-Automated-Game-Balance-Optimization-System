@@ -7,7 +7,7 @@ from random import randint, random as _random
 from ai.battle import (
     apply_element_and_react, ITEM_META, Debuff, roll_multi_hit_count,
     DamageCalc, execute_skill, SKILL_META, TurnLog,
-    execute_single_hit, consume_skill_mp,
+    execute_single_hit, consume_skill_mp, mage_resonance_mult,
 )
 
 
@@ -456,7 +456,8 @@ class PlayerActionsMixin:
                                 self.player.luc,
                                 tgt.effective_sparm(),
                                 tgt.luc,
-                                skill_mult=skill_mult,
+                                # 원소 공명 배율 — 첫 대상(execute_skill)과 같은 값 (단계는 시전당 1회 갱신됨)
+                                skill_mult=skill_mult * mage_resonance_mult(self.player, meta.get("element", "")),
                                 role="player",
                                 attacker=self.player,
                                 defender=tgt,

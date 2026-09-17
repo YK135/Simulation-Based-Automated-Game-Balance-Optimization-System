@@ -170,6 +170,15 @@ function refreshPlayerStatusList(bs) {
     const buffs   = bs.player_buffs   || [];
     const debuffs = bs.player_debuffs || [];
     buffsEl.innerHTML   = buffs.map(b => renderChip(b, 'buff')).join('');
+    // 마법사 원소 공명 단계(bs.player_resonance — 서버 표시용 파생값): 같은 원소 연속 시전 n/3
+    const res = bs.player_resonance;
+    if (res && res.stack > 0) {
+        const elemKor = { fire: '화염', ice: '빙결', lightning: '번개' }[res.element] || res.element;
+        const pct = Math.max(0, res.stack - 1) * 10;
+        buffsEl.innerHTML += `<span class="status-chip buff resonance" title="원소 공명 — 같은 원소 연속 시전 ${res.stack}/${res.max}, 피해 +${pct}%. 다른 원소로 바꾸면 그 시전의 반응 보너스 +20%p">
+                  🔮 ${elemKor} 공명<span class="turns">${res.stack}/${res.max}</span>
+                </span>`;
+    }
     debuffsEl.innerHTML = debuffs.map(d => renderChip(d, 'debuff')).join('');
 }
 

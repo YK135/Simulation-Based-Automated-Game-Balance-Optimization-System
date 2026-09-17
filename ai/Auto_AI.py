@@ -5,7 +5,12 @@ Auto_AI.py
 """
 from __future__ import annotations
 from ai.battle import Action, EntitySnapshot, SKILL_META, MONSTER_SKILL_META, get_monster_kit
-from ai.battle.Elements import is_element_immune, REACTIONS, REACTION_EFFECTS, _current_element
+from ai.battle.Elements import (
+    is_element_immune, REACTIONS, REACTION_EFFECTS, _current_element,
+    mage_resonance_mult, RESONANCE_STEP, RESONANCE_MAX_STACK, RESONANCE_ELEMENTS,
+    MAGE_REACTION_BONUS, MAGE_SWITCH_REACTION_BONUS,
+)
+from ai.battle.Skills import physical_skill_mult
 from ai.battle.EliteKit import elite_forced_action, GOLEM_PHASE_STRIKE
 from ai.battle.BossKit import is_midboss
 
@@ -24,9 +29,11 @@ def _skill_attack_element(meta: dict) -> str:
     return meta.get("element", "") or ""
 
 
-def _reaction_bonus(meta: dict, defender: EntitySnapshot | None) -> float:
+def _reaction_bonus(meta: dict, defender: EntitySnapshot | None,
+                    attacker: EntitySnapshot | None = None) -> float:
     """대상에게 지금 붙어 있는 원소와 이 스킬이 만드는 반응의 배율 (Elements 표 그대로).
-    반응이 없으면 1.0. 파쇄(ice + 물리)도 포함 — 전사·도적이 서리 갑주를 노릴 수 있게."""
+    반응이 없으면 1.0. 파쇄(ice + 물리)도 포함 — 전사·도적이 서리 갑주를 노릴 수 있게.
+    attacker가 마법사면 패시브 +5%p, 원소 전환 시전이면 전환 공명 +20%p까지 반영(6-2)."""
     if defender is None:
         return 1.0
     cur = _current_element(defender)
@@ -36,7 +43,24 @@ def _reaction_bonus(meta: dict, defender: EntitySnapshot | None) -> float:
     if elem == "physical":
         return REACTION_EFFECTS["shatter"]["bonus_mult"] if cur == "ice" else 1.0
     name = REACTIONS.get((cur, elem))
-    return REACTION_EFFECTS[name]["bonus_mult"] if name else 1.0
+    if not name:
+        return 1.0
+    mult = REACTION_EFFECTS[name]["bonus_mult"]
+    if attacker is not None and getattr(attacker, "job", "") == "마법사" and name in ("melt", "overload"):
+        switching = bool(attacker.resonance_element) and attacker.resonance_element != elem
+        mult += MAGE_SWITCH_REACTION_BONUS if switching else MAGE_REACTION_BONUS
+    return mult
+
+
+def _next_resonance_mult(meta: dict, attacker: EntitySnapshot) -> float:
+    """이 스킬을 지금 시전하면 적용될 공명 단계 배율 — 같은 원소면 다음 단계, 아니면 1.0 (측정용 AI만 본다)."""
+    elem = meta.get("element", "")
+    if getattr(attacker, "job", "") != "마법사" or elem not in RESONANCE_ELEMENTS:
+        return 1.0
+    if attacker.resonance_element != elem:
+        return 1.0
+    nxt = min(RESONANCE_MAX_STACK, attacker.resonance_stack + 1)
+    return 1.0 + RESONANCE_STEP * (nxt - 1)
 
 
 def _enemy_telegraphing(defender: EntitySnapshot | None) -> bool:
@@ -153,9 +177,15 @@ def _best_attack_skill(attacker: EntitySnapshot, defender: EntitySnapshot,
         if not meta or meta.get("type") not in ATTACK_TYPES:
             continue
         score = _skill_efficiency(skill, attacker, defender, enemy_count=enemy_count)
-        # 측정용 모드만: 지금 반응이 나는 스킬에 반응 배율만큼 가점 (면역 -1은 그대로 배제)
+        # 측정용 모드만: 지금 반응이 나는 스킬에 반응 배율만큼 가점 (면역 -1은 그대로 배제),
+        # 6장 역할 분화(처형·출혈 급소·공명 단계)도 "지금 시전하면 실제로 붙는 배율"만큼 가점.
+        # 기본 모드(balanced)의 점수는 그대로다 — 튜닝 기준을 움직이지 않기 위해.
         if reaction_aware and score > 0:
-            score *= _reaction_bonus(meta, defender)
+            score *= _reaction_bonus(meta, defender, attacker)
+            if meta.get("type") == "physical":
+                score *= physical_skill_mult(meta, defender)[0]
+            elif meta.get("type") == "magical":
+                score *= _next_resonance_mult(meta, attacker)
         if score > best_score:
             best_score, best = score, skill
     return best if best_score > 0 else None

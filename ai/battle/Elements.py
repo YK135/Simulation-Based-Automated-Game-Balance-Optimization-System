@@ -21,6 +21,43 @@ REACTION_EFFECTS = {
     "overload": {"bonus_mult": 1.3, "label": "⚡ 과부하"},
 }
 
+# ── 마법사 원소 공명 (Combat Content Brief 6-2 · 11-1 2차 4번) — 기존 패시브의 사전 축적 확장 ──
+#   같은 원소를 연속 시전하면 2회차 +10% / 3회차 +20%(최대). 다른 원소로 전환하면 공명은 1단계로
+#   초기화되는 대신 그 시전의 반응 보너스가 +5%p → +20%p. 상태는 EntitySnapshot.resonance_*,
+#   갱신은 Skills.execute_skill의 훅(mage_resonance_on_cast) 한 곳 — 원소 마법 스킬 시전에만 반응한다.
+#   힐·버프 같은 무원소 스킬과 아이템은 단계를 바꾸지 않는다.
+RESONANCE_STEP = 0.10
+RESONANCE_MAX_STACK = 3
+RESONANCE_ELEMENTS = ("fire", "ice", "lightning")
+MAGE_REACTION_BONUS = 0.05          # 기존 패시브: 융해·과부하 +5%p
+MAGE_SWITCH_REACTION_BONUS = 0.20   # 전환 공명: 그 시전의 반응 보너스 +20%p
+
+
+def mage_resonance_on_cast(attacker, element: str, stype: str) -> str:
+    """마법사의 원소 마법 시전 1회를 공명에 반영. 반환 "stack"(같은 원소) / "switch"(전환) / ""(해당 없음)."""
+    if getattr(attacker, "job", "") != "마법사" or stype != "magical" or element not in RESONANCE_ELEMENTS:
+        return ""
+    if attacker.resonance_element == element:
+        attacker.resonance_stack = min(RESONANCE_MAX_STACK, attacker.resonance_stack + 1)
+        attacker.resonance_switched = False
+        return "stack"
+    switched = bool(attacker.resonance_element)
+    attacker.resonance_element = element
+    attacker.resonance_stack = 1
+    attacker.resonance_switched = switched
+    return "switch" if switched else "stack"
+
+
+def mage_resonance_mult(attacker, element: str) -> float:
+    """현재 공명 단계의 피해 배율 — 같은 원소 2단계 1.10 / 3단계 1.20, 그 외 1.0."""
+    if getattr(attacker, "job", "") != "마법사" or not element:
+        return 1.0
+    if getattr(attacker, "resonance_element", "") != element:
+        return 1.0
+    stack = getattr(attacker, "resonance_stack", 0)
+    return 1.0 + RESONANCE_STEP * max(0, min(RESONANCE_MAX_STACK, stack) - 1)
+
+
 # 원소 → 상태이상
 ELEMENT_STATUS = {
     "fire":      ("ignite",    30),
@@ -186,7 +223,12 @@ def apply_element_and_react(
                 #    명세(파쇄 제외)를 명시적으로 보장하기 위해 reaction_name 체크.
                 is_mage = attacker is not None and getattr(attacker, "job", "") == "마법사"
                 if is_mage and reaction_name in ("melt", "overload"):
-                    bonus_mult += 0.05
+                    if getattr(attacker, "resonance_switched", False):
+                        # 전환 공명(6-2): 원소를 바꾼 그 시전은 +5%p 대신 +20%p
+                        bonus_mult += MAGE_SWITCH_REACTION_BONUS
+                        messages.append(f"[마법사 패시브] 원소 전환 공명 — 반응 보너스 +{int(MAGE_SWITCH_REACTION_BONUS * 100)}%p")
+                    else:
+                        bonus_mult += MAGE_REACTION_BONUS
                 bonus = int(base_damage * (bonus_mult - 1.0))
                 defender.element_queue.clear()
                 messages.append(f"{eff['label']} 반응 발동!")

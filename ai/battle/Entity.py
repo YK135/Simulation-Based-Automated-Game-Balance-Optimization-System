@@ -148,6 +148,11 @@ class EntitySnapshot:
     #             (Player_Actions/Enemy_Actions/Damage._suppress_crit)
     job: str = ""
 
+    # ── 마법사 원소 공명 (ai/battle/Elements.py mage_resonance_*) — 플레이어(마법사) 전용 ──
+    resonance_element: str = ""      # 마지막으로 시전한 원소 마법의 원소
+    resonance_stack: int = 0         # 같은 원소 연속 시전 수 (1~3) — 2단계 +10% / 3단계 +20%
+    resonance_switched: bool = False # 직전 시전이 원소 전환이었나 — 그 시전의 반응 보너스 +20%p
+
     # ── 원소 시스템 ──
     # element_queue: 원소 부착 큐 (최대 2개)
     # status_effects: 실제 상태이상 리스트 (StatusEffect)

@@ -5,7 +5,7 @@ from random import randint, random, uniform
 
 from .Entity import EntitySnapshot, Debuff, Buff, StatusEffect
 from .Damage import DamageCalc
-from .Elements import apply_element_and_react
+from .Elements import apply_element_and_react, mage_resonance_on_cast, mage_resonance_mult
 from .EliteKit import BAT_SCREAM_SPD_AMOUNT, BAT_SCREAM_TURNS
 from .BossKit import MIDBOSS_RIFT_MULT, MIDBOSS_RIFT_ARM_PEN, RIFT_STATUS
 from .MonsterKit import BAT_WING_SKILL, BAT_WING_ATB_DRAIN, BAT_WING_MP
@@ -71,11 +71,15 @@ SKILL_META = {
         "mp": 13, "mult": 0.70, "type": "physical", "hits": 3
     },
     "강타1": {
-        "mp": 10, "mult": 1.55, "type": "physical", "hits": 1
+        # 처형(6-1): 대상 HP가 30% 이하면 계수 +50% (1.55 → 2.33). 평소엔 연속공격, 마무리는 강타.
+        #   몬스터판(고블린 강타1)은 MONSTER_SKILL_META에 개편 전 값으로 고정 — 처형 없음.
+        "mp": 10, "mult": 1.55, "type": "physical", "hits": 1,
+        "execute_hp": 0.30, "execute_mult": 1.5,
     },
     "강타2": {
-        # 스펙: mult 1.80
-        "mp": 16, "mult": 1.80, "type": "physical", "hits": 1
+        # 스펙: mult 1.80 — 처형 시 2.70
+        "mp": 16, "mult": 1.80, "type": "physical", "hits": 1,
+        "execute_hp": 0.30, "execute_mult": 1.5,
     },
     "슬래시1": {
         # 전사 광역 생존기 — AoE 딜 + 명중한 적 수만큼 실드 (maxhp 5%/명중, 최대 15%)
@@ -88,12 +92,14 @@ SKILL_META = {
         "shield_per_hit": 0.07, "shield_cap": 0.21
     },
     "강화1": {
+        # 지속 2 → 3턴(6-1): ATB 턴제에서 2턴 버프는 공격 1~2회분이라 강타 한 번보다 못했다.
+        #   유령의 강화1은 MONSTER_SKILL_META(2턴) 그대로.
         "mp": 14, "type": "buff",
-        "buff_stat": "stg", "buff_amount": 0.15, "buff_turns": 2
+        "buff_stat": "stg", "buff_amount": 0.15, "buff_turns": 3
     },
     "강화2": {
         "mp": 20, "type": "buff",
-        "buff_stat": "stg", "buff_amount": 0.25, "buff_turns": 2
+        "buff_stat": "stg", "buff_amount": 0.25, "buff_turns": 3
     },
 
     "파이어볼1": {
@@ -104,16 +110,20 @@ SKILL_META = {
         "mp": 16, "mult": 1.55, "type": "magical", "hits": 1, "element": "fire"
     },
     "아이스볼릿1": {
+        # 확정 둔화(6-2): 확률 30%·10~15% → 100%·−10% 2턴. 계수는 그대로 —
+        #   "계수는 낮지만 반드시 늦춘다"로 파이어볼(화력)/라이트닝(대물리)과 역할을 가른다.
+        #   빙결 슬라임의 아이스볼릿은 MONSTER_SKILL_META에 개편 전 값으로 고정.
         "mp": 11, "mult": 1.25, "type": "magical", "hits": 1,
         "element": "ice",
-        "debuff_stat": "spd", "debuff_chance": 0.3,
-        "debuff_amount": (0.10, 0.15), "debuff_turns": (2, 3)
+        "debuff_stat": "spd", "debuff_chance": 1.0,
+        "debuff_amount": (0.10, 0.10), "debuff_turns": (2, 2)
     },
     "아이스볼릿2": {
+        # 확정 둔화 −15% 3턴
         "mp": 17, "mult": 1.45, "type": "magical", "hits": 1,
         "element": "ice",
-        "debuff_stat": "spd", "debuff_chance": 0.5,
-        "debuff_amount": (0.15, 0.20), "debuff_turns": (2, 3)
+        "debuff_stat": "spd", "debuff_chance": 1.0,
+        "debuff_amount": (0.15, 0.15), "debuff_turns": (3, 3)
     },
     "라이트닝1": {
         "mp": 12, "mult": 1.55, "type": "magical", "hits": 1, "element": "lightning"
@@ -173,13 +183,15 @@ SKILL_META = {
     },
 
     "급소찌르기1": {
+        # 출혈 중인 대상에게 +15%(6-3): 주사위 3·6 출혈 → 다음 턴 급소찌르기 루프.
+        #   암살자의 급소찌르기1은 MONSTER_SKILL_META(보너스 없음) 그대로.
         "mp": 7, "mult": 1.20, "type": "physical", "hits": 1,
-        "luc_bonus": 0.8
+        "luc_bonus": 0.8, "bleed_bonus": 0.15
     },
     "급소찌르기2": {
         # 스펙: mult 1.30, luc_bonus 0.8 (후반 폭주 억제)
         "mp": 15, "mult": 1.30, "type": "physical", "hits": 1,
-        "luc_bonus": 0.8
+        "luc_bonus": 0.8, "bleed_bonus": 0.15
     },
     "연속찌르기": {
         # 스펙: max_hits 4, base_prob 5, luc_mult 3, prob_decay 20, dmg_decay 0.68
@@ -230,6 +242,23 @@ SKILL_META = {
 #   재시전이 가능하므로 1회당 위력을 플레이어판보다 낮게 잡는다.
 # ────────────────────────────────────────────
 MONSTER_SKILL_META = {
+    # ── 6장 역할 분화에서 플레이어판만 바뀐 스킬 — 몬스터판은 개편 전 값으로 고정 ──
+    #   (몬스터 개편은 2차 3번, 스킬 분화는 2차 4번 — 원인 분리를 위해 서로 섞지 않는다)
+    "강타1": {            # 고블린 킷 — 처형 없음
+        "mp": 10, "mult": 1.55, "type": "physical", "hits": 1
+    },
+    "아이스볼릿1": {      # 빙결 슬라임 킷 — 확률 둔화 그대로
+        "mp": 11, "mult": 1.25, "type": "magical", "hits": 1,
+        "element": "ice",
+        "debuff_stat": "spd", "debuff_chance": 0.3,
+        "debuff_amount": (0.10, 0.15), "debuff_turns": (2, 3)
+    },
+    "아이스볼릿2": {
+        "mp": 17, "mult": 1.45, "type": "magical", "hits": 1,
+        "element": "ice",
+        "debuff_stat": "spd", "debuff_chance": 0.5,
+        "debuff_amount": (0.15, 0.20), "debuff_turns": (2, 3)
+    },
     # 유령 전용
     "강화1": {
         "mp": 10, "type": "buff",
@@ -311,6 +340,31 @@ def _resolve_meta(skill_name: str, attacker: EntitySnapshot) -> dict | None:
         if meta:
             return meta
     return SKILL_META.get(skill_name)
+
+
+def physical_skill_mult(meta: dict, defender: EntitySnapshot) -> tuple:
+    """물리 스킬의 조건부 계수 보정(6장 역할 분화). 반환 (배율, 발동한 태그 목록).
+      execute  : meta.execute_hp 이하 HP의 대상 → ×execute_mult (강타 처형)
+      bleed    : 출혈 중인 대상 → ×(1 + bleed_bonus) (급소찌르기)
+    시전 시점의 대상 상태로 한 번만 판정한다 — execute_skill / execute_single_hit 두 경로가 공유."""
+    mult, tags = 1.0, []
+    ex_hp = meta.get("execute_hp")
+    if ex_hp is not None and defender is not None and defender.maxhp > 0 \
+            and defender.hp / defender.maxhp <= ex_hp:
+        mult *= meta.get("execute_mult", 1.0)
+        tags.append("execute")
+    bb = meta.get("bleed_bonus", 0.0)
+    if bb and defender is not None and any(
+            getattr(e, "effect_type", "") == "bleed" for e in getattr(defender, "status_effects", [])):
+        mult *= (1.0 + bb)
+        tags.append("bleed")
+    return mult, tags
+
+
+_PHYSICAL_TAG_MSG = {
+    "execute": "⚔ 처형! 대상 HP 30% 이하 — 피해 +50%",
+    "bleed":   "🩸 출혈 급소! 피해 +15%",
+}
 
 
 def skill_atb_drain(skill_name: str, attacker: EntitySnapshot) -> float:
@@ -407,12 +461,13 @@ def execute_single_hit(
         return int(raw), dodge, crit
 
     if stype == "physical":
+        cond_mult, _tags = physical_skill_mult(meta, defender)   # 처형 · 출혈 급소 (6장)
         raw, dodge, crit = DamageCalc.physical(
             attacker.effective_stg(),
             attacker.luc,
             defender.effective_arm() * (1.0 - meta.get("arm_pen", 0.0)),   # ARM 관통 (대지 균열)
             defender.luc,
-            skill_mult=meta.get("mult", 1.0),
+            skill_mult=meta.get("mult", 1.0) * cond_mult,
             attacker=attacker,
             defender=defender,
             hit_count=1,
@@ -456,6 +511,11 @@ def execute_skill(
 
     attacker.mp -= real_mp_cost
     stype = meta["type"]
+
+    # ── 마법사 원소 공명(6-2) — 시전 1회당 한 번, 원소 마법 스킬만 상태를 바꾼다 ──
+    #    (실전 세션과 튜너 엔진이 모두 execute_skill을 거치므로 여기가 공용 훅 자리.
+    #     AoE는 세션이 첫 대상만 execute_skill로 처리하므로 역시 1회.)
+    resonance_note = mage_resonance_on_cast(attacker, meta.get("element", ""), stype)
 
     if stype == "debuff":
         amt = round(
@@ -547,6 +607,8 @@ def execute_skill(
 
     total = 0
     hits = meta.get("hits", 1)
+    cond_mult, cond_tags = (physical_skill_mult(meta, defender) if stype == "physical" else (1.0, []))
+    res_mult = mage_resonance_mult(attacker, meta.get("element", "")) if stype == "magical" else 1.0
 
     for _ in range(hits):
         if stype == "physical":
@@ -555,7 +617,7 @@ def execute_skill(
                 attacker.luc,
                 defender.effective_arm() * (1.0 - meta.get("arm_pen", 0.0)),   # ARM 관통 (대지 균열)
                 defender.luc,
-                skill_mult=meta.get("mult", 1.0),
+                skill_mult=meta.get("mult", 1.0) * cond_mult,    # 처형 · 출혈 급소 (6장)
                 attacker=attacker,
                 defender=defender,
                 hit_count=hits,  # hits>1이면 다단히트로 회피 페널티 적용
@@ -570,7 +632,7 @@ def execute_skill(
                 attacker.luc,
                 defender.effective_sparm(),
                 defender.luc,
-                skill_mult=meta.get("mult", 1.0),
+                skill_mult=meta.get("mult", 1.0) * res_mult,     # 원소 공명 단계 배율 (마법사)
                 attacker=attacker,
                 defender=defender,
                 hit_count=hits,
@@ -597,6 +659,10 @@ def execute_skill(
     # ── 원소 큐 + 반응 + 상태이상 ──
     element = meta.get("element", "")
     extra_msgs: list = []
+    if total > 0:
+        extra_msgs.extend(_PHYSICAL_TAG_MSG[t] for t in cond_tags)      # 처형 / 출혈 급소
+        if res_mult > 1.0:
+            extra_msgs.append(f"🔮 원소 공명 {attacker.resonance_stack}단계 — 피해 +{int(round((res_mult - 1) * 100))}%")
     if total > 0 or element:
         total = apply_element_and_react(attacker, defender, element, total, extra_msgs)
     # ── 명중 시 부여하는 상태이상 (중간 보스 「대지 균열」의 균열) ──
