@@ -70,6 +70,48 @@ function renderNameWithStatus(el, entity) {
     el.appendChild(iconsWrap);
 }
 
+/* ── 적 패턴 배지 (예고 / 스택 / 골렘 사이클 / 그로기) ───────────
+   bs.enemies[i].pattern이 실어 오는 표시 전용 파생값을 그대로 그린다.
+   서버가 이미 "무엇을, 몇 칸 중 몇 칸" 형태로 정규화해 주므로 여기서는
+   몬스터 종류를 전혀 모른 채 배지 배열만 렌더한다 — 새 엘리트가 늘어도
+   State._pattern_badges만 고치면 이 함수는 그대로다. */
+function renderPatternBadges(el, badges) {
+    if (!el) return;
+    badges = badges || [];
+    el.innerHTML = '';
+    // '' 대신 명시적으로 flex — 스타일시트 기본값(none)에 의존하지 않는다
+    el.style.display = badges.length ? 'flex' : 'none';
+
+    badges.forEach(b => {
+        const max = Math.max(1, b.max || 1);
+        const cur = Math.max(0, Math.min(b.cur || 0, max));
+
+        const badge = document.createElement('span');
+        badge.className = `pattern-badge kind-${b.kind || 'telegraph'} state-${b.state || 'idle'}`;
+        // 스크린리더/툴팁용 — 눈으로는 칸으로, 글자로는 숫자로 읽히게
+        badge.title = `${b.label} ${cur}/${max}`;
+
+        const name = document.createElement('span');
+        name.className = 'pattern-label';
+        name.textContent = b.label || '';
+        badge.appendChild(name);
+
+        // max가 1이면(사제 부활 의식처럼 단발) 칸을 그리지 않는다 — 한 칸짜리
+        // 게이지는 정보가 없고 배지만 넓어진다
+        if (max > 1) {
+            const pips = document.createElement('span');
+            pips.className = 'pattern-pips';
+            for (let i = 0; i < max; i++) {
+                const pip = document.createElement('i');
+                pip.className = 'pattern-pip' + (i < cur ? ' on' : '');
+                pips.appendChild(pip);
+            }
+            badge.appendChild(pips);
+        }
+        el.appendChild(badge);
+    });
+}
+
 function refreshLeftStatsBattle(bs) {
     const grid = document.getElementById('stat-grid');
     if (!grid || !state.player) return;

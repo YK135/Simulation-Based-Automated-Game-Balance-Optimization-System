@@ -6,11 +6,114 @@ from __future__ import annotations
 from ai.battle import (
     _current_element,
 )
+from ai.battle.EliteKit import (
+    ASSASSIN_MARK_INTERVAL, BAT_SCREAM_INTERVAL,
+    FIRE_SLIME_STACK_THRESHOLD, LIGHTNING_SLIME_STACK_THRESHOLD,
+    GOLEM_PHASE_GUARD, GOLEM_PHASE_CHARGE, GOLEM_PHASE_STRIKE,
+    PRIEST_PHASE_PREPARING,
+)
 from game.Inventory import Inventory
+
+# ── 엘리트 패턴 UI 배지 정의 (표시 전용) ───────────────────────
+# "n회 행동마다 예고 → 다음 행동에 발동" 형태를 공유하는 두 리더.
+# elite_pattern_turn이 카운터, elite_phase 1/2가 "예고됨"을 뜻한다
+# (EliteKit.elite_forced_action 참고 — 1=막 예고, 2=다음 행동에 발동).
+_TELEGRAPH_COUNTDOWN = {
+    "박쥐":   ("초음파비명", BAT_SCREAM_INTERVAL),
+    "암살자": ("암살 표식",  ASSASSIN_MARK_INTERVAL),
+}
+# 피격 스택이 임계치에 닿으면 강스킬이 나가는 원소 슬라임 두 종.
+# elite_pattern_turn이 곧 스택 수이고, 임계치에 닿는 순간 소비된다.
+_STACK_GAUGE = {
+    "화염 슬라임": ("과부하 화염", FIRE_SLIME_STACK_THRESHOLD),
+    "번개 슬라임": ("과부하 전격", LIGHTNING_SLIME_STACK_THRESHOLD),
+}
+# 골렘 3단계 사이클 — phase가 곧 "다음 행동에 무엇을 하는가"다.
+_GOLEM_PHASE_LABEL = {
+    GOLEM_PHASE_GUARD:  ("수비 태세", "idle"),
+    GOLEM_PHASE_CHARGE: ("충전 예고", "charging"),
+    GOLEM_PHASE_STRIKE: ("강타",      "armed"),
+}
+# 골렘 그로기: 일반공격 2연타로 방어력을 깎고, 충전 중이면 강타까지 취소된다
+# (Player_Actions._update_golem_groggy). 엘리트가 아닌 골렘에게도 있다.
+_GROGGY_HITS_REQUIRED = 2
 
 
 class StateMixin:
     """BattleSession에 상태 JSON 기능을 제공하는 mixin."""
+
+    @staticmethod
+    def _pattern_badges(en) -> list:
+        """적이 '이미 갖고 있는' 패턴 상태를 UI 배지로 노출한다.
+
+        ★ 전투 계산에는 전혀 쓰이지 않는 읽기 전용 파생값이다 — 여기서
+          엔티티를 수정하면 안 된다. 새 상태를 만들지도 않는다: 전부
+          elite_phase / elite_pattern_turn / physical_hit_streak를 읽어서
+          문장으로 바꿀 뿐이라, 이 함수를 통째로 지워도 밸런스는 불변이다.
+
+        배지 하나: {kind, label, cur, max, state}
+          kind  : telegraph(예고형) | stack(스택형) | cycle(골렘) | groggy(플레이어측 게이지)
+          state : armed(다음 행동에 발동) | charging(진행 중) | idle
+        """
+        et      = getattr(en, "enemy_type", "")
+        leader  = getattr(en, "elite_leader", False)
+        phase   = getattr(en, "elite_phase", 0)
+        counter = getattr(en, "elite_pattern_turn", 0)
+        badges  = []
+
+        if leader and et in _TELEGRAPH_COUNTDOWN:
+            label, interval = _TELEGRAPH_COUNTDOWN[et]
+            armed = phase != 0
+            badges.append({
+                "kind":  "telegraph",
+                "label": label,
+                # 예고된 상태에서는 카운터가 0으로 리셋돼 있으므로 가득 찬 것으로 보여준다
+                "cur":   interval if armed else min(counter, interval),
+                "max":   interval,
+                "state": "armed" if armed else "charging",
+            })
+
+        if leader and et in _STACK_GAUGE:
+            label, threshold = _STACK_GAUGE[et]
+            badges.append({
+                "kind":  "stack",
+                "label": label,
+                "cur":   min(counter, threshold),
+                "max":   threshold,
+                "state": "armed" if counter >= threshold - 1 else "charging",
+            })
+
+        if leader and et == "골렘":
+            label, state = _GOLEM_PHASE_LABEL.get(phase, _GOLEM_PHASE_LABEL[GOLEM_PHASE_GUARD])
+            badges.append({
+                "kind":  "cycle",
+                "label": label,
+                "cur":   phase + 1,
+                "max":   len(_GOLEM_PHASE_LABEL),
+                "state": state,
+            })
+
+        if leader and et == "사제" and phase == PRIEST_PHASE_PREPARING \
+                and not getattr(en, "elite_pattern_used", False):
+            badges.append({
+                "kind":  "telegraph",
+                "label": "부활 의식",
+                "cur":   1, "max": 1,
+                "state": "armed",
+            })
+
+        # 골렘 그로기는 엘리트 여부와 무관 — 플레이어가 쌓는 게이지라 항상 보여준다
+        if et == "골렘":
+            streak = getattr(en, "physical_hit_streak", 0)
+            badges.append({
+                "kind":  "groggy",
+                "label": "그로기",
+                "cur":   min(streak, _GROGGY_HITS_REQUIRED),
+                "max":   _GROGGY_HITS_REQUIRED,
+                "state": "armed" if streak >= _GROGGY_HITS_REQUIRED - 1 else "idle",
+            })
+
+        return badges
 
     def _pack_status_list(self, entity) -> dict:
         """
@@ -448,6 +551,8 @@ class StateMixin:
                 "status_effects":   en_status["status_effects"],
                 "difficulty":       en_diff,
                 "difficulty_label": self._DIFF_LABEL.get(en_diff, en_diff),
+                # ── 패턴 배지 (표시 전용 파생값 — _pattern_badges 주석 참고) ──
+                "pattern":          self._pattern_badges(en),
             })
 
         return {

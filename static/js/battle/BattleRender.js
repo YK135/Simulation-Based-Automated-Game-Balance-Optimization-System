@@ -142,6 +142,10 @@ function renderEnemySlots(bs, opts) {
         }
         if (metaEl) metaEl.textContent = `LV ${en.lv ?? '--'} ${en.difficulty_label ? '[' + en.difficulty_label + ']' : ''}`;
 
+        // 패턴 배지 — 죽은 적은 예고가 의미 없으므로 비운다
+        renderPatternBadges(document.getElementById(`enemy-pattern${enemyIdSuffix(i)}`),
+                            en.alive ? en.pattern : []);
+
         // HP 바
         const hpEl     = document.getElementById(`enemy-cb-hp${enemyIdSuffix(i)}`);
         const hpTextEl = document.getElementById(`enemy-cb-hp-text${enemyIdSuffix(i)}`);

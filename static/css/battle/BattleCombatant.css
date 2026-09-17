@@ -412,3 +412,77 @@ img.combatant-art {
         100% { transform: translate(-50%, -14px); opacity: 0; }
     }
 }
+
+
+/* ═══════════════════════════════════════════════════════════
+   적 패턴 배지 — 예고 / 스택 / 골렘 사이클 / 그로기
+   ─────────────────────────────────────────────────────────
+   이미 엔진에 있는 패턴을 "보이게만" 하는 층. 서버가 정규화한
+   {label, cur, max, state}만 그리므로 몬스터 종류를 몰라도 된다
+   (BattleStatusUI.js renderPatternBadges).
+
+   색 규칙: 적의 위협은 경고색(--accent-warn), 플레이어가 쌓는
+   그로기 게이지만 아군색(--atb-cyan)으로 뒤집어 "내 것"으로 읽히게 한다.
+   ═══════════════════════════════════════════════════════════ */
+.pattern-badges {
+    /* 기본은 숨김 — 배지가 있을 때만 renderPatternBadges가 flex로 켠다.
+       (적이 없는 슬롯은 렌더 루프가 아예 건너뛰므로 여기 기본값이 최후 방어선) */
+    display: none;
+    flex-wrap: wrap;
+    justify-content: center;
+    gap: 3px;
+    margin-top: 3px;
+    max-width: 130px;   /* .combatant-bars와 같은 폭 — 슬롯 밖으로 안 나가게 */
+}
+
+.pattern-badge {
+    display: inline-flex; align-items: center; gap: 4px;
+    padding: 1px 5px;
+    border: 1px solid var(--border);
+    border-radius: 2px;
+    font-size: 8px; font-weight: 700;
+    letter-spacing: 0.03em; line-height: 1.5;
+    color: var(--text-muted);
+    white-space: nowrap;
+}
+
+.pattern-badge.state-charging {
+    border-color: rgba(251, 191, 36, 0.45);
+    color: var(--text-dim);
+}
+
+/* 다음 행동에 발동 — 여기만 눈에 띄어야 한다 */
+.pattern-badge.state-armed {
+    background: var(--accent-warn);
+    border-color: var(--accent-warn);
+    color: var(--bg-darkest);
+    box-shadow: 0 0 8px rgba(251, 191, 36, 0.55);
+    animation: pattern-armed-pulse 0.9s ease-in-out infinite alternate;
+}
+
+/* 그로기는 플레이어가 쌓는 게이지 — 위협색이 아니라 아군색 */
+.pattern-badge.kind-groggy { border-color: rgba(34, 211, 238, 0.35); }
+.pattern-badge.kind-groggy.state-armed {
+    background: var(--atb-cyan);
+    border-color: var(--atb-cyan);
+    box-shadow: 0 0 8px rgba(34, 211, 238, 0.55);
+}
+
+.pattern-pips { display: inline-flex; gap: 2px; }
+.pattern-pip {
+    width: 4px; height: 4px;
+    border-radius: 50%;
+    background: transparent;
+    border: 1px solid currentColor;
+    opacity: 0.55;
+}
+.pattern-pip.on { background: currentColor; opacity: 1; }
+
+@keyframes pattern-armed-pulse {
+    from { opacity: 0.78; }
+    to   { opacity: 1; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .pattern-badge.state-armed { animation: none; }
+}
