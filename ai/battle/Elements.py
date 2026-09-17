@@ -4,6 +4,7 @@ from __future__ import annotations
 from random import randint
 
 from .Entity import Debuff, StatusEffect
+from .Relics import frost_mark_mult, frost_mark_on_shatter
 from .EliteKit import (
     ICE_SLIME_ARMOR_REDUCTION, ICE_SLIME_BREAK_SPARM_AMOUNT, ICE_SLIME_BREAK_TURNS,
     LIGHTNING_SLIME_OVERLOAD_SPD_AMOUNT, LIGHTNING_SLIME_OVERLOAD_SPD_TURNS,
@@ -187,11 +188,18 @@ def apply_element_and_react(
 
     # physical: 파쇄 체크만 (큐에 추가 안 함)
     if attack_element == "physical" or not attack_element:
+        # 서리 사냥꾼의 각인(유물): ice가 붙은 대상에게 주는 물리 피해 +15% — 파쇄 배율 앞에 곱한다
+        fm = frost_mark_mult(attacker, defender)
+        if fm > 1.0 and base_damage > 0:
+            base_damage = int(base_damage * fm)
+            messages.append(f"❄ 서리 사냥꾼의 각인 — 물리 피해 +{int(round((fm - 1) * 100))}%")
         if q and q[-1] == "ice":
             eff = REACTION_EFFECTS["shatter"]
             bonus = int(base_damage * (eff["bonus_mult"] - 1.0))
             defender.element_queue.clear()
             messages.append(f"{eff['label']} 발동! +{bonus} 추가 데미지")
+            if frost_mark_on_shatter(attacker) > 0:
+                messages.append("❄ 서리 사냥꾼의 각인 — 파쇄! ATB +5")
             messages.append(f"{defender.name}의 원소 큐가 초기화되었다.")
             _restore_innate_element(defender, messages)   # 원소 슬라임 고유 원소 복구
             _elite_ice_slime_break(defender, messages)     # 엘리트 빙결 슬라임: 갑옷 파쇄

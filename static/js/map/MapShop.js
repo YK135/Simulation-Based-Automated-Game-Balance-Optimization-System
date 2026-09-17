@@ -7,10 +7,12 @@ function _showShopPanel(r) {
     const items = r.shop_items || [];
     overlay.style.display = "flex";
     // 일반(포션) / 특수 섹션 분리 — type 필드 기준 (없으면 id로 판별)
-    const isSpecial = (it) => (it.type === "special") ||
-        (it.type !== "potion" && !String(it.id).endsWith("_potion"));
-    const normals  = items.filter(it => !isSpecial(it));
+    const isRelic   = (it) => it.type === "relic";
+    const isSpecial = (it) => !isRelic(it) && ((it.type === "special") ||
+        (it.type !== "potion" && !String(it.id).endsWith("_potion")));
+    const normals  = items.filter(it => !isSpecial(it) && !isRelic(it));
     const specials = items.filter(isSpecial);
+    const relics   = items.filter(isRelic);   // 유물 — 아직 없는 것만 서버가 진열 (game/Relics.py)
 
     const cardHtml = (item) => `
         <div class="shop-item ${gold < item.price ? "cant-afford" : ""}"
@@ -18,7 +20,7 @@ function _showShopPanel(r) {
              data-tooltip-item="${item.id}"
              data-price="${item.price}"
              title="${(typeof ITEM_DESCRIPTIONS !== "undefined" && ITEM_DESCRIPTIONS[item.id]) || item.effect || ""}">
-            <span class="shop-item-icon" data-icon-for="${item.id}"></span>
+            <span class="shop-item-icon" data-icon-for="${item.id}" data-icon-emoji="${item.icon || ""}"></span>
             <span class="shop-item-name">${item.name}</span>
             <span class="shop-item-effect">${item.effect}</span>
             <span class="shop-item-price">${item.price} G</span>
@@ -37,6 +39,7 @@ function _showShopPanel(r) {
             <div class="shop-scroll-area">
                 ${sectionHtml("일반 아이템", normals)}
                 ${sectionHtml("특수 아이템", specials)}
+                ${sectionHtml("유물 (영구)", relics)}
             </div>
             <button class="btn shop-leave-btn" id="shop-leave-btn">나가기</button>
         </div>
@@ -45,7 +48,9 @@ function _showShopPanel(r) {
     // 아이콘 주입 (이미지 우선 + 이모지 폴백) — name 텍스트/구매 id 영향 없음
     overlay.querySelectorAll(".shop-item-icon[data-icon-for]").forEach(span => {
         const id = span.dataset.iconFor;
-        const meta = (typeof ITEM_ICONS !== "undefined" ? ITEM_ICONS[id] : null) || { icon: "□" };
+        // 유물은 서버가 준 이모지(data-icon-emoji)로 — ITEM_ICONS 표에 없다
+        const meta = (typeof ITEM_ICONS !== "undefined" ? ITEM_ICONS[id] : null)
+            || (span.dataset.iconEmoji ? { icon: span.dataset.iconEmoji } : null) || { icon: "□" };
         if (typeof renderIconWithFallback === "function") {
             span.replaceWith(renderIconWithFallback(meta, "shop-item-icon"));
         } else {

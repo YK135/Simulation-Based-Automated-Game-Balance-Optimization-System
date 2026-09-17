@@ -60,6 +60,8 @@ class Player:
         # ★ 스탯 선택 시스템: 미분배 선택 포인트
         # 레벨업 시 +3씩 쌓임. allocate_stat_points()로 소비.
         self.pending_points = 0
+        # 유물 id 목록 (game/Relics.py) — 전투 효과는 EntitySnapshot.relics로 복사돼 ai/battle/Relics.py가 읽는다
+        self.relics = []
 
     # ─────────────────────────────────────────
     # 직렬화 (세션 영속화용 — Redis/DB 저장/복구)
@@ -77,6 +79,7 @@ class Player:
             "atb_remainder": self.atb_remainder,
             "pending_points": self.pending_points,
             "learned_skills": list(self.skill.learned_skills) if self.skill else [],
+            "relics": list(getattr(self, "relics", [])),
         }
 
     @classmethod
@@ -92,6 +95,7 @@ class Player:
         )
         p.atb_remainder = data.get("atb_remainder", 0.0)
         p.pending_points = data.get("pending_points", 0)
+        p.relics = list(data.get("relics", []) or [])
 
         from game.Skill import Ply_Skill
         skill_sys = Ply_Skill(p.job)

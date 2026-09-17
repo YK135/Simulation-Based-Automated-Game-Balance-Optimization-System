@@ -16,6 +16,7 @@ from .Skills import (
 from .Items import use_item
 from .Elements import apply_element_and_react
 from .MonsterKit import BAT_TYPE, bat_lifesteal_amount
+from .Relics import relic_try_revive, relic_atb_carry
 
 @dataclass
 class TurnLog:
@@ -117,7 +118,7 @@ class BattleEngine:
             self.action_count += 1
             action = enemy_ai(self.enemy, self.player, chapter=self.chapter)
             self._execute_action(action, self.enemy, self.player, "enemy")
-            if self.player.hp <= 0:
+            if self.player.hp <= 0 and not relic_try_revive(self.player):   # 사제의 유해(유물): 전투당 1회 부활
                 return self._make_result("enemy")
 
         while self.tick_count < self.MAX_TICKS:
@@ -161,7 +162,7 @@ class BattleEngine:
                 else:
                     action = enemy_ai(self.enemy, self.player, chapter=self.chapter)
                     self._execute_action(action, self.enemy, self.player, "enemy")
-                    if self.player.hp <= 0:
+                    if self.player.hp <= 0 and not relic_try_revive(self.player):
                         return self._make_result("enemy")
 
             # ── 버프/디버프 1틱 소진 (실전 ai/battle_session/Enemy_Actions.py의
@@ -402,10 +403,7 @@ class BattleEngine:
             log.damage_dealt = max(0, int(before_hp - defender.hp))
             log.hp_after = defender.hp
             log.mp_after = attacker.mp
-            # 신속물약: 행동 후 ATB 추가 (플레이어만)
-            if success and actor == "player" and getattr(attacker, "_pending_atb_bonus", 0) > 0:
-                self.atb.player_pt += float(attacker._pending_atb_bonus)
-                attacker._pending_atb_bonus = 0
+            # (신속물약의 행동 후 ATB 추가는 아래 공통 처리 — 유물 파쇄 보너스와 같은 경로)
 
         elif action.action_type == "escape":
             chance = _escape_chance(attacker.effective_spd(), defender.effective_spd())
@@ -422,6 +420,11 @@ class BattleEngine:
         elif action.action_type == "pass":
             pass
 
+        # ── 행동 뒤 ATB 추가 (플레이어): 신속물약 · 서리 사냥꾼의 각인 파쇄 보너스 — 실전 세션과 같은 필드 ──
+        if actor == "player" and getattr(attacker, "_pending_atb_bonus", 0) > 0:
+            self.atb.player_pt += float(attacker._pending_atb_bonus)
+            attacker._pending_atb_bonus = 0
+
         self.logs.append(log)
         return "ok"
 
@@ -435,7 +438,7 @@ class BattleEngine:
             player_name=self.player.name,
             enemy_name=self.enemy.name,
             final_player_items=list(self.player.items),
-            final_player_atb=self.atb.player_pt,
+            final_player_atb=relic_atb_carry(self.player, self.atb.player_pt),   # 깨진 모래시계: ×2
         )
 
 

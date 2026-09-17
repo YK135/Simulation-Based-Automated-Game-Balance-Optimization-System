@@ -26,6 +26,7 @@ from .Inventory import inventory_bp
 from .Rest      import rest_bp
 from .Ranking   import ranking_bp
 from .Map       import map_bp
+from .Relic     import relic_bp
 from .Shared    import GAME_SESSIONS, _persist_session, _get_user_lock, USER_LOCK_TIMEOUT_SECONDS
 
 # ── 마스터 모드(로컬 전용 디버그) ──
@@ -89,7 +90,7 @@ def create_app() -> Flask:
 
     init_db()
 
-    for bp in (game_bp, battle_bp, inventory_bp, rest_bp, ranking_bp, map_bp):
+    for bp in (game_bp, battle_bp, inventory_bp, rest_bp, ranking_bp, map_bp, relic_bp):
         app.register_blueprint(bp)
 
     app.config["MASTER_MODE"] = _MASTER_MODE

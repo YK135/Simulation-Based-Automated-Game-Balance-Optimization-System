@@ -17,6 +17,8 @@ from flask import Blueprint, jsonify
 from game.Lv        import LV_
 from game.Inventory import Inventory
 from ai.Battlesession import BattleSession
+from ai.battle.Relics import relic_gold_mult
+from game.Relics import relic_choices, relic_list_public, RELIC_GOLD_CONVERT
 from core.ErrorLog import log_error
 
 from .Shared import (
@@ -27,6 +29,7 @@ from .Shared import (
     _register_pending_swap,
     _get_json_body,
     _get_str_field,
+    _register_relic_offer, _sync_inventory_relics,
 )
 
 battle_bp = Blueprint("battle", __name__)
@@ -249,6 +252,7 @@ def _finish_battle(gs: dict, battle, result: dict, winner: str) -> None:
         for item_name in bs_items:
             new_inv.add(item_name)
         gs["inventory"] = new_inv
+        _sync_inventory_relics(gs)       # 새 인벤토리에도 유물 규칙(포션 슬롯 −1)을 다시 건다
         gs["items"]     = new_inv.to_flat_list()
 
     # ── 전투 보상 ──────────────────────────────────────────────
@@ -269,7 +273,13 @@ def _finish_battle(gs: dict, battle, result: dict, winner: str) -> None:
         node_type = _get_current_node_type(gs)
         rw = calc_battle_rewards(_get_defeated_list(battle), node_type)
         gold_gained = rw["gold"]
-        gs["gold"] = gs.get("gold", 0) + rw["gold"]
+        # 탐욕의 인장(유물): 골드 +40% — 보상 계산 뒤 서버에서 곱한다
+        gold_mult = relic_gold_mult(getattr(player, "relics", []))
+        if gold_mult > 1.0 and gold_gained > 0:
+            boosted = int(round(gold_gained * gold_mult))
+            rw["messages"].append(f"탐욕의 인장: 골드 {gold_gained}G → {boosted}G")
+            gold_gained = boosted
+        gs["gold"] = gs.get("gold", 0) + gold_gained
         for it in rw["items"]:
             add_res = gs["inventory"].add(it)
             if add_res.get("ok"):
@@ -311,6 +321,18 @@ def _finish_battle(gs: dict, battle, result: dict, winner: str) -> None:
                 "candidates": potion_res.get("candidates", []),
             })
             result["messages"].append("가방이 가득 차 HP_L_potion을(를) 놓쳤다...")
+
+    # ── 유물 3종 택 1 (7장): 엘리트 노드·보스 승리 시 아직 없는 유물 중 최대 3개 제시 ──
+    #    실제 지급은 /api/relic/choose가 티켓으로 검증해 처리한다 (app/Relic.py)
+    if winner == "player" and (_get_current_node_type(gs) == "elite" or getattr(battle, "is_boss", False)):
+        choices = relic_choices(getattr(player, "relics", []), getattr(player, "job", ""))
+        if choices:
+            ticket_id = _register_relic_offer(gs, choices)
+            result["relic_offer"] = {
+                "ticket_id": ticket_id,
+                "choices":   relic_list_public(choices),
+                "gold_alt":  RELIC_GOLD_CONVERT,
+            }
 
     gs["items"] = gs["inventory"].to_flat_list()
     result["gold_gained"]        = gold_gained

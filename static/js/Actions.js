@@ -230,6 +230,9 @@ async function battleAction(action) {
                     }
                 }
 
+                // ★ 유물 3종 택 1 (엘리트·보스 승리) — 보상·교체 다음, 레벨업 스탯 분배 앞
+                if (r.relic_offer && typeof openRelicChoice === 'function') await openRelicChoice(r.relic_offer);
+
                 if (typeof checkPendingPoints === 'function') await checkPendingPoints();
             }
             if (r.winner === 'player' && typeof handleMapNodeDone === 'function') {

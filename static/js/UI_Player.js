@@ -42,6 +42,9 @@ function refreshPlayer() {
     const goldEl = document.getElementById('player-gold');
     if (goldEl) goldEl.textContent = `${state.gold || 0} G`;
 
+    // ── 유물 (state.player.relics — 서버가 이름·아이콘·설명까지 내려준다) ──
+    if (typeof renderPlayerRelics === 'function') renderPlayerRelics(p);
+
     // ── 아이템 패널 (노드 선택 필드 전용) ──
     refreshInventoryPanel(p);
 

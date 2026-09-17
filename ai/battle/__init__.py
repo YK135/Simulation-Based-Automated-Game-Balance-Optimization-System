@@ -4,7 +4,8 @@ Battle 패키지 — 전투 시스템 (Battle_Engine.py 분리본)
 의존성 계층:
   Entity / ATB / Actions / EliteKit (→ Actions만)  (의존 없음/최소)
   Elements / Damage       → Entity
-  Elements                → EliteKit (엘리트 원소 반응 후처리)
+  Elements                → EliteKit (엘리트 원소 반응 후처리), Relics (서리 사냥꾼의 각인)
+  Relics                  → (의존 없음 — 유물 상수 + 전투 효과 순수 함수; 이름·가격은 game/Relics.py)
   BossKit                 → Actions (Skills는 함수 안에서 지연 import — 상수는 Skills가 읽는다)
   Skills                  → Entity, Damage, Elements, EliteKit, BossKit
   Items                   → Entity, Elements
@@ -31,6 +32,9 @@ from .Skills import (
 from .Items import ITEM_META, use_item
 from .Engine import TurnLog, BattleResult, BattleEngine, _escape_chance
 from .MonsterKit import MONSTER_KITS, get_monster_kit
+from .Relics import (
+    RELIC_IDS, has_relic, relic_atb_carry, relic_try_revive, relic_gold_mult, relic_potion_slot_penalty,
+)
 from .EliteKit import elite_forced_action
 
 __all__ = [
@@ -48,5 +52,6 @@ __all__ = [
     "ITEM_META", "use_item",
     "TurnLog", "BattleResult", "BattleEngine", "_escape_chance",
     "MONSTER_KITS", "get_monster_kit",
+    "RELIC_IDS", "has_relic", "relic_atb_carry", "relic_try_revive", "relic_gold_mult", "relic_potion_slot_penalty",
     "elite_forced_action",
 ]

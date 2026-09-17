@@ -90,6 +90,12 @@ class Inventory:
             data = {"potions": [], "special": []}
         self.potions = list(data.get("potions", []))
         self.special = list(data.get("special", []))
+        # 포션 슬롯 감소 (유물 탐욕의 인장 — app/Shared._sync_inventory_relics가 플레이어 유물에서 맞춘다)
+        self.potion_penalty = int(data.get("potion_penalty", 0) or 0)
+
+    def potion_capacity(self) -> int:
+        """실제 포션 슬롯 수 — 기본 6에서 유물 감소분을 뺀다 (최소 1)."""
+        return max(1, SLOT_LIMITS["potion"] - self.potion_penalty)
 
     @classmethod
     def new(cls) -> "Inventory":
@@ -104,6 +110,7 @@ class Inventory:
         return {
             "potions": list(self.potions),
             "special": list(self.special),
+            "potion_penalty": self.potion_penalty,
         }
 
     @classmethod
@@ -136,7 +143,7 @@ class Inventory:
         slot = get_slot(item_name)
 
         if slot == "potion":
-            if len(self.potions) >= SLOT_LIMITS["potion"]:
+            if len(self.potions) >= self.potion_capacity():
                 # ★ 예전엔 포션은 가득 차면 그냥 거절(선택 없음)이었는데, 특수템과
                 #   일관되게 "버릴 아이템 선택" UI를 받도록 변경 — candidates 추가.
                 return {
@@ -272,7 +279,7 @@ class Inventory:
         return {
             "potions": [{"name": k, "count": v} for k, v in pot_counts.items()],
             "special": list(self.special),
-            "potion_capacity": SLOT_LIMITS["potion"],
+            "potion_capacity": self.potion_capacity(),
             "special_capacity": SLOT_LIMITS["special"],
             "potion_used": len(self.potions),
             "special_used": len(self.special),

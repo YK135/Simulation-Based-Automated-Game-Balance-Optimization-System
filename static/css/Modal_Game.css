@@ -486,3 +486,52 @@
     color: var(--text-muted, #6b7a8d);
 }
 #reward-confirm-btn { margin-top: 8px; min-width: 120px; }
+
+/* ─────────────────────────────────────────────
+   유물 3종 택 1 팝업 (#modal-relic) — RelicModal.js
+   보상 팝업(#modal-reward)과 같은 톤, 카드 3장 가로 배치 → 좁으면 세로
+   ───────────────────────────────────────────── */
+#modal-relic.modal-bg {
+    background: rgba(5, 10, 13, 0.55);
+    backdrop-filter: blur(10px);
+}
+#modal-relic .modal.modal-relic {
+    width: min(560px, 94%);
+    text-align: center;
+}
+.relic-hint {
+    font-size: 11px;
+    color: var(--text-muted, #6b7a8d);
+    margin-bottom: 10px;
+}
+.relic-choice-list {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 8px;
+    margin: 8px 0 12px;
+}
+@media (max-width: 520px) {
+    .relic-choice-list { grid-template-columns: 1fr; }
+}
+.relic-card {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 6px;
+    padding: 12px 8px;
+    border: 1px solid rgba(160, 100, 255, 0.45);
+    border-radius: 6px;
+    background: rgba(160, 100, 255, 0.07);
+    cursor: pointer;
+    transition: border-color 0.15s, transform 0.15s, background 0.15s;
+}
+.relic-card:hover, .relic-card:focus-visible {
+    border-color: rgba(221, 184, 111, 0.85);
+    background: rgba(221, 184, 111, 0.10);
+    transform: translateY(-2px);
+    outline: none;
+}
+.relic-card-icon { font-size: 26px; line-height: 1; }
+.relic-card-name { font-size: 12px; font-weight: 700; color: var(--fantasy-gold, #ddb86f); }
+.relic-card-desc { font-size: 10.5px; line-height: 1.45; color: var(--text-muted, #9aa6b5); }
+.relic-gold-btn { min-width: 200px; }

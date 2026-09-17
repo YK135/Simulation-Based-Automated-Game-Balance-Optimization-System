@@ -23,6 +23,7 @@ from ai.battle import (
     EntitySnapshot, SKILL_META, TurnLog, execute_skill,
     is_free_action, preview_next_dice, skill_requirement_error, SKILL_REQUIREMENT_LABEL,
 )
+from ai.battle.Relics import relic_atb_carry, relic_try_revive, REMAINS_REVIVE_HP_RATIO
 from ai.Auto_AI import EnemyAI
 
 from ai.battle_session.Targeting      import TargetingMixin
@@ -251,10 +252,10 @@ class BattleSession(
             self.done = True
             self.winner = "player"
             try:
-                self.player.atb_remainder = float(self.player_atb)
+                self.player.atb_remainder = relic_atb_carry(self.player, self.player_atb)
                 # ★ 원본에도 동기화 (이월값 유지)
                 if self.player_original is not None:
-                    self.player_original.atb_remainder = float(self.player_atb)
+                    self.player_original.atb_remainder = relic_atb_carry(self.player, self.player_atb)
             except Exception:
                 pass
             msgs.append("모든 적을 처치했다!")
@@ -281,8 +282,8 @@ class BattleSession(
             if hasattr(self.player, "tick_status_effects"):
                 for m in self.player.tick_status_effects():
                     msgs.append(m)
-            # 상태이상 지속 피해로 사망 (점화 / 출혈 / 균열)
-            if self.player.hp <= 0:
+            # 상태이상 지속 피해로 사망 (점화 / 출혈 / 균열) — 사제의 유해(유물)가 있으면 한 번 되살아난다
+            if self.player.hp <= 0 and not self._relic_revive(msgs):
                 self.done = True
                 self.winner = "enemy"
                 msgs.append(f"{self._dot_label(self.player)} {self.player.name}이(가) "
@@ -308,10 +309,11 @@ class BattleSession(
             # 플레이어 행동 처리
             p_result = self._player_action(action, msgs)
             self._player_action_count += 1       # 보스 예고 카운터 (위 __init__ 주석)
-            # 신속물약: 행동 후 ATB 추가 획득
+            # 신속물약: 행동 후 ATB 추가 획득 (+ 엔티티 쪽 보너스 — 서리 사냥꾼의 각인 파쇄)
             if self._pending_atb_bonus > 0:
                 self.player_atb += float(self._pending_atb_bonus)
                 self._pending_atb_bonus = 0
+            self._flush_entity_atb_bonus()
             self.player.tick_buffs()
 
             # 큐에서 자신 제거
@@ -322,10 +324,10 @@ class BattleSession(
                 self.done = True
                 self.winner = "escaped"
                 try:
-                    self.player.atb_remainder = float(self.player_atb)
+                    self.player.atb_remainder = relic_atb_carry(self.player, self.player_atb)
                     # ★ 원본에도 동기화 (이월값 유지)
                     if self.player_original is not None:
-                        self.player_original.atb_remainder = float(self.player_atb)
+                        self.player_original.atb_remainder = relic_atb_carry(self.player, self.player_atb)
                 except Exception:
                     pass
                 msgs.append("도망에 성공했다!")
@@ -336,10 +338,10 @@ class BattleSession(
                 self.done = True
                 self.winner = "player"
                 try:
-                    self.player.atb_remainder = float(self.player_atb)
+                    self.player.atb_remainder = relic_atb_carry(self.player, self.player_atb)
                     # ★ 원본에도 동기화 (이월값 유지)
                     if self.player_original is not None:
-                        self.player_original.atb_remainder = float(self.player_atb)
+                        self.player_original.atb_remainder = relic_atb_carry(self.player, self.player_atb)
                 except Exception:
                     pass
                 if len(self.enemies) > 1:
@@ -443,16 +445,17 @@ class BattleSession(
             # 적 행동
             self._single_enemy_action(enemy, msgs)
             self.action_queue.pop(0)
+            self._flush_entity_atb_bonus()      # 도적 반격이 파쇄를 터뜨렸을 때의 각인 보너스
 
-            # 플레이어 사망 체크
-            if self.player.hp <= 0:
+            # 플레이어 사망 체크 — 사제의 유해(유물)가 있으면 한 번 되살아난다
+            if self.player.hp <= 0 and not self._relic_revive(msgs):
                 self.done = True
                 self.winner = "enemy"
                 try:
-                    self.player.atb_remainder = float(self.player_atb)
+                    self.player.atb_remainder = relic_atb_carry(self.player, self.player_atb)
                     # ★ 원본에도 동기화 (이월값 유지)
                     if self.player_original is not None:
-                        self.player_original.atb_remainder = float(self.player_atb)
+                        self.player_original.atb_remainder = relic_atb_carry(self.player, self.player_atb)
                 except Exception:
                     pass
                 msgs.append(f"{self.player.name}이(가) 쓰러졌다...")
@@ -468,9 +471,9 @@ class BattleSession(
                 self.done = True
                 self.winner = "player"
                 try:
-                    self.player.atb_remainder = float(self.player_atb)
+                    self.player.atb_remainder = relic_atb_carry(self.player, self.player_atb)
                     if self.player_original is not None:
-                        self.player_original.atb_remainder = float(self.player_atb)
+                        self.player_original.atb_remainder = relic_atb_carry(self.player, self.player_atb)
                 except Exception:
                     pass
                 if len(self.enemies) > 1:
@@ -500,6 +503,22 @@ class BattleSession(
 
         # 폴백 (도달 X)
         return self._state(messages=msgs, next_actor="player")
+
+    def _flush_entity_atb_bonus(self) -> None:
+        """엔티티에 적힌 행동 후 ATB 보너스(유물 파쇄 +5 등)를 세션의 플레이어 ATB로 옮긴다 — 엔진과 같은 필드."""
+        bonus = getattr(self.player, "_pending_atb_bonus", 0)
+        if bonus > 0:
+            self.player_atb += float(bonus)
+            self.player._pending_atb_bonus = 0
+
+    def _relic_revive(self, msgs: list) -> bool:
+        """사제의 유해 — HP 0에서 전투당 1회 부활. 반환 True면 전투를 끝내지 않는다."""
+        healed = relic_try_revive(self.player)
+        if healed <= 0:
+            return False
+        msgs.append(f"💀 사제의 유해가 빛난다 — {self.player.name}이(가) 최대 HP "
+                    f"{int(REMAINS_REVIVE_HP_RATIO * 100)}%로 되살아났다! (전투당 1회)")
+        return True
 
     def _free_action(self, skill_name: str, msgs: list) -> dict:
         """턴을 소비하지 않는 스킬(패 고치기) — MP와 전투당 횟수만 쓰고 플레이어 차례를 그대로 돌려준다.

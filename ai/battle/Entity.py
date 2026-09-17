@@ -162,6 +162,10 @@ class EntitySnapshot:
     #   박쥐의 흡혈은 별도(MonsterKit.bat_lifesteal_amount) — 이 필드를 쓰지 않는다.
     lifesteal: float = 0.0
 
+    # ── 유물 (ai/battle/Relics.py · 11-1 2차 7번) — 플레이어 전용, 세션/엔진이 효과를 읽는다 ──
+    relics: list = field(default_factory=list)   # 보유 유물 id (Player.relics에서 복사)
+    relic_revive_used: bool = False              # 사제의 유해 — 전투당 1회
+
     # ── 신규 스킬 6종의 전투당 상태 (Combat Content Brief 9·10장 · 11-1 2차 6번) ──
     pending_dice: int = 0        # 도적 「패 고치기」가 저장한 다음 공격 주사위 (0 = 없음, 다음 공격이 소비)
     dice_fix_uses: int = 0       # 「패 고치기」 사용 횟수 (전투당 최대 Skills 메타 max_uses)
@@ -468,6 +472,7 @@ class EntitySnapshot:
             learned_skills=skills,
             job=getattr(player, "job", ""),  # 직업별 패시브 발동용
             atb_remainder=float(getattr(player, "atb_remainder", 0.0)),
+            relics=list(getattr(player, "relics", []) or []),
         )
 
     @classmethod

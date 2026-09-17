@@ -30,6 +30,8 @@ from typing import Optional
 from flask import session, request
 
 from game.Inventory import Inventory
+from game.Relics import relic_list_public
+from ai.battle.Relics import relic_potion_slot_penalty
 from ai.battle import EntitySnapshot
 from core.RedisCache import redis_get, redis_set
 from core.ErrorLog import log_error
@@ -199,6 +201,8 @@ def _snapshot_dict(gs: dict) -> dict:
         #   battle(BattleSession)과 같은 급의 트레이드오프: Redis까지 완전히
         #   사라진 뒤 DB로만 복구하는 극단적 상황에서만 대기 티켓이 유실된다.
         "pending_swaps":    gs.get("pending_swaps", []),
+        # 유물 선택 대기 티켓 — pending_swaps와 같은 급 (Redis까지만, DB 컬럼 없음)
+        "pending_relic_offer": gs.get("pending_relic_offer"),
         # ★ 이게 빠져있으면 워커 재시작이나 유휴 세션 방출(1시간) 후 같은
         #   pending_node_id로 복구됐을 때 "이 휴식 노드 이미 썼음" 표시가
         #   사라져서, 같은 휴식 노드에서 수련 보상을 다시 받을 수 있었다
@@ -217,6 +221,7 @@ def _gs_from_snapshot(uid: str, snap: dict) -> Optional[dict]:
 
     player = Player.from_dict(snap["player"])
     inv = Inventory.from_dict(snap.get("inventory") or {})
+    inv.potion_penalty = relic_potion_slot_penalty(getattr(player, "relics", []))   # 유물 → 포션 슬롯
     items = inv.to_flat_list()
     # ★ auto_prewarm=False — 이건 새 게임이 아니라 기존 세션 복구(워커
     #   재시작/유휴 세션 방출/Redis 히트마다 여기로 옴)라, 매번 고블린/박쥐
@@ -248,6 +253,7 @@ def _gs_from_snapshot(uid: str, snap: dict) -> Optional[dict]:
         "battle_node_type": snap.get("battle_node_type"),
         "battle_map_layer": snap.get("battle_map_layer"),
         "pending_swaps":    snap.get("pending_swaps", []),
+        "pending_relic_offer": snap.get("pending_relic_offer"),
         "rest_used_node_id": snap.get("rest_used_node_id"),
     }
 
@@ -393,6 +399,51 @@ def _restore_pending_swap(gs: dict, ticket: dict) -> None:
 
 
 # ─────────────────────────────────────────────
+# 유물 (game/Relics.py · 11-1 2차 7번) — 선택 대기 티켓 + 지급
+#   pending_swaps와 같은 원칙: 클라이언트는 ticket_id와 고른 id만 보내고, 무엇이 제시됐는지는
+#   서버 티켓이 안다. 한 번에 하나만 대기(새 제시가 오면 덮어쓴다).
+# ─────────────────────────────────────────────
+
+def _register_relic_offer(gs: dict, choices: list) -> str:
+    ticket_id = secrets.token_hex(8)
+    gs["pending_relic_offer"] = {"ticket_id": ticket_id, "choices": list(choices)}
+    return ticket_id
+
+
+def _pop_relic_offer(gs: dict, ticket_id: str) -> Optional[dict]:
+    ticket = gs.get("pending_relic_offer")
+    if not ticket_id or not ticket or ticket.get("ticket_id") != ticket_id:
+        return None
+    gs["pending_relic_offer"] = None
+    return ticket
+
+
+def _restore_relic_offer(gs: dict, ticket: dict) -> None:
+    gs["pending_relic_offer"] = ticket
+
+
+def _sync_inventory_relics(gs: dict) -> None:
+    """플레이어 유물 → 인벤토리 규칙(탐욕의 인장: 포션 슬롯 −1). 인벤토리를 새로 만들거나 유물이 바뀔 때 부른다."""
+    inv = gs.get("inventory")
+    player = gs.get("player")
+    if isinstance(inv, Inventory) and player is not None:
+        inv.potion_penalty = relic_potion_slot_penalty(getattr(player, "relics", []))
+
+
+def _grant_relic(gs: dict, relic_id: str) -> bool:
+    """유물 지급 — 이미 가졌으면 False. 인벤토리 규칙도 같이 맞춘다."""
+    player = gs["player"]
+    relics = getattr(player, "relics", None)
+    if relics is None:
+        player.relics = relics = []
+    if relic_id in relics:
+        return False
+    relics.append(relic_id)
+    _sync_inventory_relics(gs)
+    return True
+
+
+# ─────────────────────────────────────────────
 # 세션 헬퍼
 # ─────────────────────────────────────────────
 
@@ -462,6 +513,7 @@ def _player_to_snap(player, inv) -> EntitySnapshot:
         learned_skills=skills,
         items=items_list,
         job=getattr(player, "job", ""),
+        relics=list(getattr(player, "relics", []) or []),
     )
 
 
@@ -501,6 +553,8 @@ def _player_dict(player, inv) -> dict:
         "items":          flat_items,
         "inventory":      inv_dict,
         "pending_points": getattr(player, "pending_points", 0),
+        # 유물 — 이름·아이콘·설명까지 서버가 내려준다 (프론트 표를 늘리지 않기 위해)
+        "relics":         relic_list_public(getattr(player, "relics", [])),
     }
 
 

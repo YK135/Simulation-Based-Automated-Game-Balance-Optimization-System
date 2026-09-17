@@ -24,11 +24,14 @@ from random import choices as rand_choices, randint, choice
 from flask import Blueprint, jsonify
 
 from game.Map      import FloorMap, NORMAL_LAYERS
+from game.Relics   import shop_relic_items
 from game.Enemy_Class import (
     Make_MidBoss, Make_FinalBoss,
 )
 
-from app.Shared  import _get_session, _player_dict, _register_pending_swap, _get_json_body, _get_str_field
+from app.Shared  import (
+    _get_session, _player_dict, _register_pending_swap, _get_json_body, _get_str_field, _grant_relic,
+)
 from app.Battle  import _start_battle, _start_battle_multi
 from core.ErrorLog import log_error
 
@@ -605,7 +608,7 @@ def map_choose():
     elif node_type == "shop":
         _log_node_choice(gs, node)
         _save_map(gs, fmap)   # ★ choose()의 갈래 잠금(player_branch) 저장 — 새로고침 시 유지
-        shop_items = _get_shop_items(player.lv)
+        shop_items = _shop_items_for(player)
         return jsonify({
             "ok": True, "event": "shop",
             "node_id":    node_id,
@@ -734,10 +737,10 @@ def _get_boss(chapter: int, player_lv: int):
     return Make_FinalBoss(player_lv)
 
 
-def _get_shop_items(player_lv: int) -> list:
+def _get_shop_items(player_lv: int, relics=None, job: str = "") -> list:
     """
-    상점 아이템 목록 생성 (포션 + 특수 아이템).
-    특수 아이템은 레벨 3 이상부터 노출.
+    상점 아이템 목록 생성 (포션 + 특수 아이템 + 아직 없는 유물).
+    특수 아이템은 레벨 3 이상부터 노출. 유물은 game/Relics.py(가격 RELIC_SHOP_PRICE)에서.
     """
     items = [
         {"id": "HP_M_potion", "name": "HP 중형 포션", "type": "potion",
@@ -758,7 +761,12 @@ def _get_shop_items(player_lv: int) -> list:
             {"id": "focus_drug", "name": "집중 물약",   "type": "special",
              "effect": "다음 스킬 추가 피해", "price": 100},
         ]
+    items += shop_relic_items(relics or [], job)
     return items
+
+
+def _shop_items_for(player) -> list:
+    return _get_shop_items(player.lv, getattr(player, "relics", []), getattr(player, "job", ""))
 
 
 # ─────────────────────────────────────────────
@@ -772,7 +780,7 @@ def shop_buy():
     요청: { "item_id": "HP_M_potion" }
     ★ price는 요청 바디로 받지 않는다 — 클라이언트가 보낸 값을 그대로 믿으면
       {"price": 0}이나 음수 price로 무료 구매/골드 무한 생성이 가능해짐.
-      항상 _get_shop_items(player.lv)의 서버 측 가격표에서 조회한다.
+      항상 _shop_items_for(player)의 서버 측 가격표에서 조회한다.
     """
     gs = _get_session()
     if not gs:
@@ -782,7 +790,7 @@ def shop_buy():
     item_id = data.get("item_id", "")
     gold    = gs.get("gold", 0)
 
-    shop_items = _get_shop_items(gs["player"].lv)
+    shop_items = _shop_items_for(gs["player"])
     item_meta  = next((it for it in shop_items if it["id"] == item_id), None)
     if item_meta is None:
         return jsonify({"ok": False, "error": "판매하지 않는 아이템입니다."}), 400
@@ -790,6 +798,19 @@ def shop_buy():
 
     if gold < price:
         return jsonify({"ok": False, "error": f"골드가 부족합니다. (보유: {gold}G)"}), 400
+
+    if item_meta.get("type") == "relic":
+        # 유물은 인벤토리 칸이 아니라 플레이어에게 붙는다 — 이미 가졌으면 진열되지 않으므로 여기선 안전망
+        if not _grant_relic(gs, item_id):
+            return jsonify({"ok": False, "error": "이미 가진 유물입니다."}), 400
+        gs["gold"] = gold - price
+        return jsonify({
+            "ok":        True,
+            "message":   f"유물 {item_meta['name']} 획득! (-{price}G)",
+            "gold":      gs["gold"],
+            "player":    _player_dict(gs["player"], gs["inventory"]),
+            "shop_items": _shop_items_for(gs["player"]),
+        })
 
     inv    = gs["inventory"]
     result = inv.add(item_id)
@@ -819,5 +840,5 @@ def shop_buy():
         "message":   f"{item_id} 구매! (-{price}G)",
         "gold":      gs["gold"],
         "player":    _player_dict(gs["player"], inv),
-        "shop_items": _get_shop_items(gs["player"].lv),  # 상점 UI 재렌더용
+        "shop_items": _shop_items_for(gs["player"]),  # 상점 UI 재렌더용
     })
