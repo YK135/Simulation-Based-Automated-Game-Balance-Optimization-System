@@ -12,6 +12,7 @@ from ai.battle.Elements import (
 )
 from ai.battle.Skills import (
     physical_skill_mult, skill_requirement_error, skill_effective_element, harvest_damage,
+    attached_bonus_mult,
 )
 from ai.battle.EliteKit import elite_forced_action, GOLEM_PHASE_STRIKE
 from ai.battle.BossKit import is_midboss, is_boss_or_elite
@@ -118,8 +119,9 @@ def _skill_efficiency(skill_name: str, attacker: EntitySnapshot, defender: Entit
 
     stype = meta.get("type")
 
-    # 대상 조건이 있는 스킬(원소 폭발·피의 수확)·횟수 소진(패 고치기)은 지금 못 쓰면 배제
-    if (meta.get("requires_element") or meta.get("requires_bleed") or stype == "dice") \
+    # 조건이 있는 스킬(원소 폭발·피의 수확·불굴)·횟수 소진(패 고치기)은 지금 못 쓰면 배제
+    if (meta.get("requires_element") or meta.get("requires_bleed") or stype == "dice"
+            or meta.get("requires_self_hp") is not None or meta.get("once_per_battle")) \
             and skill_requirement_error(skill_name, attacker, defender) not in ("", "mp"):
         return -1.0
 
@@ -202,8 +204,12 @@ def _best_attack_skill(attacker: EntitySnapshot, defender: EntitySnapshot,
             score *= _reaction_bonus(meta, defender, attacker)
             if meta.get("type") == "physical":
                 score *= physical_skill_mult(meta, defender)[0]
+                if meta.get("bleed_atb") and defender is not None and any(
+                        e.effect_type == "bleed" for e in defender.status_effects):
+                    score *= 1.25                                  # 혈흔 추적 — 출혈 대상이면 템포 가점
             elif meta.get("type") == "magical":
                 score *= _next_resonance_mult(meta, attacker, defender)
+            score *= attached_bonus_mult(meta, defender)          # 연쇄 번개 — 원소가 붙은 대상
         if score > best_score:
             best_score, best = score, skill
     return best if best_score > 0 else None
@@ -253,6 +259,9 @@ def _best_shield_skill(attacker: EntitySnapshot) -> str | None:
     for skill in attacker.learned_skills:
         meta = SKILL_META.get(skill)
         if meta and meta.get("type") == "shield" and attacker.mp >= meta.get("mp", 0):
+            # 조건부 실드(불굴: HP 35% 이하 · 전투당 1회)는 지금 쓸 수 있을 때만 — 헛턴 방지
+            if skill_requirement_error(skill, attacker, None):
+                continue
             return skill
     return None
 
@@ -364,7 +373,31 @@ class PlayerAI:
             # 곧바로 다시 decide()를 부른다 — 6-3 측정 후 확정된 형태)
             if ok("패 고치기") and attacker.pending_dice < self.DICE_REROLL_BELOW:
                 return Action("skill", "패 고치기")
-        elif job == "전사":
+        telegraph = _enemy_telegraphing(defender)
+        enemy_hp = defender.hp / defender.maxhp if defender.maxhp > 0 else 0.0
+
+        # ── 남은 신규 스킬 11종 (2차 8번) ──
+        if job == "전사":
+            if ok("불굴"):                                           # HP 35% 이하 · 전투당 1회
+                return Action("skill", "불굴")
+            if ok("철벽 의지") and (telegraph or hp_ratio < 0.6) and not _self_has_buff(attacker, "dmg_reduction"):
+                return Action("skill", "철벽 의지")
+            if ok("피의 맹세") and not _self_has_buff(attacker, "lifesteal_oath") \
+                    and hp_ratio >= 0.5 and enemy_hp >= 0.4:
+                return Action("skill", "피의 맹세")
+        elif job == "마법사":
+            if ok("마나 장막") and telegraph and not _self_has_buff(attacker, "mana_veil") and mp_ratio >= 0.4:
+                return Action("skill", "마나 장막")
+            if ok("서리 결계") and not _self_has_buff(attacker, "frost_ward") \
+                    and enemy_hp >= 0.5 and mp_ratio >= 0.5:
+                return Action("skill", "서리 결계")
+        elif job == "도적":
+            if ok("연막") and telegraph and not _self_has_buff(attacker, "dodge"):
+                return Action("skill", "연막")
+            if ok("약점 표식") and not _enemy_has_debuff(defender, "vulnerable") and enemy_hp >= 0.4:
+                return Action("skill", "약점 표식")
+
+        if job == "전사":
             # 피의 격노 — 흡혈 버프가 없고, HP 지불이 안전하고, 적이 아직 오래 남았을 때
             if ok("피의 격노") and not _self_has_buff(attacker, "lifesteal") \
                     and hp_ratio >= self.RAGE_HP_MIN \

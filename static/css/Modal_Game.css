@@ -535,3 +535,45 @@
 .relic-card-name { font-size: 12px; font-weight: 700; color: var(--fantasy-gold, #ddb86f); }
 .relic-card-desc { font-size: 10.5px; line-height: 1.45; color: var(--text-muted, #9aa6b5); }
 .relic-gold-btn { min-width: 200px; }
+
+
+/* ─────────────────────────────────────────────
+   스킬 2택 1 팝업 (#modal-skill-choice) — SkillChoice.js
+   카드 두 장 나란히, 좁으면 세로. 유물 팝업과 같은 톤(청록 테두리로 구분)
+   ───────────────────────────────────────────── */
+#modal-skill-choice .modal.modal-skill-choice {
+    width: min(520px, 94%);
+    text-align: center;
+}
+.sc-options {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 10px;
+    margin-top: 8px;
+}
+@media (max-width: 480px) {
+    .sc-options { grid-template-columns: 1fr; }
+}
+.sc-card {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    padding: 14px 10px;
+    border: 1px solid rgba(80, 200, 190, 0.45);
+    border-radius: 6px;
+    background: rgba(80, 200, 190, 0.07);
+    color: inherit;
+    font: inherit;
+    text-align: center;
+    cursor: pointer;
+    transition: border-color 0.15s, transform 0.15s, background 0.15s;
+}
+.sc-card:hover, .sc-card:focus-visible {
+    border-color: rgba(221, 184, 111, 0.85);
+    background: rgba(221, 184, 111, 0.10);
+    transform: translateY(-2px);
+    outline: none;
+}
+.sc-name { font-size: 14px; font-weight: 700; color: var(--fantasy-gold, #ddb86f); }
+.sc-cost { font-size: 10px; color: #7fb6ff; min-height: 12px; }
+.sc-desc { font-size: 11px; line-height: 1.5; color: var(--text-muted, #9aa6b5); }

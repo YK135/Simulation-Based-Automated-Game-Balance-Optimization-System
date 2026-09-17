@@ -23,15 +23,23 @@ class Debuff:
 @dataclass
 class Buff:
     """
-    stat   : "stg" | "arm" | "spd" | "mp_efficiency" | "lifesteal"
-    amount : 증가 비율 (0.0~1.0) — lifesteal은 준 피해 대비 회복 비율 (Damage.lifesteal_heal)
+    stat   : "stg" | "arm" | "spd" | "mp_efficiency"
+             | "lifesteal" | "lifesteal_oath"  — 준 피해 대비 회복 비율 (Damage.lifesteal_heal, 합산)
+             | "lifesteal_amp"                 — 흡혈량 배율 가산 (철벽 의지 1.0 = 2배)
+             | "dmg_reduction"                 — 받는 피해 감소 비율 (불굴·철벽 의지)
+             | "dodge"                         — 회피 확률 가산 (연막 0.35 = +35%p)
+             | "mana_veil"                     — 받는 피해 중 MP로 대신 내는 비율 (마나 장막)
+             | "frost_ward"                    — 나를 공격한 적에게 ice + SPD −amount (서리 결계)
+    amount : 증가 비율 (0.0~1.0)
     turns  : 남은 지속 행동 수
     name   : 버프 스킬명
+    expire_hp_cost : 만료될 때 현재 HP에서 지불하는 비율 (피의 맹세 0.20) — 절대 죽지 않는다(max 1)
     """
     stat: str
     amount: float
     turns: int
     name: str
+    expire_hp_cost: float = 0.0
 
 
 # ────────────────────────────────────────────
@@ -143,6 +151,12 @@ class EntitySnapshot:
     boss_telegraph_at: int = -1    # 예고를 세운 시점의 플레이어 행동 횟수, -1이면 예약 없음.
                                    # 발동 조건: 플레이어 행동 횟수 > 이 값 (예고 보장 규칙)
     boss_frost_regrow: int = 0     # 서리 갑주(ice) 재부착 카운트다운
+    # 최종 보스 (BossKit finalboss_*)
+    boss_element_idx: int = 0      # 페이즈 1 원소 순환 위치 (fire/ice/lightning)
+    boss_stunned: int = 0          # 그림자 전멸 뒤 남은 무방비 행동 수
+    boss_summon_cd: int = -1       # 재소환까지 남은 보스 행동 수 (-1 = 대기 없음)
+    boss_doom_at: int = -1         # 「종언」이 터지는 플레이어 행동 횟수 (-1 = 카운트 없음)
+    boss_doom_count: int = 0       # 「종언」이 터진 횟수 (0 → 75% 고정 피해, 1+ → 즉사)
 
     # ── 직업 식별자 (플레이어 전용) ──
     # 직업별 패시브 발동에 사용:
@@ -156,6 +170,12 @@ class EntitySnapshot:
     #             회피 시 반격(일반 luc 크리 허용, 주사위 미적용)
     #             (Player_Actions/Enemy_Actions/Damage._suppress_crit)
     job: str = ""
+
+    # ── 회복·피해 배율 (최종 보스 「종언」 회복 −50%, 그림자 경감 등) — 기본 1.0 / 0.0이면 계산 불변 ──
+    heal_taken_mult: float = 1.0   # 받는 모든 회복(힐·포션·흡혈·직업 패시브)에 곱한다
+    boss_guard: float = 0.0        # 받는 피해 경감(보스 그림자 생존 중 0.25) — damage_taken_mult가 읽는다
+    once_used: list = field(default_factory=list)   # 전투당 1회 스킬 사용 기록 (불굴)
+    free_rerolls: int = 0          # 연막 회피 성공으로 얻은 무료 재굴림 (패 고치기 — MP·횟수 소모 없음)
 
     # ── 흡혈 (ai/battle/Damage.py lifesteal_heal) — 기본 0, 스킬 버프(stat "lifesteal")로만 붙는 값 ──
     #   준 피해(실제 HP 감소 + 실드 감소)의 비율만큼 회복, 타격당 maxHP 4% · 시전당 12% 두 겹 상한.
@@ -251,8 +271,32 @@ class EntitySnapshot:
         return max(1.0, base)
 
     def effective_lifesteal(self) -> float:
-        """기본 흡혈 + 흡혈 버프(피의 격노 등)의 합 — 0이면 흡혈 없음."""
-        return max(0.0, self.lifesteal + sum(b.amount for b in self.buffs if b.stat == "lifesteal"))
+        """기본 흡혈 + 흡혈 버프(피의 격노 lifesteal · 피의 맹세 lifesteal_oath)의 합 × (1 + 흡혈량 가산).
+        0이면 흡혈 없음. 격노와 맹세는 stat을 나눠 서로 덮어쓰지 않는다(apply_buff는 같은 stat을 덮어쓴다)."""
+        base = self.lifesteal + sum(b.amount for b in self.buffs if b.stat in ("lifesteal", "lifesteal_oath"))
+        if base <= 0:
+            return 0.0
+        amp = sum(b.amount for b in self.buffs if b.stat == "lifesteal_amp")
+        return base * (1.0 + amp)
+
+    def damage_taken_mult(self) -> float:
+        """받는 피해 배율 — (1 − 경감 버프) × (1 + 취약 디버프) × (1 − 보스 경감). 아무것도 없으면 정확히 1.0."""
+        red = sum(b.amount for b in self.buffs if b.stat == "dmg_reduction")
+        vul = sum(d.amount for d in self.debuffs if d.stat == "vulnerable")
+        if not red and not vul and not self.boss_guard:
+            return 1.0
+        return max(0.0, (1.0 - red) * (1.0 + vul) * (1.0 - self.boss_guard))
+
+    def effective_dodge_bonus(self) -> float:
+        """회피 보정 = 고유 dodge_bonus(유령) + 회피 버프(연막)."""
+        return self.dodge_bonus + sum(b.amount for b in self.buffs if b.stat == "dodge")
+
+    def buff_amount(self, stat: str) -> float:
+        return sum(b.amount for b in self.buffs if b.stat == stat)
+
+    def heal_value(self, amount: float) -> float:
+        """받는 회복량 — heal_taken_mult(기본 1.0)를 곱한다. 회복 적용 지점이 모두 이 함수를 거친다."""
+        return amount * self.heal_taken_mult if self.heal_taken_mult != 1.0 else amount
 
     def mp_cost_multiplier(self) -> float:
         # buff 기반 효율 (효율성 스킬 등 한정 시간 효과)
@@ -279,7 +323,7 @@ class EntitySnapshot:
           - 현재: 공격 3회마다 → 발동 빈도 ~33% 감소 → 적정 수준 기대
         """
         if self.job == "전사":
-            heal = self.maxhp * 0.10
+            heal = self.heal_value(self.maxhp * 0.10)
             before = self.hp
             self.hp = min(self.maxhp, self.hp + heal)
             self._record_hit("heal", self.hp - before, via="passive")
@@ -310,7 +354,7 @@ class EntitySnapshot:
             if gained > 0:
                 return f"[탱커 패시브] 물리피격 → MP +{gained}"
         elif damage_type == "magical":
-            heal = self.maxhp * 0.10
+            heal = self.heal_value(self.maxhp * 0.10)
             before = self.hp
             self.hp = min(self.maxhp, self.hp + heal)
             self._record_hit("heal", self.hp - before, via="passive")
@@ -334,6 +378,7 @@ class EntitySnapshot:
                 existing.amount = buff.amount
                 existing.turns = buff.turns
                 existing.name = buff.name
+                existing.expire_hp_cost = buff.expire_hp_cost
                 return
         self.buffs.append(copy.copy(buff))
 
@@ -345,13 +390,21 @@ class EntitySnapshot:
                 alive.append(d)
         self.debuffs = alive
 
-    def tick_buffs(self):
-        alive = []
+    def tick_buffs(self) -> list:
+        """버프 1턴 소진. 만료되는 버프에 expire_hp_cost가 있으면 현재 HP에서 지불(피의 맹세).
+        반환: 메시지 리스트 (없으면 [] — 기존 호출부는 반환값을 쓰지 않아도 된다)."""
+        alive, msgs = [], []
         for b in self.buffs:
             if b.turns > 1:
                 b.turns -= 1
                 alive.append(b)
+            elif b.expire_hp_cost > 0 and self.hp > 0:
+                before = self.hp
+                self.hp = max(1.0, self.hp * (1.0 - b.expire_hp_cost))
+                self._record_hit("damage", before - self.hp, via="cost", element="", reaction="")
+                msgs.append(f"🩸 {b.name} 종료 — HP {int(before - self.hp)} 지불")
         self.buffs = alive
+        return msgs
 
     # ── 원소 상태이상 ──
     def apply_status_effect(self, effect: "StatusEffect") -> "StatusEffect":

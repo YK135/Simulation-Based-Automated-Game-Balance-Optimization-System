@@ -26,7 +26,8 @@ from core.Balance_Hook import BalanceHook
 from game.Player_Class import create_player_by_job
 from game.Map import NORMAL_LAYERS
 from game.Enemy_Class import Make_MidBoss, Make_FinalBoss
-from game.Lv import LV_, Allocate_Stat_Points
+from game.Lv import LV_, Allocate_Stat_Points, auto_resolve_skill_choices
+import random as _random_mod
 from app.Map import (
     _make_enemies, _make_elite_encounter,
     STAT_SCALE, ELITE_STAT_SCALE, _early_game_multi_scale, _apply_stat_scale,
@@ -38,9 +39,21 @@ MAIN_STAT = {"전사": "stg", "마법사": "sp", "탱커": "arm", "도적": "stg
 # 플레이어 AI 모드 — 기본 balanced(튜닝 기준). Combat Content Brief 11-1은 패턴·역할 변화를
 # 잴 때 측정용 reactive와 나란히 보라고 하므로 AI_MODE=reactive로 같은 스윕을 한 번 더 돈다.
 AI_MODE = os.environ.get("AI_MODE", "balanced")
+# 스킬 2택 1 정책 — new(신규 스킬) / old(기존 스킬) / random
+SKILL_PICK = os.environ.get("SKILL_PICK", "new")
+
+
+def pick_target(bs):
+    """대상 인덱스 — 기본은 세션의 현재 대상(살아있는 첫 적). 최종 보스전에서 그림자가 살아 있으면
+    HP가 가장 낮은 그림자를 먼저 친다(보스 경감 −25%를 풀어야 하는 페이즈 — 단일 대상 직업도 이렇게 한다)."""
+    shadows = [(e.hp, i) for i, e in enumerate(bs.enemies) if e.hp > 0 and e.enemy_type == "심연의 그림자"]
+    if bs.is_boss and shadows:
+        return min(shadows)[1]
+    return None
 
 # 2차 콘텐츠 발동 카운터 — 메시지 부분 문자열로 센다 (없는 판에서는 0으로 남는다).
 _BLEED_TICK = re.compile(r"출혈(?: ×\d+)? -(\d+)")
+_DICE_MSG = re.compile(r"🎲 주사위: (\d)!")
 
 MESSAGE_KEYWORDS = {
     "goblin_pack":    "무리 전술",          # 고블린 무리 전술 발동/갱신
@@ -68,6 +81,8 @@ def build_player(job, level):
         pts = getattr(p, "pending_points", 0)
         if pts > 0:
             Allocate_Stat_Points(p, {MAIN_STAT[job]: pts})
+        # 스킬 2택 1(2차 8번) — 시뮬은 SKILL_PICK 정책으로 확정 (random은 (직업,레벨)마다 고정 시드)
+        auto_resolve_skill_choices(p, SKILL_PICK, rng=_random_mod.Random(f"{job}|{level}"))
     _PLAYER_CACHE[key] = p
     return p
 
@@ -141,13 +156,16 @@ def run_one(job, level, btype, stats):
     while not bs.done and guard < 400:
         na, _ = bs._peek_next_actor()
         if na == "player":
-            tgt = bs._current_target() or bs.enemy
+            ti = pick_target(bs)
+            tgt = bs.enemies[ti] if ti is not None else (bs._current_target() or bs.enemy)
             alive = sum(1 for e in bs.enemies if e.hp > 0)
             a = ai.decide(bs.player, tgt, enemy_count=alive)
             if a.action_type == "skill":
                 stats[f"sk_{a.detail}"] += 1   # 스킬별 선택 횟수 (슬래시1 추적용)
             s = {"attack": "attack", "skill": f"skill:{a.detail}",
                  "item": f"item:{a.detail}"}.get(a.action_type, "attack")
+            if ti is not None and a.action_type in ("attack", "skill"):
+                s = f"attack:{ti}" if a.action_type == "attack" else f"{s}:{ti}"
             r = bs.step(s)
         else:
             r = bs.step("auto")
@@ -174,9 +192,9 @@ def run_one(job, level, btype, stats):
     for m in msgs_all:
         if "🛡 다대일 대응!" in m:
             stats["multi_shield_procs"] += 1
-        if "🎲 주사위:" in m:
-            d = int(m.split("주사위:")[1].strip().rstrip("!"))
-            stats[f"dice_{d}"] += 1
+        _dm = _DICE_MSG.match(m)                # "🎲 주사위: 4!" / "… 4! (미리 본 눈)" (2차 6번)
+        if _dm:
+            stats[f"dice_{_dm.group(1)}"] += 1
         if "[도적 반격]" in m: stats["counter"] += 1
         _bl = _BLEED_TICK.search(m)          # "출혈 -N" / "출혈 ×2 -N" (2차 5번 스택 표기)
         if _bl:

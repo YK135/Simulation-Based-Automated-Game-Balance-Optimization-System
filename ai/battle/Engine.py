@@ -12,6 +12,7 @@ from .Damage import DamageCalc, _apply_damage_with_shield, LifestealCast, deal_d
 from .Skills import (
     SKILL_META, execute_skill, _resolve_meta, skill_atb_drain, consume_atb_drain,
     is_free_action, preview_next_dice, skill_requirement_error,
+    rogue_dice_crit, maybe_hit_bleed, skill_lifesteal_bonus, frost_ward_retaliate,
 )
 from .Items import use_item
 from .Elements import apply_element_and_react
@@ -103,6 +104,15 @@ class BattleEngine:
         hp_dmg, _healed = deal_damage_with_lifesteal(attacker, defender, int(dmg), cast)
         return hp_dmg
 
+    def _is_enemy_attack(self, action) -> bool:
+        """적의 이번 행동이 플레이어를 노린 공격이었나 (서리 결계 판정 — 세션과 같은 기준)."""
+        if action.action_type == "attack":
+            return True
+        if action.action_type == "skill":
+            meta = _resolve_meta(action.detail, self.enemy) or {}
+            return meta.get("type", "") in self._ATTACK_SKILL_TYPES
+        return False
+
     def _is_attack_action(self, action) -> bool:
         """일반공격 또는 공격형 스킬인지 (전사 카운트/도적 주사위 대상)."""
         if action.action_type == "attack":
@@ -164,6 +174,8 @@ class BattleEngine:
                     self._execute_action(action, self.enemy, self.player, "enemy")
                     if self.player.hp <= 0 and not relic_try_revive(self.player):
                         return self._make_result("enemy")
+                    if self._is_enemy_attack(action) and self.enemy.hp > 0:
+                        frost_ward_retaliate(self.player, self.enemy)     # 서리 결계
 
             # ── 버프/디버프 1틱 소진 (실전 ai/battle_session/Enemy_Actions.py의
             #    _single_enemy_action과 동일 규칙으로 맞춤) ──
@@ -193,7 +205,9 @@ class BattleEngine:
             player_pt=self.atb.player_pt,
             enemy_pt=self.atb.enemy_pt,
         )
-        cast = LifestealCast(attacker)     # 흡혈 시전 예산 — 행동 1회 단위 (10-4)
+        # 흡혈 시전 예산 — 행동 1회 단위 (10-4). 광풍 베기처럼 시전에 붙은 흡혈은 bonus로
+        cast = LifestealCast(attacker, bonus=(skill_lifesteal_bonus(action.detail, attacker)
+                                              if action.action_type == "skill" else 0.0))
 
         if action.action_type == "attack":
             # ── 도적 주사위 (플레이어 공격, 게임 규칙과 동일) ──
@@ -215,7 +229,7 @@ class BattleEngine:
                 attacker._suppress_crit = False
                 if not is_dodge:
                     dmg = int(round(dmg * self._ROGUE_DICE_MULT[dice]))
-                    if dice == 6:
+                    if rogue_dice_crit(dice, defender):          # 6, 또는 약점 표식 대상에게 5
                         dmg = int(dmg * 1.5)
                         is_crit = True
                         self.atb.player_pt += 20.0
@@ -248,6 +262,9 @@ class BattleEngine:
                 )
                 if not c_dodge:
                     self._hit(defender, attacker, c_dmg, LifestealCast(defender))   # 반격도 공격 1회
+                # 연막 중 회피 → 패 고치기 무료 재굴림 +1 (세션 _rogue_counter와 같은 규칙)
+                if defender.buff_amount("dodge") > 0 and "패 고치기" in defender.learned_skills:
+                    defender.free_rerolls += 1
                 self.atb.player_pt += float(defender.effective_spd())
                 self.logs.append(TurnLog(
                     turn=self.action_count, actor="player",
@@ -289,7 +306,7 @@ class BattleEngine:
                         _d = int(_raw)
                         if dice is not None:
                             _d = int(round(_d * self._ROGUE_DICE_MULT[dice]))
-                            if dice == 6 and not _crit:
+                            if rogue_dice_crit(dice, defender) and not _crit:
                                 _d = int(_d * 1.5)
                         if getattr(attacker, "_next_skill_bonus", 1.0) > 1.0:
                             _d = int(_d * attacker._next_skill_bonus)
@@ -298,9 +315,11 @@ class BattleEngine:
                             attacker, defender,
                             _meta.get("element", "") or "physical", _d, _rm)
                         _total_hp += self._hit(attacker, defender, _d, cast)
+                        if _d > 0:
+                            maybe_hit_bleed(_meta, defender)      # 칼날 폭풍 — 타격마다 출혈 판정
                     # 스킬 전체 1회 효과 (주사위 6 ATB / 출혈, 집중물약 소진)
                     if dice is not None:
-                        if dice == 6:
+                        if rogue_dice_crit(dice, defender):
                             self.atb.player_pt += 20.0
                         if dice in (3, 6) and defender.hp > 0:
                             from .Entity import StatusEffect
@@ -319,7 +338,7 @@ class BattleEngine:
                 attacker._suppress_crit = False
                 if not mp_lack and dmg > 0:
                     dmg = int(round(dmg * self._ROGUE_DICE_MULT[dice]))
-                    if dice == 6:
+                    if rogue_dice_crit(dice, defender):
                         dmg = int(dmg * 1.5)
                         self.atb.player_pt += 20.0
                     if dice in (3, 6):

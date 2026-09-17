@@ -169,7 +169,9 @@ function refreshPlayerStatusList(bs) {
 
     const STAT_KOR = {
         stg:'공격', arm:'방어', sparm:'마방', spd:'속도',
-        mp_efficiency:'마나효율', lifesteal:'흡혈'
+        mp_efficiency:'마나효율', lifesteal:'흡혈', lifesteal_oath:'맹세 흡혈',
+        lifesteal_amp:'흡혈량', dmg_reduction:'피해 경감', dodge:'회피',
+        mana_veil:'MP 대납', frost_ward:'서리 결계', vulnerable:'취약'
     };
 
     const renderChip = (s, kind) => {

@@ -62,6 +62,8 @@ class Player:
         self.pending_points = 0
         # 유물 id 목록 (game/Relics.py) — 전투 효과는 EntitySnapshot.relics로 복사돼 ai/battle/Relics.py가 읽는다
         self.relics = []
+        # 스킬 2택 1 대기 레벨 (game/Lv.py JOB_SKILL_CHOICES — /api/skill/choose로 확정)
+        self.pending_skill_choices = []
 
     # ─────────────────────────────────────────
     # 직렬화 (세션 영속화용 — Redis/DB 저장/복구)
@@ -80,6 +82,7 @@ class Player:
             "pending_points": self.pending_points,
             "learned_skills": list(self.skill.learned_skills) if self.skill else [],
             "relics": list(getattr(self, "relics", [])),
+            "pending_skill_choices": list(getattr(self, "pending_skill_choices", [])),
         }
 
     @classmethod
@@ -96,6 +99,7 @@ class Player:
         p.atb_remainder = data.get("atb_remainder", 0.0)
         p.pending_points = data.get("pending_points", 0)
         p.relics = list(data.get("relics", []) or [])
+        p.pending_skill_choices = list(data.get("pending_skill_choices", []) or [])
 
         from game.Skill import Ply_Skill
         skill_sys = Ply_Skill(p.job)

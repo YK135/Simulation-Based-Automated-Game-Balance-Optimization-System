@@ -180,6 +180,32 @@ def skills():
     return jsonify({"ok": True, "skills": result})
 
 
+@game_bp.route("/api/skill/choose", methods=["POST"])
+def skill_choose():
+    """스킬 2택 1 확정 (Combat Content Brief 10-6).
+    요청: { "lv": 11, "skill": "피의 격노" } — 서버가 대기열(pending_skill_choices)과 선택 표로 검증한다."""
+    gs = _get_session()
+    if not gs:
+        return jsonify({"ok": False, "error": "게임 세션이 없습니다."}), 404
+    if gs.get("battle"):
+        return jsonify({"ok": False, "error": "전투 중에는 스킬을 고를 수 없습니다."}), 400
+
+    data = _get_json_body()
+    try:
+        lv = int(data.get("lv"))
+    except (TypeError, ValueError):
+        return jsonify({"ok": False, "error": "lv는 숫자여야 합니다."}), 400
+    skill = str(data.get("skill") or "")
+
+    from game.Lv import resolve_skill_choice
+    player = gs["player"]
+    res = resolve_skill_choice(player, lv, skill)
+    if not res["ok"]:
+        return jsonify({"ok": False, "error": res["msg"]}), 400
+    # resolve_skill_choice가 player.learned_skills와 player.skill(Ply_Skill)을 함께 맞춘다
+    return jsonify({"ok": True, "message": res["msg"], "player": _player_dict(player, gs["inventory"])})
+
+
 @game_bp.route("/api/items", methods=["GET"])
 def items():
     """보유 아이템 목록."""

@@ -176,10 +176,13 @@ function closeStatAllocate() {
 function checkPendingPoints() {
     if (!state.player) return Promise.resolve();
     const pending = state.player.pending_points || 0;
+    // 스탯 분배가 끝나면 스킬 2택 1(SkillChoice.js)을 이어서 — 호출부는 이 Promise 하나만 기다리면 된다
+    const afterStats = () => (typeof checkPendingSkillChoices === 'function')
+        ? checkPendingSkillChoices() : Promise.resolve();
     if (pending > 0) {
-        return openStatAllocate(pending);
+        return openStatAllocate(pending).then(afterStats);
     }
-    return Promise.resolve();
+    return afterStats();
 }
 
 // 버튼 이벤트 바인딩 (DOMContentLoaded 후)

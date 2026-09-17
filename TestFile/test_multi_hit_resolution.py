@@ -216,7 +216,7 @@ def main():
     p11 = mk_player(job="도적", skills=["연속찌르기"])
     bs11 = BattleSession(p11, enemies=[mk_enemy()])
     orig_dice = PA.PlayerActionsMixin._roll_rogue_dice
-    PA.PlayerActionsMixin._roll_rogue_dice = lambda self, msgs: {
+    PA.PlayerActionsMixin._roll_rogue_dice = lambda self, msgs, target=None: {   # target: 약점 표식 판정용(2차 8번)
         "mult": 1.0, "force_crit": True, "bleed": False, "value": 6}
     PA.roll_multi_hit_count = lambda meta, atk: 4
     atb_before = bs11.player_atb

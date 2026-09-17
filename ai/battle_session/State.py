@@ -635,7 +635,8 @@ class StateMixin:
             # 도적 「패 고치기」 — 저장된 다음 주사위와 남은 재굴림 횟수 (표시 전용). 도적이 아니면 None
             "player_dice": (
                 {"pending": self.player.pending_dice,
-                 "rerolls_left": max(0, SKILL_META.get("패 고치기", {}).get("max_uses", 0) - self.player.dice_fix_uses)}
+                 "rerolls_left": max(0, SKILL_META.get("패 고치기", {}).get("max_uses", 0) - self.player.dice_fix_uses),
+                 "free_rerolls": self.player.free_rerolls}
                 if getattr(self.player, "job", "") == "도적" and "패 고치기" in self.player.learned_skills else None),
             # 마법사 원소 공명 단계 (표시 전용 — Elements.mage_resonance_*). 마법사가 아니면 None
             "player_resonance": (

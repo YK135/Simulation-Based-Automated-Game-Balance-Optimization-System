@@ -84,7 +84,11 @@ def dummy(hp=5000, spd=1.0, et="슬라임", **kw):
 # ═══════════════════════════════════════════════════════════
 print("\n[1] 해금 테이블")
 u = JOB_SKILL_UNLOCKS
-check("전사 8 방패치기 / 11 피의 격노", u["전사"][8] == ["방패치기"] and u["전사"][11] == ["피의 격노"])
+from game.Lv import JOB_SKILL_CHOICES
+# 2차 8번에서 전사의 방패치기·피의 격노는 Lv11 2택 1로 옮겼다 (test_remaining_skills.py가 선택 규칙을 본다)
+check("전사 Lv11 2택 1: 피의 격노 ↔ 방패치기 (자동 해금 표에는 없음)",
+      JOB_SKILL_CHOICES["전사"][11] == ("피의 격노", "방패치기")
+      and all("방패치기" not in v and "피의 격노" not in v for v in u["전사"].values()))
 check("마법사 7 화염 폭풍 / 9 원소 폭발", u["마법사"][7] == ["화염 폭풍"] and u["마법사"][9] == ["원소 폭발"])
 check("도적 8 패 고치기 / 19 피의 수확", u["도적"][8] == ["패 고치기"] and u["도적"][19] == ["피의 수확"])
 check("6종 모두 SKILL_META에 있음", all(k in SKILL_META for k in ("화염 폭풍", "원소 폭발", "방패치기", "피의 격노", "패 고치기", "피의 수확")))
@@ -212,13 +216,13 @@ check("안전망: 4회째 execute_skill은 MP 안 쓰고 무효", not lack and i
 # 세션: 배우면 시작부터 다음 눈이 보이고, 시전은 턴을 쓰지 않는 재굴림
 with skills_dice(2):
     s = BattleSession(ent(job="도적", skills=["패 고치기"]), enemies=[dummy()])
-check("전투 시작: 다음 주사위 미리 보기(2)", s.player.pending_dice == 2 and s._state()["player_dice"] == {"pending": 2, "rerolls_left": 3})
+check("전투 시작: 다음 주사위 미리 보기(2)", s.player.pending_dice == 2 and s._state()["player_dice"] == {"pending": 2, "rerolls_left": 3, "free_rerolls": 0})
 check("스킬이 없는 도적은 미리 보기 없음(0)", BattleSession(ent(job="도적", skills=["급소찌르기1"]), enemies=[dummy()]).player.pending_dice == 0)
 turn0, q0 = s.turn, list(s.action_queue)
 with skills_dice(6):
     r = s.step("skill:패 고치기")
 check("재굴림: 메시지 + player_dice {pending 6, rerolls_left 2}, MP −6", any("다시 굴렸다: 6" in x for x in r["messages"])
-      and r["player_dice"] == {"pending": 6, "rerolls_left": 2} and s.player.mp == 494, (r["messages"], r.get("player_dice")))
+      and r["player_dice"] == {"pending": 6, "rerolls_left": 2, "free_rerolls": 0} and s.player.mp == 494, (r["messages"], r.get("player_dice")))
 check("자유 행동: 턴·큐·행동 카운터 그대로, 다음 행동자는 여전히 플레이어",
       s.turn == turn0 and s.action_queue == q0 and s._player_action_count == 0 and r["next_actor"] == "player")
 with deterministic():

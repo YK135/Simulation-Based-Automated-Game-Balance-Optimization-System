@@ -89,21 +89,19 @@ JOB_GROWTH = {
 # 직업별 스킬 해금 테이블
 # ─────────────────────────────────────────────
 JOB_SKILL_UNLOCKS: Dict[str, Dict[int, List[str]]] = {
-    # 신규 6종(Combat Content Brief 10-5 · 11-1 2차 6번): 전사 방패치기(8)·피의 격노(11),
-    # 마법사 화염 폭풍(7)·원소 폭발(9), 도적 패 고치기(8)·피의 수확(19) — 공백 구간을 메우는 자리.
+    # 신규 스킬(Combat Content Brief 10-5 · 11-1 2차 6·8번)은 자동 해금과 2택1(JOB_SKILL_CHOICES)로 나뉜다.
+    # 2택1 짝이 된 기존 스킬은 그 선택 지점 레벨로 옮겼다 (사용자 결정 2026-09-17 — 직업당 3쌍).
     "전사": {
         1:  ["강타1"],
         3:  ["연속공격1"],
         4:  ["슬래시1"],   # 밸런스 패치: Lv7→Lv4 — 초반 다대일 대응 (MC: Lv5 1대2 27.8%)
         5:  ["강화1"],
         6:  ["약화1"],
-        8:  ["방패치기"],
         10: ["강타2"],
-        11: ["피의 격노"],
         12: ["약화2"],
         13: ["연속공격2"],
+        15: ["불굴"],
         16: ["강화2"],
-        20: ["슬래시2"],
     },
     "마법사": {
         1:  ["파이어볼1"],
@@ -114,9 +112,6 @@ JOB_SKILL_UNLOCKS: Dict[str, Dict[int, List[str]]] = {
         7:  ["화염 폭풍"],
         9:  ["원소 폭발"],
         12: ["미약화2"],
-        13: ["파이어볼2"],
-        16: ["힐2"],
-        19: ["아이스볼릿2"],
         22: ["라이트닝2"],
         25: ["효율성2"],
     },
@@ -139,8 +134,6 @@ JOB_SKILL_UNLOCKS: Dict[str, Dict[int, List[str]]] = {
         7:  ["난사1"],
         8:  ["패 고치기"],
         10: ["급소찌르기2"],
-        12: ["둔화2"],
-        14: ["난사2"],
         19: ["피의 수확"],
     },
 }
@@ -169,6 +162,95 @@ SKILL_REPLACEMENTS = {
     "난사2": "난사1",
     "둔화2": "둔화1",
 }
+
+
+# ─────────────────────────────────────────────
+# 스킬 2택 1 (Combat Content Brief 10-6 · 11-1 2차 8번)
+#   레벨업으로 이 레벨에 닿으면 player.pending_skill_choices에 레벨이 쌓이고,
+#   플레이어가 /api/skill/choose로 둘 중 하나를 고른다. 고르지 않은 쪽은 그 런에서 영구히 못 배운다.
+#   (첫 번째 = 신규 스킬, 두 번째 = 기존 스킬 — 기존 스킬은 원래 해금 레벨에서 이 지점으로 옮겼다)
+# ─────────────────────────────────────────────
+JOB_SKILL_CHOICES: Dict[str, Dict[int, tuple]] = {
+    "전사": {
+        11: ("피의 격노", "방패치기"),      # 흡혈 특화 ↔ 템포 특화
+        18: ("광풍 베기", "슬래시2"),       # 회복형 광역 ↔ 실드형 광역
+        25: ("피의 맹세", "철벽 의지"),     # 고위험 흡혈 ↔ 안정형
+    },
+    "마법사": {
+        14: ("연쇄 번개", "파이어볼2"),     # 광역 과부하 ↔ 단일 화력
+        17: ("마나 장막", "힐2"),           # MP로 막기 ↔ HP로 메우기
+        20: ("서리 결계", "아이스볼릿2"),   # 반격형 원소 ↔ 제어 강화
+    },
+    "도적": {
+        11: ("약점 표식", "둔화2"),         # 확률 조작 ↔ 속도 제어
+        16: ("혈흔 추적", "난사2"),         # 출혈 템포 ↔ 즉발 광역
+        25: ("칼날 폭풍", "연막"),          # 출혈 축적 광역 ↔ 회피 생존
+    },
+}
+
+
+def _queue_skill_choice(player, lv: int) -> bool:
+    """이 레벨이 선택 지점이면 대기열에 올린다 (이미 둘 중 하나를 배웠거나 대기 중이면 무시)."""
+    try:
+        job = _get_job(player)
+    except ValueError:
+        return False
+    pair = JOB_SKILL_CHOICES.get(job, {}).get(lv)
+    if not pair:
+        return False
+    pending = getattr(player, "pending_skill_choices", None)
+    if pending is None:
+        player.pending_skill_choices = pending = []
+    if lv in pending or any(sk in player.learned_skills for sk in pair):
+        return False
+    pending.append(lv)
+    pending.sort()
+    return True
+
+
+def skill_choice_pair(player, lv: int) -> tuple:
+    try:
+        return JOB_SKILL_CHOICES.get(_get_job(player), {}).get(lv, ())
+    except ValueError:
+        return ()
+
+
+def resolve_skill_choice(player, lv: int, skill_name: str) -> dict:
+    """대기 중인 선택을 확정한다. 반환 {"ok", "msg"} — 대기열에 없는 레벨·짝에 없는 스킬은 거절."""
+    pending = getattr(player, "pending_skill_choices", None) or []
+    if lv not in pending:
+        return {"ok": False, "msg": "선택할 수 있는 스킬이 없는 레벨입니다."}
+    pair = skill_choice_pair(player, lv)
+    if skill_name not in pair:
+        return {"ok": False, "msg": "그 레벨에서 고를 수 있는 스킬이 아닙니다."}
+    _ensure_skill_container(player)
+    _remove_old_skill_if_replaced(player, skill_name)
+    if skill_name not in player.learned_skills:
+        player.learned_skills.append(skill_name)
+    pending.remove(lv)
+    _sync_skill_object(player)
+    return {"ok": True, "msg": f"새 스킬 '{skill_name}' 습득!"}
+
+
+def auto_resolve_skill_choices(player, policy: str = "new", rng=None) -> list:
+    """시뮬레이션용 — 대기 중인 선택을 정책대로 전부 확정한다.
+    policy: "new"(신규 스킬) | "old"(기존 스킬) | "random"(rng.random() 기준). 반환: 고른 스킬 목록."""
+    import random as _r
+    rng = rng or _r
+    picked = []
+    for lv in list(getattr(player, "pending_skill_choices", None) or []):
+        pair = skill_choice_pair(player, lv)
+        if not pair:
+            continue
+        if policy == "old":
+            choice = pair[1]
+        elif policy == "random":
+            choice = pair[0] if rng.random() < 0.5 else pair[1]
+        else:
+            choice = pair[0]
+        if resolve_skill_choice(player, lv, choice)["ok"]:
+            picked.append(choice)
+    return picked
 
 
 # ─────────────────────────────────────────────
@@ -283,6 +365,7 @@ def _unlock_skills_for_current_level(player) -> List[str]:
             _remove_old_skill_if_replaced(player, skill_name)
             player.learned_skills.append(skill_name)
             learned_now.append(skill_name)
+    _queue_skill_choice(player, player.lv)      # 2택 1 지점이면 선택 대기 (확정은 resolve_skill_choice)
 
     # 배우고 나서 skill 객체에도 반영
     _sync_skill_object(player)
@@ -308,6 +391,9 @@ def _initialize_skills_for_existing_level(player) -> None:
                 _remove_old_skill_if_replaced(player, skill_name)
                 if skill_name not in player.learned_skills:
                     player.learned_skills.append(skill_name)
+    for lv in sorted(JOB_SKILL_CHOICES.get(job, {})):
+        if lv <= player.lv:
+            _queue_skill_choice(player, lv)
 
     _sync_skill_object(player)
 

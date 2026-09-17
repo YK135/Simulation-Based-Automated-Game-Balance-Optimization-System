@@ -11,6 +11,7 @@ from ai.battle import (
     LifestealCast, lifesteal_heal, StatusEffect, BLEED_RATE_PER_STACK,
     consume_atb_drain, skill_requirement_error, SKILL_REQUIREMENT_LABEL, preview_next_dice,
 )
+from ai.battle.Skills import rogue_dice_crit, maybe_hit_bleed, attached_bonus_mult, skill_lifesteal_bonus
 
 
 class PlayerActionsMixin:
@@ -23,7 +24,7 @@ class PlayerActionsMixin:
     # 주사위 배율 테이블 (6은 배율 1.0 + 크리 확정 1.5x)
     _ROGUE_DICE_MULT = {1: 0.75, 2: 0.90, 3: 1.00, 4: 1.15, 5: 1.25, 6: 1.00}
 
-    def _roll_rogue_dice(self, msgs: list):
+    def _roll_rogue_dice(self, msgs: list, target=None):
         """
         도적 주사위 패시브 — 공격/공격형 스킬 입력 시 굴림 (이모션 전).
         반환: dict {mult, force_crit, bleed} 또는 None(도적 아님).
@@ -41,10 +42,11 @@ class PlayerActionsMixin:
         info = {
             "dice":       dice,
             "mult":       self._ROGUE_DICE_MULT[dice],
-            "force_crit": dice == 6,
+            "force_crit": rogue_dice_crit(dice, target),   # 6, 또는 약점 표식 대상에게 5
             "bleed":      dice in (3, 6),
         }
-        msgs.append(f"🎲 주사위: {dice}!" + (" (미리 본 눈)" if fixed else ""))
+        msgs.append(f"🎲 주사위: {dice}!" + (" (미리 본 눈)" if fixed else "")
+                    + (" — 약점 표식: 5도 치명타" if dice == 5 and info["force_crit"] else ""))
         return info
 
     def _apply_rogue_dice(self, dmg: int, dice_info, target, msgs: list) -> int:
@@ -60,7 +62,7 @@ class PlayerActionsMixin:
         dmg = int(round(dmg * dice_info["mult"]))
         if dice_info["force_crit"]:
             dmg = int(dmg * 1.5)
-            msgs.append("💥 주사위 6 — 치명타 확정!")
+            msgs.append(f"💥 주사위 {dice_info.get('dice', 6)} — 치명타 확정!")
             # 크리 발생 시 ATB 추가 20
             self.player_atb += 20.0
             msgs.append("⚡ ATB +20!")
@@ -233,7 +235,7 @@ class PlayerActionsMixin:
                 #   경로(_apply_rogue_dice)와 같은 값이 나오게 첫 명중에서만 준다.
                 #   (타마다 주면 연속찌르기 4타에 ATB +80이 되어 도적 턴이 폭주)
                 if dice_info["force_crit"] and not dice_atb_done:
-                    msgs.append("💥 주사위 6 — 치명타 확정!")
+                    msgs.append(f"💥 주사위 {dice_info.get('dice', 6)} — 치명타 확정!")
                     self.player_atb += 20.0
                     msgs.append("⚡ ATB +20!")
                     dice_atb_done = True
@@ -369,7 +371,7 @@ class PlayerActionsMixin:
         # ═══════════════════════════════════════════════════════════
         if action == "attack":
             # ── 도적 주사위 (공격 입력 직후, 이모션 전) ──
-            dice_info = self._roll_rogue_dice(msgs)
+            dice_info = self._roll_rogue_dice(msgs, target)
             dmg, dodge, crit = DamageCalc.physical(
                 self.player.effective_stg(), self.player.luc,
                 target.effective_arm(),       target.luc,
@@ -417,6 +419,7 @@ class PlayerActionsMixin:
             skill_name = action[6:]
             meta = SKILL_META.get(skill_name, {})
             is_aoe = bool(meta.get("aoe", False))
+            self._lifesteal_cast.bonus = skill_lifesteal_bonus(skill_name, self.player)   # 광풍 베기 8%
 
             # ── 대상 조건·횟수 사전 검사 (원소 폭발 / 피의 수확 / 패 고치기) — MP 부족은 아래 기존 경로 ──
             #    메뉴가 회색으로 막지만, 무효 요청도 차례는 소비한다(보스 카운터 계약과 같은 이유).
@@ -439,8 +442,8 @@ class PlayerActionsMixin:
                 if not alive_targets:
                     return "ok"
 
-                # ── 도적 주사위 (AoE 전체에 배율 적용, 출혈은 피격 대상 전부) ──
-                dice_info = self._roll_rogue_dice(msgs)
+                # ── 도적 주사위 (AoE 전체에 배율 적용, 출혈은 피격 대상 전부) — 약점 표식은 첫 대상 기준 ──
+                dice_info = self._roll_rogue_dice(msgs, alive_targets[0])
 
                 # 1) 첫 대상 — execute_skill로 MP 정상 차감
                 first = alive_targets[0]
@@ -477,6 +480,8 @@ class PlayerActionsMixin:
 
                 for tgt in alive_targets[1:]:
                     raw = 0
+                    _att = attached_bonus_mult(meta, tgt)     # 연쇄 번개 — 이 대상에 원소가 붙어 있었나 (타격 전)
+                    _bleeds = 0
                     for _ in range(hits):
                         if stype == "physical":
                             r, dodge, _crit = DamageCalc.physical(
@@ -507,6 +512,12 @@ class PlayerActionsMixin:
                             r, dodge = 0, False
                         if not dodge:
                             raw += int(r)
+                            if r > 0 and maybe_hit_bleed(meta, tgt):   # 칼날 폭풍 — 타격마다 출혈 판정
+                                _bleeds += 1
+                    if _att > 1.0 and raw > 0:
+                        raw = int(raw * _att)
+                    if _bleeds:
+                        msgs.append(f"🩸 {tgt.name} 칼날에 베여 출혈 ×{_bleeds}")
                     if raw > 0:
                         # AoE 원소 반응
                         elem = meta.get("element", "")
@@ -560,7 +571,7 @@ class PlayerActionsMixin:
             # ── 단일 타깃 스킬 (기존 로직 + buff/heal/shield 메시지 보강) ──
             # 도적 주사위: 공격형 스킬(physical/magical/tank_attack/counter/multi_hit)에만
             _stype_for_dice = meta.get("type", "")
-            dice_info = (self._roll_rogue_dice(msgs)
+            dice_info = (self._roll_rogue_dice(msgs, target)
                          if _stype_for_dice in self._ATTACK_SKILL_TYPES else None)
 
             # ── 연속 타격류는 타격별 판정 경로 ──
@@ -722,7 +733,7 @@ class PlayerActionsMixin:
                 if meta.get("stat") == "hp":
                     before = int(self.player.hp)
                     hp_before = self.player.hp
-                    amount = meta["amount"](self.player)
+                    amount = int(self.player.heal_value(meta["amount"](self.player)))   # 종언: 회복 −50%
                     self.player.hp = min(self.player.maxhp, self.player.hp + amount)
                     self.player._record_hit("heal", self.player.hp - hp_before)
                     msgs.append(f"{item_name} 사용 → HP {before} → {int(self.player.hp)} (+{amount})")

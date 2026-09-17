@@ -555,7 +555,27 @@ def _player_dict(player, inv) -> dict:
         "pending_points": getattr(player, "pending_points", 0),
         # 유물 — 이름·아이콘·설명까지 서버가 내려준다 (프론트 표를 늘리지 않기 위해)
         "relics":         relic_list_public(getattr(player, "relics", [])),
+        # 스킬 2택 1 대기 — [{lv, options:[{name, mp, type, desc}]}] (game/Lv.py JOB_SKILL_CHOICES)
+        "pending_skill_choices": _skill_choice_payload(player),
     }
+
+
+def _skill_choice_payload(player) -> list:
+    from game.Lv import skill_choice_pair
+    from game.Skill import SKILL_BRIEF
+    from ai.battle import SKILL_META
+    out = []
+    for lv in getattr(player, "pending_skill_choices", None) or []:
+        pair = skill_choice_pair(player, lv)
+        if not pair:
+            continue
+        out.append({"lv": lv, "options": [{
+            "name": sk,
+            "mp": SKILL_META.get(sk, {}).get("mp", 0),
+            "type": SKILL_META.get(sk, {}).get("type", ""),
+            "desc": SKILL_BRIEF.get(sk, ""),
+        } for sk in pair]})
+    return out
 
 
 # ─────────────────────────────────────────────

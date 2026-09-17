@@ -36,7 +36,7 @@ os.environ["DATABASE_URL"] = "sqlite:///" + _db
 sys.path.insert(0, ROOT)
 
 from game.Player_Class import create_player_by_job          # noqa: E402
-from game.Lv import LV_, Allocate_Stat_Points               # noqa: E402
+from game.Lv import LV_, Allocate_Stat_Points, auto_resolve_skill_choices               # noqa: E402
 from game.Enemy_Class import Make_MidBoss                   # noqa: E402
 from ai.Battlesession import BattleSession                  # noqa: E402
 from ai.Auto_AI import PlayerAI                             # noqa: E402
@@ -68,6 +68,7 @@ def build_player(job, level):
         pts = getattr(p, "pending_points", 0)
         if pts > 0:
             Allocate_Stat_Points(p, {MAIN_STAT[job]: pts})
+        auto_resolve_skill_choices(p, os.environ.get("SKILL_PICK", "new"))   # 스킬 2택 1 (2차 8번)
     assert p.lv == level, p.lv
     return p
 

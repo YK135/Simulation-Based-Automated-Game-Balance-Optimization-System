@@ -138,11 +138,11 @@ class PlayerPowerIndex:
         axes = set()
         for skill in player.learned_skills:
             meta = SKILL_META.get(skill) or {}
-            if meta.get("buff_stat") == "lifesteal":
+            if meta.get("buff_stat") in ("lifesteal", "lifesteal_oath", "lifesteal_amp") or meta.get("lifesteal"):
                 axes.add("sustain")
-            if meta.get("element") == "react":
+            if meta.get("element") == "react" or meta.get("attached_bonus"):
                 axes.add("reaction")
-            if meta.get("atb_drain") or meta.get("type") == "dice":
+            if meta.get("atb_drain") or meta.get("type") == "dice" or meta.get("bleed_atb"):
                 axes.add("tempo")
         return axes
 

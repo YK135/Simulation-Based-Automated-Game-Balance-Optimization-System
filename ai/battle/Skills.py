@@ -256,6 +256,67 @@ SKILL_META = {
     },
 
     # ─────────────────────────────────────────────
+    # 남은 신규 스킬 11종 (Combat Content Brief 10장 · 11-1 2차 8번)
+    #   추가 키: extra_buffs(한 스킬이 거는 두 번째 버프) · requires_self_hp(자기 HP 비율 이하에서만) ·
+    #            once_per_battle · attached_bonus(원소가 붙은 대상 배율) · lifesteal(이 시전의 흡혈) ·
+    #            hit_bleed_chance(타격마다 출혈 확률) · bleed_atb(출혈 대상 명중 시 자기 ATB)
+    # ─────────────────────────────────────────────
+    # 전사
+    "불굴": {
+        # Lv15: 자기 HP 35% 이하에서만, 전투당 1회 — maxHP 25% 실드 + 2턴 받는 피해 20% 경감
+        "mp": 16, "type": "shield", "shield_mult": 0.25,
+        "requires_self_hp": 0.35, "once_per_battle": True,
+        "extra_buffs": [{"stat": "dmg_reduction", "amount": 0.20, "turns": 2}],
+    },
+    "광풍 베기": {
+        # Lv18: AoE 물리 0.90 + 명중한 적마다 흡혈 8% (상한은 10-4 공용 규칙)
+        "mp": 17, "mult": 0.90, "type": "physical", "hits": 1, "aoe": True, "lifesteal": 0.08,
+    },
+    "철벽 의지": {
+        # Lv22: 3턴 받는 피해 20% 경감 + 흡혈량 2배
+        "mp": 18, "type": "buff", "buff_stat": "dmg_reduction", "buff_amount": 0.20, "buff_turns": 3,
+        "extra_buffs": [{"stat": "lifesteal_amp", "amount": 1.0, "turns": 3}],
+    },
+    "피의 맹세": {
+        # Lv25: 3턴간 흡혈 40%, 종료 시 현재 HP 20% 지불(절대 죽지 않음)
+        "mp": 12, "type": "buff", "buff_stat": "lifesteal_oath", "buff_amount": 0.40, "buff_turns": 3,
+        "expire_hp_cost": 0.20,
+    },
+    # 마법사
+    "연쇄 번개": {
+        # Lv14: AoE lightning 0.80, 원소가 이미 붙은 대상에게는 ×1.3
+        "mp": 20, "mult": 0.80, "type": "magical", "hits": 1, "aoe": True, "element": "lightning",
+        "attached_bonus": 1.3,
+    },
+    "마나 장막": {
+        # Lv17: 2턴간 받는 피해의 50%를 MP로 대납 (MP가 모자라면 그만큼만), 실드와 중첩
+        "mp": 18, "type": "buff", "buff_stat": "mana_veil", "buff_amount": 0.50, "buff_turns": 2,
+    },
+    "서리 결계": {
+        # Lv20: 3턴간 나를 공격한 적에게 ice 부착 + SPD −10% (2턴)
+        "mp": 19, "type": "buff", "buff_stat": "frost_ward", "buff_amount": 0.10, "buff_turns": 3,
+    },
+    # 도적
+    "약점 표식": {
+        # Lv11: 대상에게 3턴 표식 — 주사위 5도 크리 처리 + 받는 피해 +8%
+        "mp": 11, "type": "debuff", "debuff_stat": "vulnerable",
+        "debuff_amount": (0.08, 0.08), "debuff_turns": (3, 3),
+    },
+    "혈흔 추적": {
+        # Lv16: 물리 1.0 — 출혈 중인 대상에게 명중하면 ATB +25 (출혈 → 템포 전환).
+        #   10장 표는 효과만 적었다: MP를 쓰는 스킬이므로 "그 조건을 가진 공격"으로 해석했다.
+        "mp": 10, "mult": 1.0, "type": "physical", "hits": 1, "bleed_atb": 25.0,
+    },
+    "연막": {
+        # Lv22: 2턴간 회피 +35%, 그동안 적 공격을 회피하면 패 고치기 무료 재굴림 1회
+        "mp": 15, "type": "buff", "buff_stat": "dodge", "buff_amount": 0.35, "buff_turns": 2,
+    },
+    "칼날 폭풍": {
+        # Lv25: AoE 물리 0.70 × 2타, 각 타격마다 출혈 40%
+        "mp": 22, "mult": 0.70, "type": "physical", "hits": 2, "aoe": True, "hit_bleed_chance": 0.40,
+    },
+
+    # ─────────────────────────────────────────────
     # 사제(서포터형 몬스터) 전용 스킬 — 적이 사용
     # 플레이어 스킬 트리에는 등록되지 않음.
     # ─────────────────────────────────────────────
@@ -454,9 +515,16 @@ def skill_requirement_error(skill_name: str, attacker: EntitySnapshot,
     meta = _resolve_meta(skill_name, attacker)
     if not meta:
         return ""
+    if meta.get("type") == "dice" and getattr(attacker, "free_rerolls", 0) > 0:
+        return ""                     # 연막으로 얻은 무료 재굴림 — MP·횟수 무관
     cost = max(0, int(round(meta.get("mp", 0) * attacker.mp_cost_multiplier())))
     if attacker.mp < cost:
         return "mp"
+    need_hp = meta.get("requires_self_hp")
+    if need_hp is not None and attacker.maxhp > 0 and attacker.hp / attacker.maxhp > need_hp:
+        return "hp_high"
+    if meta.get("once_per_battle") and skill_name in getattr(attacker, "once_used", []):
+        return "used"
     if meta.get("requires_element") and not skill_effective_element(meta, defender):
         return "no_element"
     if meta.get("requires_bleed") and not (defender is not None and any(
@@ -472,7 +540,61 @@ SKILL_REQUIREMENT_LABEL = {
     "no_element": "대상에 부착된 원소가 없음",
     "no_bleed":   "대상이 출혈 중이 아님",
     "max_uses":   "이번 전투 사용 횟수 소진",
+    "hp_high":    "HP가 35% 이하일 때만 쓸 수 있음",
+    "used":       "이번 전투에 이미 사용함",
 }
+
+WEAK_MARK_SKILL = "약점 표식"
+
+
+def has_weak_mark(defender) -> bool:
+    """약점 표식이 걸린 대상 — 도적 주사위 5도 크리로 처리한다(세션·엔진 공용)."""
+    return defender is not None and any(getattr(d, "name", "") == WEAK_MARK_SKILL
+                                        for d in getattr(defender, "debuffs", []))
+
+
+def rogue_dice_crit(dice: int, defender) -> bool:
+    """도적 주사위의 확정 크리 — 6, 또는 약점 표식 대상에게 5."""
+    return dice == 6 or (dice == 5 and has_weak_mark(defender))
+
+
+def frost_ward_retaliate(player, attacker, messages: list | None = None) -> bool:
+    """서리 결계 — 나를 공격한 적에게 ice 부착 + SPD 감소(2턴). ice 면역(빙결 슬라임)에게는 ice만 빠진다.
+    반환 True면 걸었다. 세션(적 행동 뒤)과 엔진(적 행동 뒤)이 같은 함수를 부른다."""
+    amt = player.buff_amount("frost_ward") if hasattr(player, "buff_amount") else 0.0
+    if amt <= 0 or attacker is None or attacker.hp <= 0:
+        return False
+    from .Elements import is_element_immune
+    if not is_element_immune(attacker, "ice"):
+        attacker.element_queue = ["ice"]
+    attacker.apply_debuff(Debuff(stat="spd", amount=amt, turns=2, name="서리 결계"))
+    if messages is not None:
+        messages.append(f"❄ 서리 결계 — {attacker.name}이(가) 얼어붙는다! (ice · SPD −{int(amt * 100)}%)")
+    return True
+
+
+def skill_lifesteal_bonus(skill_name: str, attacker) -> float:
+    meta = _resolve_meta(skill_name, attacker) or {}
+    return float(meta.get("lifesteal", 0.0) or 0.0)
+
+
+def maybe_hit_bleed(meta: dict, defender, rng=None) -> bool:
+    """칼날 폭풍 — 명중한 타격마다 출혈 확률. 반환 True면 걸었다(스택 +1)."""
+    chance = meta.get("hit_bleed_chance", 0.0)
+    if not chance or defender is None or defender.hp <= 0:
+        return False
+    if (rng or random)() < chance:
+        defender.apply_status_effect(StatusEffect(effect_type="bleed", turns=3, name="출혈"))
+        return True
+    return False
+
+
+def attached_bonus_mult(meta: dict, defender) -> float:
+    """연쇄 번개 — 원소가 이미 붙은 대상이면 attached_bonus (타격 전 판정)."""
+    bonus = meta.get("attached_bonus")
+    if not bonus or defender is None:
+        return 1.0
+    return float(bonus) if getattr(defender, "element_queue", None) else 1.0
 
 
 def is_free_action(skill_name: str, attacker: EntitySnapshot) -> bool:
@@ -633,6 +755,12 @@ def execute_skill(
     real_mp_cost = int(round(base_mp_cost * attacker.mp_cost_multiplier()))
     real_mp_cost = max(0, real_mp_cost)
 
+    # ── 연막으로 얻은 무료 재굴림 (패 고치기) — MP·사용 횟수를 쓰지 않는다 ──
+    if meta.get("type") == "dice" and getattr(attacker, "free_rerolls", 0) > 0:
+        attacker.free_rerolls -= 1
+        attacker.pending_dice = randint(1, 6)
+        return 0, False, f"dice:{attacker.pending_dice}"
+
     if attacker.mp < real_mp_cost:
         return 0, True, ""
 
@@ -644,6 +772,10 @@ def execute_skill(
     attacker.mp -= real_mp_cost
     stype = meta["type"]
     element = skill_effective_element(meta, defender)     # "react"는 여기서 실제 원소로 확정
+    if meta.get("once_per_battle") and hasattr(attacker, "once_used"):
+        attacker.once_used.append(skill_name)
+    for eb in meta.get("extra_buffs", ()):                  # 한 스킬의 두 번째 버프 (불굴·철벽 의지)
+        attacker.apply_buff(Buff(stat=eb["stat"], amount=eb["amount"], turns=eb["turns"], name=skill_name))
 
     # ── HP 지불 스킬 (피의 격노): 현재 HP 기준, 절대 죽지 않는다 — max(1, hp × 0.85) ──
     hp_cost = meta.get("hp_cost_ratio", 0.0)
@@ -693,12 +825,15 @@ def execute_skill(
             amount=meta["buff_amount"],
             turns=meta["buff_turns"],
             name=skill_name,
+            expire_hp_cost=meta.get("expire_hp_cost", 0.0),
         ))
         return 0, False, skill_name
 
     if stype == "heal":
         heal = meta["base_heal"] + attacker.sp * meta["sp_mult"]
         heal = min(heal, attacker.maxhp * meta["cap"])
+        if hasattr(attacker, "heal_value"):
+            heal = attacker.heal_value(heal)          # 종언: 회복 −50% (기본 1.0 — 그대로)
         before = attacker.hp
         attacker.hp = min(attacker.maxhp, attacker.hp + int(heal))
         if getattr(attacker, "hit_ledger", None) is not None:   # 표시 전용 장부
@@ -764,6 +899,9 @@ def execute_skill(
     hits = meta.get("hits", 1)
     cond_mult, cond_tags = (physical_skill_mult(meta, defender) if stype == "physical" else (1.0, []))
     res_mult = mage_resonance_mult(attacker, element) if stype == "magical" else 1.0
+    att_mult = attached_bonus_mult(meta, defender)            # 연쇄 번개 — 타격 전 부착 여부
+    was_bleeding = any(getattr(e, "effect_type", "") == "bleed" for e in getattr(defender, "status_effects", []))
+    hit_bleeds = 0
 
     for _ in range(hits):
         if stype == "physical":
@@ -787,7 +925,7 @@ def execute_skill(
                 attacker.luc,
                 defender.effective_sparm(),
                 defender.luc,
-                skill_mult=meta.get("mult", 1.0) * res_mult,     # 원소 공명 단계 배율 (마법사)
+                skill_mult=meta.get("mult", 1.0) * res_mult * att_mult,   # 공명 단계 · 부착 대상 배율
                 attacker=attacker,
                 defender=defender,
                 hit_count=hits,
@@ -796,6 +934,8 @@ def execute_skill(
             return 0, False, ""
 
         total += int(raw)
+        if raw > 0 and maybe_hit_bleed(meta, defender):
+            hit_bleeds += 1
 
     if stype == "magical" and "debuff_stat" in meta and random() <= meta.get("debuff_chance", 0.0):
         amt = round(
@@ -825,6 +965,14 @@ def execute_skill(
     on_hit = meta.get("on_hit_status")
     if on_hit and total > 0 and hasattr(defender, "apply_status_effect"):
         defender.apply_status_effect(StatusEffect(**on_hit))
+    if hit_bleeds:
+        extra_msgs.append(f"🩸 칼날에 베여 출혈 ×{hit_bleeds}")
+    if att_mult > 1.0 and total > 0:
+        extra_msgs.append(f"⚡ 연쇄 — 원소가 붙은 대상 피해 ×{att_mult}")
+    # 혈흔 추적 — 출혈 중이던 대상에게 명중하면 자기 ATB (세션·엔진이 행동 뒤 _pending_atb_bonus를 옮긴다)
+    if meta.get("bleed_atb") and was_bleeding and total > 0:
+        attacker._pending_atb_bonus = getattr(attacker, "_pending_atb_bonus", 0) + meta["bleed_atb"]
+        extra_msgs.append(f"🩸 혈흔 추적 — ATB +{int(meta['bleed_atb'])}")
     info = skill_name if extra_msgs else (skill_name if "debuff_stat" in meta else "")
     return total, False, (info + "|" + "|".join(extra_msgs)) if extra_msgs else info
 

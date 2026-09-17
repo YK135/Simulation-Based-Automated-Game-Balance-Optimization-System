@@ -31,7 +31,7 @@ from ai.Auto_AI import PlayerAI
 from ai.battle import EntitySnapshot, SKILL_META
 from ai.Auto_AI import ATTACK_TYPES
 from game.Player_Class import create_player_by_job
-from game.Lv import LV_, Allocate_Stat_Points
+from game.Lv import LV_, Allocate_Stat_Points, auto_resolve_skill_choices
 from game import Enemy_Class as EC
 
 SEED = 20260917
@@ -66,6 +66,7 @@ def build_player(level):
         pts = getattr(p, "pending_points", 0)
         if pts > 0:
             Allocate_Stat_Points(p, {"stg": pts})
+        auto_resolve_skill_choices(p, os.environ.get("SKILL_PICK", "new"))   # 스킬 2택 1 (2차 8번)
     assert p.lv == level, p.lv
     return p
 

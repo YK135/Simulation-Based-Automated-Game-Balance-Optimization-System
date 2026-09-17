@@ -8,7 +8,7 @@ from ai.battle import (
     apply_element_and_react, Buff, DamageCalc,
     execute_skill, SKILL_META, TurnLog, _escape_chance,
 )
-from ai.battle.Skills import skill_atb_drain
+from ai.battle.Skills import skill_atb_drain, frost_ward_retaliate, _resolve_meta
 from ai.battle.EliteKit import (
     ASSASSIN_MARK_BONUS, ICE_SLIME_ARMOR_REDUCTION,
 )
@@ -16,6 +16,11 @@ from ai.battle.BossKit import is_midboss
 from ai.battle.MonsterKit import (
     is_goblin, goblin_pack_bonus, goblin_wants_to_flee, BAT_TYPE,
 )
+
+
+class _EnemyProbe:
+    """_resolve_meta가 몬스터 표(MONSTER_SKILL_META)를 먼저 보게 하는 표식 — enemy_type만 있으면 된다."""
+    enemy_type = "몬스터"
 
 
 class EnemyActionsMixin:
@@ -32,6 +37,10 @@ class EnemyActionsMixin:
             return
         if self.player.hp <= 0 or enemy.hp <= 0:
             return
+        # 연막(버프 dodge) 중 회피 성공 → 패 고치기 무료 재굴림 1회 (배운 경우만)
+        if self.player.buff_amount("dodge") > 0 and "패 고치기" in self.player.learned_skills:
+            self.player.free_rerolls += 1
+            msgs.append("🌫 연막 속 회피 — 패 고치기 무료 재굴림 +1")
         dmg, dodge, crit = DamageCalc.physical(
             self.player.effective_stg(), self.player.luc,
             enemy.effective_arm(),        enemy.luc,
@@ -118,9 +127,31 @@ class EnemyActionsMixin:
             ))
         return True
 
+    _ENEMY_ATTACK_TYPES = ("physical", "magical", "tank_attack", "counter", "multi_hit")
+
+    def _enemy_attacked_player(self, new_logs) -> bool:
+        """이번 적 행동이 플레이어를 노린 공격이었나 (회피 포함) — 서리 결계 반격 판정용."""
+        for lg in new_logs:
+            if lg.actor != "enemy" or lg.action not in ("attack", "skill"):
+                continue
+            if lg.action == "attack":
+                return True
+            name = (lg.action_detail or "").split("(", 1)[0]
+            meta = _resolve_meta(name, _EnemyProbe) or {}
+            if meta.get("type") in self._ENEMY_ATTACK_TYPES:
+                return True
+        return False
+
     def _single_enemy_action(self, enemy, msgs: list):
         """단일 적의 1회 행동 처리. ATB 큐가 적 1마리씩 액터 단위로 넘겨준다
         (다대일이어도 한 번에 한 마리) — Battlesession._step_core 참고."""
+        n_logs = len(self.logs)
+        self._single_enemy_action_core(enemy, msgs)
+        # 서리 결계(마법사 버프): 나를 공격한 적에게 ice + SPD 감소 — 엔진도 같은 함수
+        if enemy.hp > 0 and self.player.hp > 0 and self._enemy_attacked_player(self.logs[n_logs:]):
+            frost_ward_retaliate(self.player, enemy, msgs)
+
+    def _single_enemy_action_core(self, enemy, msgs: list):
         # ── 사제 전용 행동 (다른 아군 회복/버프) ──
         # enemy_type이 "사제"면 별도 로직 사용. 일반 EnemyAI 안 거침.
         # ⚠ return 제거 — 메서드 끝의 tick 처리(buff/debuff 1턴 감소)를

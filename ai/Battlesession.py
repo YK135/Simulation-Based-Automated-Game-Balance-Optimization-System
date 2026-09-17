@@ -293,7 +293,7 @@ class BattleSession(
             # ── 마비 행동 실패 ──
             if hasattr(self.player, "is_paralyzed") and self.player.is_paralyzed():
                 msgs.append(f"⚡ {self.player.name}이(가) 마비로 행동에 실패했다!")
-                self.player.tick_buffs()
+                msgs.extend(self.player.tick_buffs())      # 만료 비용(피의 맹세) 메시지
                 self.action_queue.pop(0)
                 self._accumulate_atb_all()
                 self._cleanup_dead_from_queue()
@@ -314,7 +314,7 @@ class BattleSession(
                 self.player_atb += float(self._pending_atb_bonus)
                 self._pending_atb_bonus = 0
             self._flush_entity_atb_bonus()
-            self.player.tick_buffs()
+            msgs.extend(self.player.tick_buffs())          # 만료 비용(피의 맹세) 메시지
 
             # 큐에서 자신 제거
             self.action_queue.pop(0)
@@ -529,10 +529,11 @@ class BattleSession(
             msgs.append(f"{skill_name}을(를) 쓸 수 없다 — {SKILL_REQUIREMENT_LABEL.get(why, why)}")
             return self._state(messages=msgs, next_actor="player", acting_enemy_idx=-1)
         meta = SKILL_META.get(skill_name, {})
-        execute_skill(skill_name, self.player, target)      # dice: MP 소모 + pending_dice 재굴림 + 횟수 +1
+        free = self.player.free_rerolls > 0
+        execute_skill(skill_name, self.player, target)      # dice: MP 소모 + pending_dice 재굴림 + 횟수 +1 (무료면 둘 다 없음)
         left = meta.get("max_uses", 0) - self.player.dice_fix_uses
         msgs.append(f"🎲 {skill_name} — 다음 공격 주사위를 다시 굴렸다: {self.player.pending_dice}! "
-                    f"(재굴림 {left}회 남음, 차례는 그대로)")
+                    + ("(연막 무료 재굴림, " if free else f"(재굴림 {left}회 남음, ") + "차례는 그대로)")
         self.logs.append(TurnLog(
             turn=self.turn, actor="player", action="skill", action_detail=skill_name,
             damage_dealt=0, hp_after=(target.hp if target is not None else 0), mp_after=self.player.mp,

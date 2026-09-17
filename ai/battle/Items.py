@@ -97,6 +97,7 @@ def use_item(item_name: str, user: EntitySnapshot, enemies: list = None) -> bool
     if "amount" in meta:
         amount = meta["amount"](user)
         if meta.get("stat") == "hp":
+            amount = user.heal_value(amount) if hasattr(user, "heal_value") else amount   # 종언: 회복 −50%
             user.hp = min(user.maxhp, user.hp + amount)
         elif meta.get("stat") == "mp":
             user.mp = min(user.maxmp, user.mp + amount)

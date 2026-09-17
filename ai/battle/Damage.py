@@ -58,7 +58,7 @@ class DamageCalc:
         # +dodge_bonus(유령 +20), -다단히트 페널티(다단히트시 회피율 감소)
         base_evade = min(def_luc * 0.4, 25)
         if defender is not None:
-            base_evade += defender.dodge_bonus * 100  # 0.20 → +20%p
+            base_evade += defender.effective_dodge_bonus() * 100  # 유령 0.20 → +20%p, 연막 버프 +35%p
             if hit_count > 1:
                 penalty = defender.dodge_penalty_per_extra_hit * 100 * (hit_count - 1)
                 base_evade -= penalty
@@ -159,12 +159,22 @@ class DamageCalc:
 
 
 def _apply_damage_with_shield(defender: EntitySnapshot, dmg: int) -> int:
+    # 받는 피해 배율(불굴·철벽 의지 경감, 약점 표식 취약, 보스 그림자 경감) — 없으면 1.0이라 그대로
+    mult = defender.damage_taken_mult() if hasattr(defender, "damage_taken_mult") else 1.0
+    if mult != 1.0:
+        dmg = int(dmg * mult)
     actual = dmg
     absorbed = 0
     if defender.shield > 0:
         absorbed = min(defender.shield, actual)
         defender.shield -= absorbed
         actual -= absorbed
+    # 마나 장막: 실드 뒤에 남은 피해의 일정 비율을 MP로 대신 낸다 (MP가 모자라면 그만큼만)
+    veil = defender.buff_amount("mana_veil") if hasattr(defender, "buff_amount") else 0.0
+    if veil > 0 and actual > 0 and defender.mp > 0:
+        paid = min(float(defender.mp), actual * veil)
+        defender.mp -= paid
+        actual = int(round(actual - paid))
     before = defender.hp
     defender.hp = max(0, defender.hp - actual)
     defender.last_damage_taken = actual
@@ -188,19 +198,24 @@ LIFESTEAL_CAST_CAP_RATIO = 0.12
 
 
 class LifestealCast:
-    """시전 1회의 흡혈 예산 — 시전(행동)마다 새로 만든다."""
-    __slots__ = ("pool",)
+    """시전 1회의 흡혈 예산 — 시전(행동)마다 새로 만든다.
+    bonus: 이 시전에만 붙는 흡혈 비율(광풍 베기 0.08) — 버프 흡혈에 더한다."""
+    __slots__ = ("pool", "bonus")
 
-    def __init__(self, attacker: EntitySnapshot):
+    def __init__(self, attacker: EntitySnapshot, bonus: float = 0.0):
         self.pool = float(attacker.maxhp) * LIFESTEAL_CAST_CAP_RATIO
+        self.bonus = float(bonus or 0.0)
 
 
 def lifesteal_heal(attacker: EntitySnapshot, basis: float, cast: "LifestealCast | None") -> float:
-    """basis(실제 HP+실드 감소량)의 effective_lifesteal() 비율만큼 회복. 반환: 실제 회복량."""
+    """basis(실제 HP+실드 감소량)의 흡혈 비율만큼 회복. 반환: 실제 회복량.
+    비율 = effective_lifesteal() + 시전 보너스(광풍 베기) — 흡혈량 가산(철벽 의지)은 시전 보너스에도 곱한다."""
     ratio = attacker.effective_lifesteal()
+    if cast is not None and cast.bonus > 0:
+        ratio += cast.bonus * (1.0 + attacker.buff_amount("lifesteal_amp"))
     if ratio <= 0 or basis <= 0:
         return 0.0
-    heal = min(basis * ratio, attacker.maxhp * LIFESTEAL_HIT_CAP_RATIO)
+    heal = attacker.heal_value(min(basis * ratio, attacker.maxhp * LIFESTEAL_HIT_CAP_RATIO))
     if cast is not None:
         heal = min(heal, cast.pool)
     heal = min(heal, max(0.0, attacker.maxhp - attacker.hp))

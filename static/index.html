@@ -653,6 +653,15 @@
   </div>
 </div>
 
+<!-- 스킬 2택 1 (SkillChoice.js — 스탯 분배 다음에 열린다, 닫기 없음) -->
+<div id="modal-skill-choice" class="modal-bg">
+  <div class="modal modal-skill-choice">
+    <div class="reward-title">📘 SKILL — <span id="sc-level">Lv</span> 둘 중 하나</div>
+    <div class="relic-hint">고르지 않은 스킬은 이번 모험에서 다시 배울 수 없다.</div>
+    <div id="sc-options" class="sc-options"></div>
+  </div>
+</div>
+
 <div id="modal-stat-allocate" class="modal-bg">
     <div class="modal modal-stat-allocate">
         <h2>⬆ LEVEL UP — STAT ALLOCATION</h2>
@@ -731,6 +740,7 @@
 <script src="js/RelicModal.js"></script>    <!-- 유물 3종 택 1 팝업 + 좌측 패널 유물 줄 -->
 <script src="js/ItemTooltip.js"></script>    <!-- 아이템 커스텀 툴팁 -->            <!-- 휴식/도망 + 시뮬 가시화 -->
 <script src="js/StatAllocate.js"></script>     <!-- 레벨업 스탯 분배 모달 -->
+<script src="js/SkillChoice.js"></script>      <!-- 스킬 2택 1 모달 (스탯 분배 뒤) -->
 <!-- 맵 UI 분리 모듈 (UI_Map.js 오케스트레이터보다 먼저 로드) -->
 <script src="js/map/MapRender.js"></script>
 <script src="js/map/MapRest.js"></script>
