@@ -8,9 +8,10 @@ from random import randint, random
 from .Entity import EntitySnapshot
 from .ATB import ATBSystem
 from .Damage import DamageCalc, _apply_damage_with_shield
-from .Skills import SKILL_META, execute_skill
+from .Skills import SKILL_META, execute_skill, _resolve_meta, skill_atb_drain
 from .Items import use_item
 from .Elements import apply_element_and_react
+from .MonsterKit import BAT_TYPE, bat_lifesteal_amount
 
 @dataclass
 class TurnLog:
@@ -209,6 +210,10 @@ class BattleEngine:
             if not is_dodge and actual > 0:
                 defender.passive_on_hit_received("physical")
 
+            # ── 박쥐 흡혈 (일반 10%/상한 5%, 엘리트 20%/10%) — 실전 Enemy_Actions와 같은 함수 ──
+            if actor == "enemy" and getattr(attacker, "enemy_type", "") == BAT_TYPE and actual > 0:
+                attacker.hp = min(attacker.maxhp, attacker.hp + bat_lifesteal_amount(attacker, actual))
+
             # ── 도적 패시브: 회피 시 반격 (몬스터 턴 내 즉시 기본공격, 일반 크리 허용) ──
             if is_dodge and actor == "enemy" and defender.job == "도적" and defender.hp > 0:
                 c_dmg, c_dodge, c_crit = DamageCalc.physical(
@@ -304,6 +309,13 @@ class BattleEngine:
 
             if not mp_lack:
                 _meta = SKILL_META.get(action.detail, {})
+                # ── 피해 없는 ATB 감소기 (박쥐 날갯소리) — 대상의 ATB에서 깎는다 ──
+                _drain = skill_atb_drain(action.detail, attacker)
+                if _drain > 0:
+                    if actor == "enemy":
+                        self.atb.player_pt = max(0.0, self.atb.player_pt - _drain)
+                    else:
+                        self.atb.enemy_pt = max(0.0, self.atb.enemy_pt - _drain)
                 # ── 전사 광역 생존기 실드 (슬래시 계열) — 시뮬은 1v1이라 명중 1명 기준 ──
                 _sph = _meta.get("shield_per_hit", 0.0)
                 if _sph > 0 and attacker.job == "전사" and actor == "player" and dmg > 0:

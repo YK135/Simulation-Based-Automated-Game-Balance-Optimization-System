@@ -317,12 +317,12 @@ def test_priest_revival_once_only():
     escort.hp = 0   # 동료 사망 가정
 
     msgs1 = []
-    handled1 = session._priest_elite_revival_check(priest, msgs1)
+    handled1 = session._priest_revival_check(priest, msgs1)
     check("동료 사망 감지 시 부활 의식 준비 시작(행동 소비)", handled1 is True)
     check("준비 단계 진입(elite_phase=1)", priest.elite_phase == 1)
 
     msgs2 = []
-    handled2 = session._priest_elite_revival_check(priest, msgs2)
+    handled2 = session._priest_revival_check(priest, msgs2)
     check("다음 행동에 부활 발동", handled2 is True)
     check("동료가 최대HP 25%로 부활", escort.hp == escort.maxhp * 0.25, f"hp={escort.hp}")
     # 보상은 전투 종료 시 최종 상태 기준으로 딱 한 번만 계산되므로(이중 지급
@@ -335,7 +335,7 @@ def test_priest_revival_once_only():
     # 재사망 후 재부활 시도 — 이미 사용했으므로 무시되어야 함
     escort.hp = 0
     msgs3 = []
-    handled3 = session._priest_elite_revival_check(priest, msgs3)
+    handled3 = session._priest_revival_check(priest, msgs3)
     check("부활 1회 소진 후 재부활 시도는 무시", handled3 is False)
 
 
@@ -346,7 +346,7 @@ def test_priest_death_cancels_ritual():
     session = BattleSession(player, enemies=[priest, escort], items=[])
     priest, escort = session.enemies   # deepcopy 반영
     escort.hp = 0
-    session._priest_elite_revival_check(priest, [])
+    session._priest_revival_check(priest, [])
     check("의식 준비 중", priest.elite_phase == 1)
 
     msgs = []
@@ -364,7 +364,7 @@ def test_bat_lifesteal_and_scream():
     session = BattleSession(player, enemy=bat, items=[])
     bat.hp = 500   # 절반만 채워 회복 여지를 둠 (풀피면 회복량이 캡에 막혀 검증 불가)
     hp_before = bat.hp
-    session._elite_bat_lifesteal(bat, 100, [])
+    session._bat_lifesteal(bat, 100, [])
     check("흡혈 시 HP 회복(피해량의 20%, 상한 maxHP 10%)",
           bat.hp == hp_before + min(100 * 0.20, bat.maxhp * 0.10))
 
@@ -391,7 +391,7 @@ def test_bat_no_lifesteal_when_shielded_or_dodged():
     bat = mk_elite("박쥐", hp=1000, stg=10)
     session = BattleSession(player, enemy=bat, items=[])
     hp_before = bat.hp
-    session._elite_bat_lifesteal(bat, 0, [])   # 회피/실드 완전흡수 시 dmg=0으로 호출됨
+    session._bat_lifesteal(bat, 0, [])   # 회피/실드 완전흡수 시 dmg=0으로 호출됨
     check("피해 0(회피/완전흡수)일 때는 흡혈 없음", bat.hp == hp_before)
 
 

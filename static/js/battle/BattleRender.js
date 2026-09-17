@@ -109,7 +109,8 @@ function renderEnemySlots(bs, opts) {
         }
 
         slotEl.style.display = '';
-        slotEl.style.opacity = en.alive ? '1' : '0.3';
+        // 달아난 적(en.fled — 고블린 겁쟁이)은 죽은 게 아니라 자리를 비운 것: 시체 포즈 없이 흐리게만
+        slotEl.style.opacity = en.alive ? '1' : (en.fled ? '0.15' : '0.3');
         slotEl.style.filter  = en.alive ? '' : 'grayscale(100%)';
 
         const artEl = document.getElementById(`enemy-art${enemyIdSuffix(i)}`);
@@ -119,7 +120,7 @@ function renderEnemySlots(bs, opts) {
         //   이해 못 하는 옛 _updateBattleSprite로 매 렌더 덮어쓰면, 시트 로딩 사이의
         //   찰나에 이모지 폴백이 깜빡이는 버그가 있었음(모든 시트 몬스터 공통).
         //   idle/dead는 자동 idle 복귀 타이머를 안 타므로 매 렌더 호출해도 안전.
-        const stateKey = en.alive ? 'idle' : 'dead';
+        const stateKey = (en.alive || en.fled) ? 'idle' : 'dead';
         // ★ renderPlayerCombatant와 동일한 이유로 "방금 죽은" 슬롯은 여기서
         //   즉시 dead 처리하지 않고 playBattleSequence의 사망 연출에 맡긴다.
         if (stateKey === 'dead' && opts.deferDeathAnim && !isCharDead(`enemy_battle:${i}`)) {
@@ -133,7 +134,7 @@ function renderEnemySlots(bs, opts) {
         if (nameEl) {
             renderNameWithStatus(nameEl, {
                 ...en,
-                name: en.name + (en.alive ? '' : ' ✖'),
+                name: en.name + (en.alive ? '' : (en.fled ? ' (도주)' : ' ✖')),
                 element_aura: en.element_aura || '',
                 status_effects: en.status_effects || [],
                 buffs: en.buffs || [],

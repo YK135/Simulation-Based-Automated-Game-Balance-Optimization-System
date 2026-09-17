@@ -119,9 +119,14 @@ class EntitySnapshot:
     elite_leader: bool = False
     elite_phase: int = 0
     elite_pattern_turn: int = 0
-    elite_pattern_used: bool = False   # 전투당 1회 한정 능력(분노/추진력/부활/분열) 사용 여부
+    elite_pattern_used: bool = False   # 전투당 1회 한정 능력(분노/추진력/부활/분열, 일반 사제의 약식 소생) 사용 여부
     is_summoned: bool = False          # 분열로 생성된 개체
     reward_eligible: bool = True       # False면 처치해도 경험치/보상 제외
+
+    # ── 일반 몬스터 정체성 (ai/battle/MonsterKit.py 「일반 몬스터 정체성 규칙」) ──
+    pack_bonus: float = 0.0        # 고블린 무리 전술 — 살아있는 고블린 수에 따른 STG 가산(세션이 동기화)
+    flee_attempted: bool = False   # 고블린 겁쟁이 — 도주 시도는 전투당 1회
+    fled: bool = False             # 달아났다(hp 0 + reward_eligible False로 전투에서 빠진다 — 죽은 것과 구분해 표시)
 
     # ── 보스 패턴 (ai/battle/BossKit.py) — 엘리트 필드와 섞지 않는다 ──
     boss_phase: int = 0            # 0=아직 동기화 전, 1/2/3 (midboss_sync_phase가 HP로 올린다)
@@ -195,7 +200,9 @@ class EntitySnapshot:
     def effective_stg(self) -> float:
         debuff_r = sum(d.amount for d in self.debuffs if d.stat == "stg")
         buff_r = sum(b.amount for b in self.buffs if b.stat == "stg")
-        return max(1.0, self.stg * (1 - debuff_r + buff_r))
+        # pack_bonus: 고블린 무리 전술 — 버프 목록이 아니라 전용 필드인 이유는 apply_buff()가
+        # 같은 stat 항목을 덮어써서 전투 함성·사제축복과 서로 지워 버리기 때문 (기본 0.0)
+        return max(1.0, self.stg * (1 - debuff_r + buff_r + self.pack_bonus))
 
     def effective_arm(self) -> float:
         debuff_r = sum(d.amount for d in self.debuffs if d.stat == "arm")

@@ -6,11 +6,14 @@ battle_session/elite_actions.py — 엘리트 몬스터 패턴 실행
 """
 from __future__ import annotations
 
-from ai.battle import Buff, Debuff, EntitySnapshot
+from ai.battle import Buff, Debuff, EntitySnapshot, TurnLog
+from ai.battle.MonsterKit import (
+    bat_lifesteal_amount, PRIEST_QUICK_REVIVE_HP_RATIO, PRIEST_QUICK_REVIVE_SKILL,
+)
 from ai.battle.EliteKit import (
     GOBLIN_START_BUFF_AMOUNT, GOBLIN_START_BUFF_TURNS,
     GOBLIN_RAGE_HP_THRESHOLD, GOBLIN_RAGE_STG_AMOUNT, GOBLIN_RAGE_DEF_AMOUNT,
-    BAT_LIFESTEAL_RATIO, BAT_LIFESTEAL_CAP_RATIO, BAT_SCREAM_INTERVAL,
+    BAT_SCREAM_INTERVAL,
     SLIME_SPLIT_COUNT, SLIME_SPLIT_HP_RATIO, SLIME_SPLIT_STAT_RATIO,
     ASSASSIN_MARK_INTERVAL, ASSASSIN_MARK_TURNS, ASSASSIN_RETREAT_HP_THRESHOLD,
     GOLEM_PHASE_GUARD, GOLEM_PHASE_CHARGE, GOLEM_PHASE_STRIKE,
@@ -88,11 +91,12 @@ class EliteActionsMixin:
             enemy.elite_phase = 1
             msgs.append(f"{enemy.name}이(가) 날개를 크게 펼치며 초음파를 모은다.")
 
-    def _elite_bat_lifesteal(self, enemy: EntitySnapshot, hp_damage: int, msgs: list) -> None:
-        if hp_damage <= 0:
+    def _bat_lifesteal(self, enemy: EntitySnapshot, hp_damage: int, msgs: list) -> None:
+        """박쥐 흡혈 — 일반 박쥐(10%/상한 5%)와 엘리트 흡혈 박쥐(20%/10%)가 같은 경로.
+        비율·상한은 MonsterKit.bat_lifesteal_amount()가 elite_leader로 가른다."""
+        heal = bat_lifesteal_amount(enemy, hp_damage)
+        if heal <= 0:
             return
-        heal_cap = enemy.maxhp * BAT_LIFESTEAL_CAP_RATIO
-        heal = min(hp_damage * BAT_LIFESTEAL_RATIO, heal_cap)
         before = enemy.hp
         enemy.hp = min(enemy.maxhp, enemy.hp + heal)
         enemy._record_hit("heal", enemy.hp - before)
@@ -205,16 +209,46 @@ class EliteActionsMixin:
         msgs.append(f"{origin.name}이(가) 작은 슬라임 두 마리로 분열했다!")
 
     # ═══════════════════════════════════════════════════════
-    # 타락한 고위 사제 — 부활 의식 (Enemy_Actions._priest_action에서 호출)
+    # 사제 — 부활 (Enemy_Actions._priest_action에서 호출)
+    #   엘리트(타락한 고위 사제): 2단계 의식(준비 → 발동, maxHP 25%), 준비 중 처치 시 취소
+    #   일반 사제: 약식 소생 — 예고 없이 자기 행동으로 즉시 maxHP 10% (2장, 전투당 1회)
+    #   둘 다 elite_pattern_used 하나로 "전투당 1회"를 센다.
     # ═══════════════════════════════════════════════════════
 
-    def _priest_elite_revival_check(self, priest: EntitySnapshot, msgs: list) -> bool:
-        """반환 True면 이번 행동을 부활 의식이 대신 소비함(다른 행동 스킵)."""
-        if not getattr(priest, "elite_leader", False) or priest.elite_pattern_used:
+    def _revivable_allies(self, priest: EntitySnapshot) -> list:
+        """죽은 아군 — 달아난 개체(fled)는 전투에서 빠진 것이라 되살리지 않는다."""
+        return [e for e in self.enemies
+                if e is not priest and e.hp <= 0 and not getattr(e, "fled", False)]
+
+    def _priest_revival_check(self, priest: EntitySnapshot, msgs: list) -> bool:
+        """반환 True면 이번 행동을 부활(의식/약식 소생)이 대신 소비함(다른 행동 스킵)."""
+        if priest.elite_pattern_used:
             return False
 
+        if not getattr(priest, "elite_leader", False):
+            # ── 일반 사제: 약식 소생 (즉시) ──
+            dead_allies = self._revivable_allies(priest)
+            if not dead_allies:
+                return False
+            target = dead_allies[0]
+            self._note_fx_target("enemy", self._enemy_slot_of(target))
+            before = target.hp
+            target.hp = target.maxhp * PRIEST_QUICK_REVIVE_HP_RATIO
+            target._record_hit("heal", target.hp - before)
+            priest.elite_pattern_used = True
+            msgs.append(f"{priest.name} → {PRIEST_QUICK_REVIVE_SKILL}! {target.name}이(가) 되살아났다! "
+                        f"(HP {int(PRIEST_QUICK_REVIVE_HP_RATIO * 100)}%)")
+            self.logs.append(TurnLog(
+                turn=self.turn, actor="enemy", action="skill",
+                action_detail=PRIEST_QUICK_REVIVE_SKILL,
+                damage_dealt=-int(target.hp - before),
+                hp_after=target.hp, mp_after=priest.mp,
+            ))
+            self._sync_goblin_pack(msgs)    # 되살아난 것이 고블린이면 무리 수가 다시 는다
+            return True
+
         if priest.elite_phase == PRIEST_PHASE_IDLE:
-            dead_allies = [e for e in self.enemies if e is not priest and e.hp <= 0]
+            dead_allies = self._revivable_allies(priest)
             if not dead_allies:
                 return False
             priest.elite_phase = PRIEST_PHASE_PREPARING
@@ -225,7 +259,7 @@ class EliteActionsMixin:
             return True
 
         if priest.elite_phase == PRIEST_PHASE_PREPARING:
-            dead_allies = [e for e in self.enemies if e is not priest and e.hp <= 0]
+            dead_allies = self._revivable_allies(priest)
             if not dead_allies:
                 priest.elite_phase = PRIEST_PHASE_IDLE
                 return False
@@ -243,6 +277,7 @@ class EliteActionsMixin:
             priest.elite_pattern_used = True
             priest.elite_phase = PRIEST_PHASE_IDLE
             msgs.append(f"{priest.name}의 부활 의식이 완성되어 {target.name}이(가) 되살아났다!")
+            self._sync_goblin_pack(msgs)
             return True
 
         return False

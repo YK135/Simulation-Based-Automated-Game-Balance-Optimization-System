@@ -90,6 +90,8 @@ class PlayerActionsMixin:
         self._update_golem_groggy(target, is_basic_attack, msgs)
         self._check_elite_death(target, msgs)
         self._check_boss_phase(target, msgs)     # 중간 보스: HP 구간을 넘었으면 이 step 안에서 전환
+        if target.hp <= 0 and getattr(target, "enemy_type", "") == "고블린":
+            self._sync_goblin_pack(msgs)         # 고블린이 죽으면 남은 무리의 가산이 즉시 준다
 
         return hp_damage
 

@@ -35,6 +35,23 @@ from app.Map import (
 
 MAIN_STAT = {"전사": "stg", "마법사": "sp", "탱커": "arm", "도적": "stg"}
 
+# 플레이어 AI 모드 — 기본 balanced(튜닝 기준). Combat Content Brief 11-1은 패턴·역할 변화를
+# 잴 때 측정용 reactive와 나란히 보라고 하므로 AI_MODE=reactive로 같은 스윕을 한 번 더 돈다.
+AI_MODE = os.environ.get("AI_MODE", "balanced")
+
+# 2차 콘텐츠 발동 카운터 — 메시지 부분 문자열로 센다 (없는 판에서는 0으로 남는다).
+MESSAGE_KEYWORDS = {
+    "goblin_pack":    "무리 전술",          # 고블린 무리 전술 발동/갱신
+    "goblin_flee":    "달아났다",           # 겁쟁이 도주 성공
+    "goblin_flee_f":  "도주에 실패",        # 겁쟁이 도주 실패
+    "bat_wing":       "날갯소리",           # 박쥐 날갯소리(ATB 감소)
+    "bat_drain":      "피해를 흡수해",       # 박쥐 흡혈(일반·엘리트)
+    "priest_revive":  "되살아났다",         # 사제 소생(약식·의식)
+    "execute":        "처형",               # 강타 처형
+    "resonance":      "공명",               # 마법사 원소 공명
+    "bleed_vital":    "출혈 급소",          # 급소찌르기 출혈 보너스
+}
+
 _PLAYER_CACHE = {}
 def build_player(job, level):
     key = (job, level)
@@ -115,7 +132,7 @@ def run_one(job, level, btype, stats):
     bs = BattleSession(player_snap(p, start_items(level)),
                        enemies=esnaps, enemy_origins=origins, is_boss=is_boss)
     bs.battle_meta = {"source": "ai", "battle_type": btype}
-    ai = PlayerAI()
+    ai = PlayerAI(AI_MODE)
     msgs_all = []
     guard = 0
     while not bs.done and guard < 400:
@@ -168,6 +185,8 @@ def run_one(job, level, btype, stats):
         if "[전사 패시브]" in m: stats["warrior_heal"] += 1
         if "[탱커 패시브]" in m: stats["tanker_proc"] += 1
         if "[마법사 패시브]" in m: stats["mage_mp"] += 1
+        for key, kw in MESSAGE_KEYWORDS.items():
+            if kw in m: stats[key] += 1
 
     # 되갚기 피해 (TurnLog)
     for lg in bs.logs:

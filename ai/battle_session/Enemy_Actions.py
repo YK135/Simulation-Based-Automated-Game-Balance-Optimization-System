@@ -6,12 +6,16 @@ from random import random as _random
 
 from ai.battle import (
     apply_element_and_react, Buff, DamageCalc,
-    execute_skill, SKILL_META, TurnLog,
+    execute_skill, SKILL_META, TurnLog, _escape_chance,
 )
+from ai.battle.Skills import skill_atb_drain
 from ai.battle.EliteKit import (
     ASSASSIN_MARK_BONUS, ICE_SLIME_ARMOR_REDUCTION,
 )
 from ai.battle.BossKit import is_midboss
+from ai.battle.MonsterKit import (
+    is_goblin, goblin_pack_bonus, goblin_wants_to_flee, BAT_TYPE,
+)
 
 
 class EnemyActionsMixin:
@@ -60,6 +64,59 @@ class EnemyActionsMixin:
             is_crit=crit,
         ))
 
+    # ─────────────────────────────────────────────
+    # 고블린 — 무리 전술 / 겁쟁이 (ai/battle/MonsterKit.py 「일반 몬스터 정체성 규칙」)
+    # ─────────────────────────────────────────────
+
+    def _sync_goblin_pack(self, msgs: list | None = None) -> float:
+        """살아있는 고블린 수로 각 고블린의 pack_bonus를 다시 맞춘다.
+        전투 시작·고블린 사망/도주·소생 직후에 부른다 — "한 마리를 처치하면 즉시 사라짐".
+        msgs가 있으면 값이 바뀔 때만 한 줄 남긴다. 반환: 새 가산 비율."""
+        goblins = [e for e in self.enemies if is_goblin(e)]
+        if not goblins:
+            return 0.0
+        alive = [g for g in goblins if g.hp > 0]
+        bonus = goblin_pack_bonus(len(alive))
+        changed = any(abs(g.pack_bonus - (bonus if g.hp > 0 else 0.0)) > 1e-9 for g in goblins)
+        for g in goblins:
+            g.pack_bonus = bonus if g.hp > 0 else 0.0
+        if msgs is None:
+            return bonus
+        # 전투 시작(__init__)은 조용히 맞추므로, 첫 고블린 행동에서 한 번은 발동 중임을 알린다
+        announced = getattr(self, "_goblin_pack_announced", False)
+        if bonus > 0 and (changed or not announced):
+            self._goblin_pack_announced = True
+            msgs.append(f"🗡 고블린 무리 전술! 살아있는 고블린 {len(alive)}마리 — "
+                        f"각자 공격력 +{int(round(bonus * 100))}%")
+        elif bonus <= 0 and changed:
+            msgs.append("고블린 무리가 흩어졌다 — 무리 전술 해제")
+        return bonus
+
+    def _goblin_flee_attempt(self, goblin, msgs: list) -> bool:
+        """겁쟁이 — 조건이 맞으면 이번 행동으로 도주를 시도한다(전투당 1회, 성공·실패 모두 차례 소비).
+        반환 True면 이번 행동을 여기서 소비했다. 판정은 플레이어 도주와 같은 _escape_chance."""
+        if not goblin_wants_to_flee(goblin, self.enemies):
+            return False
+        goblin.flee_attempted = True
+        chance = _escape_chance(goblin.effective_spd(), self.player.effective_spd())
+        if _random() <= chance:
+            goblin.fled = True
+            goblin.hp = 0.0
+            goblin.reward_eligible = False      # 놓친 개체 — 경험치·골드 대상에서 빠진다 (_get_defeated_list)
+            msgs.append(f"{goblin.name} → 도주! 겁을 먹고 달아났다... (이 개체의 보상 소멸)")
+            self.logs.append(TurnLog(
+                turn=self.turn, actor="enemy", action="escape", action_detail="goblin_flee",
+                hp_after=self.player.hp, mp_after=goblin.mp, escaped=True,
+            ))
+            self._sync_goblin_pack(msgs)
+        else:
+            msgs.append(f"{goblin.name} → 도주 시도! 하지만 도주에 실패했다!")
+            self.logs.append(TurnLog(
+                turn=self.turn, actor="enemy", action="escape_failed", action_detail="goblin_flee",
+                hp_after=self.player.hp, mp_after=goblin.mp,
+            ))
+        return True
+
     def _single_enemy_action(self, enemy, msgs: list):
         """단일 적의 1회 행동 처리. ATB 큐가 적 1마리씩 액터 단위로 넘겨준다
         (다대일이어도 한 번에 한 마리) — Battlesession._step_core 참고."""
@@ -67,6 +124,16 @@ class EnemyActionsMixin:
         # enemy_type이 "사제"면 별도 로직 사용. 일반 EnemyAI 안 거침.
         # ⚠ return 제거 — 메서드 끝의 tick 처리(buff/debuff 1턴 감소)를
         #    사제도 동일하게 거쳐야 함 (Codex 지적 반영).
+        if is_goblin(enemy):
+            # 무리 전술은 행동 직전에 한 번 더 맞춘다(첫 행동에서 발동 안내). 겁쟁이 도주는
+            # 정상 행동보다 앞서며, 시도했으면(성공/실패 모두) 이번 행동은 그것으로 끝.
+            self._sync_goblin_pack(msgs)
+            if self._goblin_flee_attempt(enemy, msgs):
+                enemy.tick_buffs()
+                enemy.tick_debuffs()
+                self.player.tick_debuffs()
+                return
+
         if getattr(enemy, "enemy_type", "") == "사제":
             self._priest_action(enemy, msgs)
         elif getattr(enemy, "elite_leader", False) and enemy.enemy_type == "골렘":
@@ -117,8 +184,8 @@ class EnemyActionsMixin:
                     if tanker_msg:
                         msgs.append(tanker_msg)
 
-                    if getattr(enemy, "elite_leader", False) and enemy.enemy_type == "박쥐":
-                        self._elite_bat_lifesteal(enemy, dmg, msgs)
+                    if enemy.enemy_type == BAT_TYPE:
+                        self._bat_lifesteal(enemy, dmg, msgs)   # 일반 10%/5% · 엘리트 20%/10%
                 self.logs.append(TurnLog(
                     turn=self.turn,
                     actor="enemy",
@@ -165,10 +232,17 @@ class EnemyActionsMixin:
                         if tanker_msg:
                             msgs.append(tanker_msg)
 
-                        if is_elite and enemy.enemy_type == "박쥐":
-                            self._elite_bat_lifesteal(enemy, dmg, msgs)
+                        if enemy.enemy_type == BAT_TYPE:
+                            self._bat_lifesteal(enemy, dmg, msgs)
                         if is_assassin_finisher and dmg == 0:
                             self._clear_assassin_mark(msgs)
+                    elif skill_atb_drain(action.detail, enemy) > 0:
+                        # 날갯소리 — 피해 없이 플레이어 ATB를 깎는다 (Engine과 같은 skill_atb_drain 값)
+                        drain = skill_atb_drain(action.detail, enemy)
+                        before_atb = self.player_atb
+                        self.player_atb = max(0.0, self.player_atb - drain)
+                        msgs.append(f"{enemy.name} → {action.detail}! {self.player.name}의 ATB "
+                                    f"−{int(before_atb - self.player_atb)}")
                     elif debuff_name:
                         msgs.append(f"{enemy.name} → {action.detail} 사용!")
 
@@ -236,8 +310,8 @@ class EnemyActionsMixin:
           3) 그 외 → 홀리볼트 (마법 공격)
           4) MP 부족 → 기본 물리 공격
         """
-        # ── 엘리트 부활 의식 (최우선 — 정상 우선순위보다 앞섬) ──
-        if self._priest_elite_revival_check(priest, msgs):
+        # ── 부활 (최우선 — 정상 우선순위보다 앞섬): 엘리트는 2단계 의식, 일반은 약식 소생 ──
+        if self._priest_revival_check(priest, msgs):
             return
 
         # 자기 제외 살아있는 아군

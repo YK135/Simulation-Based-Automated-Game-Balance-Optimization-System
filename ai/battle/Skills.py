@@ -8,6 +8,7 @@ from .Damage import DamageCalc
 from .Elements import apply_element_and_react
 from .EliteKit import BAT_SCREAM_SPD_AMOUNT, BAT_SCREAM_TURNS
 from .BossKit import MIDBOSS_RIFT_MULT, MIDBOSS_RIFT_ARM_PEN, RIFT_STATUS
+from .MonsterKit import BAT_WING_SKILL, BAT_WING_ATB_DRAIN, BAT_WING_MP
 
 SKILL_META = {
     "약화1": {
@@ -281,6 +282,12 @@ MONSTER_SKILL_META = {
         "debuff_amount": (BAT_SCREAM_SPD_AMOUNT, BAT_SCREAM_SPD_AMOUNT),
         "debuff_turns": (BAT_SCREAM_TURNS, BAT_SCREAM_TURNS),
     },
+    # 일반 박쥐 전용 — 날갯소리 (ai/battle/MonsterKit.py). 피해 없이 플레이어 ATB를 깎는다.
+    #   type "atb_drain": execute_skill은 MP만 소모하고 0 피해를 돌려주며, ATB 자체는
+    #   세션(player_atb)/엔진(ATBSystem)이 들고 있으므로 호출부가 skill_atb_drain()으로 적용한다.
+    BAT_WING_SKILL: {
+        "mp": BAT_WING_MP, "type": "atb_drain", "atb_drain": BAT_WING_ATB_DRAIN,
+    },
     # 중간 보스 전용 — 「대지 균열」 (ai/battle/BossKit.py). 예고(관망) 뒤 다음 행동에 발동.
     #   arm_pen       : 플레이어 ARM을 이 비율만큼 무시 (0.5 = 절반 관통)
     #   on_hit_status : 명중(피해 > 0)했을 때 대상에게 거는 상태이상 — 전용 타입 rift
@@ -304,6 +311,12 @@ def _resolve_meta(skill_name: str, attacker: EntitySnapshot) -> dict | None:
         if meta:
             return meta
     return SKILL_META.get(skill_name)
+
+
+def skill_atb_drain(skill_name: str, attacker: EntitySnapshot) -> float:
+    """이 스킬이 대상의 ATB에서 깎는 양 (없으면 0). 실전 세션과 튜너 엔진이 같은 값을 읽는다."""
+    meta = _resolve_meta(skill_name, attacker) or {}
+    return float(meta.get("atb_drain", 0.0) or 0.0)
 
 
 # ────────────────────────────────────────────
@@ -476,6 +489,10 @@ def execute_skill(
         if getattr(attacker, "hit_ledger", None) is not None:   # 표시 전용 장부
             attacker._record_hit("heal", attacker.hp - before)
         return 0, False, "heal"
+
+    if stype == "atb_drain":
+        # 피해 없는 ATB 감소기(날갯소리) — MP는 위에서 소모됐고, ATB 적용은 호출부(skill_atb_drain).
+        return 0, False, skill_name
 
     if stype == "shield":
         new_shield = attacker.maxhp * meta["shield_mult"]

@@ -172,6 +172,10 @@ class BattleSession(
         # 큐 형식: [(actor_type, idx), ...]  actor_type: "player" | "enemy"
         self.action_queue: list = []
         self._build_round_queue()
+
+        # 고블린 무리 전술 — 시작 시점의 살아있는 고블린 수로 pack_bonus를 맞춘다
+        # (메시지는 첫 고블린 행동에서 — Enemy_Actions._sync_goblin_pack)
+        self._sync_goblin_pack()
  
         # ── 처치된 적 원본 리스트 (★ 신규) ──
         # 적이 죽을 때 self._origins[i] 를 여기에 추가.
@@ -403,6 +407,8 @@ class BattleSession(
                 msgs.append(f"{self._dot_label(enemy)} {enemy.name}을(를) "
                             f"{self._dot_name(enemy)} 데미지로 처치했다!")
                 self._check_elite_death(enemy, msgs)   # 분열/부활취소 — 직접피해 경로와 동일하게 처리
+                if getattr(enemy, "enemy_type", "") == "고블린":
+                    self._sync_goblin_pack(msgs)       # 지속 피해로 죽어도 무리 전술은 즉시 다시 센다
                 if not self._alive_enemies():
                     self.done = True
                     self.winner = "player"

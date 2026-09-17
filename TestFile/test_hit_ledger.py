@@ -90,7 +90,7 @@ bat.apply_status_effect(StatusEffect(effect_type="bleed", turns=3, name="출혈"
 before = s._hp_snapshot()
 msgs = []
 bat.tick_status_effects()                       # 출혈 틱 (피해, via=dot)
-s._elite_bat_lifesteal(bat, 200, msgs)          # 흡혈 (회복)
+s._bat_lifesteal(bat, 200, msgs)          # 흡혈 (회복)
 hits = s._hits_from_snapshot(before)
 dmg, heal = of(hits, "enemy", "damage", 0), of(hits, "enemy", "heal", 0)
 check("damage 이벤트가 남는다", len(dmg) == 1, f"hits={hits}")

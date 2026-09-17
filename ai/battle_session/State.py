@@ -15,6 +15,9 @@ from ai.battle.EliteKit import (
 from ai.battle.BossKit import (
     is_midboss, MIDBOSS_PHASE_LABEL, MIDBOSS_RIFT_INTERVAL,
 )
+from ai.battle.MonsterKit import (
+    is_goblin, GOBLIN_PACK_STG_CAP, GOBLIN_PACK_STG_PER_ALLY, PRIEST_TYPE, PRIEST_QUICK_REVIVE_SKILL,
+)
 from game.Inventory import Inventory
 
 # ── 엘리트 패턴 UI 배지 정의 (표시 전용) ───────────────────────
@@ -106,6 +109,26 @@ class StateMixin:
                 "label": "부활 의식",
                 "cur":   1, "max": 1,
                 "state": "armed",
+            })
+
+        # ── 일반 몬스터 정체성 (2장) — 값은 전부 세션이 이미 동기화한 필드를 읽기만 ──
+        # 고블린 무리 전술: 가산이 붙어 있는 동안만 (살아있는 고블린 수 / 최대 3마리 게이지)
+        if is_goblin(en) and getattr(en, "pack_bonus", 0.0) > 0:
+            alive_goblins = 1 + int(round(en.pack_bonus / GOBLIN_PACK_STG_PER_ALLY))
+            badges.append({
+                "kind":  "stack",
+                "label": f"무리 전술 +{int(round(en.pack_bonus * 100))}%",
+                "cur":   alive_goblins,
+                "max":   1 + int(round(GOBLIN_PACK_STG_CAP / GOBLIN_PACK_STG_PER_ALLY)),
+                "state": "charging",
+            })
+        # 일반 사제 약식 소생: 아직 안 썼으면 "들고 있다"를 보여준다 (쓰면 사라진다)
+        if not leader and et == PRIEST_TYPE and not getattr(en, "elite_pattern_used", False):
+            badges.append({
+                "kind":  "telegraph",
+                "label": PRIEST_QUICK_REVIVE_SKILL,
+                "cur":   1, "max": 1,
+                "state": "idle",
             })
 
         # 중간 보스 — 페이즈(1/2/3)와 「대지 균열」 예고 카운터 (ai/battle/BossKit.py 필드를 읽기만)
@@ -554,6 +577,7 @@ class StateMixin:
                 "name":             en.name,
                 "lv":               en.lv,
                 "alive":            en.hp > 0,
+                "fled":             bool(getattr(en, "fled", False)),   # 달아난 개체 — 죽은 것과 다르게 그린다
                 "hp":               max(0.0, round(en.hp, 1)),
                 "maxhp":            round(en.maxhp, 1),
                 "mp":               round(en.mp, 1),

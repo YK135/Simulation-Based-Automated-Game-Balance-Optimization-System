@@ -364,7 +364,7 @@ async function playBattleSequence(action, bs) {
         let deadWait = SEQ_TIMING.ENEMY_DEAD;
         if (typeof setDeadState === 'function') {
             (bs.enemies || []).forEach((en, i) => {
-                if (en && !en.alive) {
+                if (en && !en.alive && !en.fled) {      // 달아난 적은 사망 연출 대상이 아니다
                     setDeadState(`enemy_battle:${i}`);
                     deadWait = Math.max(deadWait, _deathAnimDuration('enemy_battle', en.name));
                 }
