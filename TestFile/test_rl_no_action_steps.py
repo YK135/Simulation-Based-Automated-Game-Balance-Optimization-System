@@ -85,7 +85,7 @@ def main():
 
     # [3] DoT 사망 -------------------------------------------------------
     print("\n[3] 지속 피해로 행동 전 사망")
-    for etype, label in (("ignite", "점화"), ("bleed", "출혈")):
+    for etype, label in (("ignite", "점화"), ("bleed", "출혈"), ("rift", "균열")):
         p = player(hp=1)
         p.hp = 1.0
         p.status_effects.append(StatusEffect(effect_type=etype, turns=2, name=label))

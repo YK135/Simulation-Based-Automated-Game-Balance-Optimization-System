@@ -22,6 +22,7 @@ function statusEmojiList(entity) {
         if (e.type === 'ignite')         emojis.push('🔥');
         else if (e.type === 'frostbite') emojis.push('❄');
         else if (e.type === 'paralyze')  emojis.push('⚡');
+        else if (e.type === 'rift')      emojis.push('🌑');
     });
 
     // 일반 디버프/버프
@@ -40,11 +41,18 @@ function getStatusIconKeys(entity) {
         if (e.type === 'ignite')         keys.push('ignite');
         else if (e.type === 'frostbite') keys.push('frostbite');
         else if (e.type === 'paralyze')  keys.push('paralyze');
+        else if (e.type === 'rift')      keys.push('rift');
     });
     if ((entity.debuffs || []).length > 0) keys.push('debuff');
     if ((entity.buffs   || []).length > 0) keys.push('buff');
     return [...new Set(keys)];
 }
+
+// STATUS_ICONS(State.js)에 아직 항목이 없는 상태이상의 이모지 폴백 —
+// 이미지 에셋이 들어오면 State.js 쪽 표에 넣고 여기는 그대로 둬도 된다(표가 우선).
+const _STATUS_ICON_FALLBACK = {
+    rift: { icon: '🌑' },   // 중간 보스 「균열」 (ai/battle/Entity.py rift)
+};
 
 function renderNameWithStatus(el, entity) {
     if (!el) return;
@@ -58,7 +66,8 @@ function renderNameWithStatus(el, entity) {
     const iconsWrap = document.createElement('span');
     iconsWrap.className = 'name-status-icons';
     getStatusIconKeys(entity).forEach(key => {
-        const meta = (typeof STATUS_ICONS !== 'undefined' ? STATUS_ICONS[key] : null) || { icon: '?' };
+        const meta = (typeof STATUS_ICONS !== 'undefined' ? STATUS_ICONS[key] : null)
+            || _STATUS_ICON_FALLBACK[key] || { icon: '?' };
         if (typeof renderIconWithFallback === 'function') {
             iconsWrap.appendChild(renderIconWithFallback(meta, 'status-icon'));
         } else {

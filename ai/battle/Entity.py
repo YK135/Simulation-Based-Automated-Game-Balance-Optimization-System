@@ -41,11 +41,15 @@ class Buff:
 @dataclass
 class StatusEffect:
     """
-    상태이상 (원소 + 도적 출혈).
-    effect_type: "ignite" | "frostbite" | "paralyze" | "bleed"
+    상태이상 (원소 + 도적 출혈 + 보스 균열).
+    effect_type: "ignite" | "frostbite" | "paralyze" | "bleed" | "rift"
     turns   : 남은 지속 행동 수
-    dot_rate: 점화 데미지 비율 (기본 maxhp 4%)
+    dot_rate: 점화/균열 데미지 비율 (기본 maxhp 4%)
               bleed는 dot_rate 대신 매턴 uniform(0.04, 0.07) 랜덤 적용
+    rift    : 중간 보스 「대지 균열」의 지속 피해. 전용 타입인 이유 —
+              apply_status_effect()가 effect_type으로 동일 효과를 판정하므로
+              ignite를 재사용하면 기존 화상과 하나로 합쳐진다
+              (TestFile/telegraph_envelope.py 부록 D-2/D-3)
     fail_prob: 마비 행동 실패 확률 (기본 40%)
     """
     effect_type: str
@@ -366,6 +370,14 @@ class EntitySnapshot:
                 self._stamp_last_hit("bleed", via="dot")  # UI 숫자 색 (표시 전용)
                 self._record_hit("damage", before - self.hp, via="dot")
                 msgs.append(f"🩸 [{self.name}] 출혈 -{dmg} HP")
+            elif eff.effect_type == "rift":
+                # 균열 — 점화와 같은 고정 비율 DoT. 물리 공격의 여파라 숫자 색은 physical.
+                dmg = max(1, int(self.maxhp * eff.dot_rate))
+                before = self.hp
+                self.hp = max(0.0, self.hp - dmg)
+                self._stamp_last_hit("physical", via="dot")  # UI 숫자 색 (표시 전용)
+                self._record_hit("damage", before - self.hp, via="dot")
+                msgs.append(f"🌑 [{self.name}] 균열 -{dmg} HP")
             elif eff.effect_type == "frostbite":
                 msgs.append(f"❄ [{self.name}] 동상 — SPD 50% ({eff.turns}T 남음)")
             elif eff.effect_type == "paralyze":

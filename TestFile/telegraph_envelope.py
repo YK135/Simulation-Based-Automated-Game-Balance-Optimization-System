@@ -1,8 +1,10 @@
 """telegraph_envelope.py — 「대지 균열」 한 방의 기준 피해와 실제 분포 측정.
 
-전제 코드: HEAD 9ef20a6. 이 스크립트가 읽는 4개 파일은 모두 HEAD와 동일(작업트리 수정 없음):
-  ai/battle/Damage.py 01e579e5  game/Lv.py 86240466
-  game/Player_Class.py b21aa061  game/Enemy_Class.py 51a83f94
+전제 코드: 본표·부록 A~C의 계산은 9ef20a6 기준이며, 그 뒤의 커밋은 이 4개 파일의
+계산 경로를 바꾸지 않았다(Damage.py는 표시 전용 피격 장부 기록 줄만 추가):
+  ai/battle/Damage.py  game/Lv.py  game/Player_Class.py  game/Enemy_Class.py
+부록 D는 ai/battle/Entity.py의 상태이상 처리를 읽는다 — 전용 타입 "rift"의 tick 분기가
+들어간 뒤(11-1 3-1)부터 D-3이 실제 피해를 보고한다.
 실행:  python3 telegraph_envelope.py
 출력:  telegraph_envelope.out  (표준출력과 동일 내용)
 """
@@ -219,8 +221,8 @@ def main():
     names = ", ".join(f"{x.name}({x.effect_type},{x.turns}T)" for x in e.status_effects)
     lines.append(f"      화상 + 균열(rift)      : 효과 {len(e.status_effects)}개 — {names}")
     d = drain(e, 5)
-    lines.append(f"      단, tick_status_effects()에 'rift' 분기가 없어 피해가 들어가지 않음: 총 {d:>5.0f}")
-    lines.append("      -> 전용 타입을 쓰려면 tick 분기 1개 + 표시용 element 태그가 함께 필요하다.")
+    lines.append(f"      틱 5회 동안 총 피해 {d:>5.0f} = 화상 3틱(120) + 균열 2틱(80) — 서로 독립적으로 들어간다")
+    lines.append("      -> 전용 타입 'rift'는 tick_status_effects()에 분기가 있어 화상과 따로 피해를 준다(3-1 구현).")
 
     txt = "\n".join(lines)
     print(txt)
