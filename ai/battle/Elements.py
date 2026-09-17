@@ -5,6 +5,7 @@ from random import randint
 
 from .Entity import Debuff, StatusEffect
 from .Relics import frost_mark_mult, frost_mark_on_shatter
+from .BossKit import finalboss_element_resist
 from .EliteKit import (
     ICE_SLIME_ARMOR_REDUCTION, ICE_SLIME_BREAK_SPARM_AMOUNT, ICE_SLIME_BREAK_TURNS,
     LIGHTNING_SLIME_OVERLOAD_SPD_AMOUNT, LIGHTNING_SLIME_OVERLOAD_SPD_TURNS,
@@ -210,6 +211,12 @@ def apply_element_and_react(
 
     status_bonus = 0
     reacted = ""          # UI 색 구분용 — 이번 타격에서 실제로 터진 반응명
+
+    # 최종 보스 페이즈 1: 붙어 있는 원소와 같은 원소 공격은 −40% (원소 슬라임 면역의 약화판)
+    er = finalboss_element_resist(defender, attack_element)
+    if er < 1.0 and base_damage > 0:
+        base_damage = int(base_damage * er)
+        messages.append(f"{defender.name}의 {attack_element} 갑주가 같은 원소를 흘려낸다! (피해 −{int(round((1 - er) * 100))}%)")
 
     if len(q) == 0:
         defender.element_queue.append(attack_element)

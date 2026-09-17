@@ -432,6 +432,11 @@ MONSTER_SKILL_META = {
         "mp": 0, "type": "physical", "mult": MIDBOSS_RIFT_MULT[1], "hits": 1,
         "arm_pen": MIDBOSS_RIFT_ARM_PEN, "on_hit_status": RIFT_STATUS,
     },
+    # 최종 보스 전용 — 「심연의 손아귀」 (BossKit finalboss_*). 예고 뒤 다음 행동: STG 2.5배 단일 타격.
+    #   플레이어 ATB 초기화는 세션(Boss_Actions)이 명중 시 처리한다.
+    "심연의 손아귀": {
+        "mp": 0, "type": "physical", "mult": 2.5, "hits": 1,
+    },
     "대지 균열_강화": {
         "mp": 0, "type": "physical", "mult": MIDBOSS_RIFT_MULT[2], "hits": 1,
         "arm_pen": MIDBOSS_RIFT_ARM_PEN, "on_hit_status": RIFT_STATUS,

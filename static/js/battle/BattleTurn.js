@@ -133,7 +133,9 @@ function refreshBattleBackground(bs) {
                             'battle-bg-ch2-depths');
     // ★ 보스전 레이아웃 — 항상 솔로 전투라 슬롯 넓이만 키움(BattleStage.css/
     //   BattleCombatant.css의 .is-boss). 배경 클래스와 별개로 매번 갱신.
-    stage.classList.toggle('is-boss', !!bs.is_boss);
+    // 보스 전용 3칸 배치는 적이 한 명일 때만 — 최종 보스가 그림자를 부르면(적 3) 일반 5칸 배치로 돌아간다
+    //   (.is-boss는 4·5번째 칸을 숨기므로 그대로 두면 그림자가 화면에서 사라진다 — CLAUDE.md 참고)
+    stage.classList.toggle('is-boss', !!bs.is_boss && (bs.enemies || []).length <= 1);
 
     const layer = bs.current_layer || 0;
     const turn = state.exploreTurn || layer || 0;

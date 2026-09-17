@@ -181,6 +181,11 @@ class BattleSession(
 
         # 도적 「패 고치기」를 배웠으면 다음 공격 주사위를 미리 보여준다 (Skills.preview_next_dice)
         preview_next_dice(self.player)
+
+        # 최종 보스 — 첫 타격 전에 페이즈 1(원소 순환: 화염 부착)을 세워 둔다
+        for e in self.enemies:
+            if getattr(e, "enemy_type", "") == "최종 보스":
+                self._check_boss_phase(e, [])
  
         # ── 처치된 적 원본 리스트 (★ 신규) ──
         # 적이 죽을 때 self._origins[i] 를 여기에 추가.
@@ -417,6 +422,7 @@ class BattleSession(
                 msgs.append(f"{self._dot_label(enemy)} {enemy.name}을(를) "
                             f"{self._dot_name(enemy)} 데미지로 처치했다!")
                 self._check_elite_death(enemy, msgs)   # 분열/부활취소 — 직접피해 경로와 동일하게 처리
+                self._check_boss_phase(enemy, msgs)    # 최종 보스·그림자: 경감 해제/그림자 정리 — 직접피해 경로와 동일
                 if getattr(enemy, "enemy_type", "") == "고블린":
                     self._sync_goblin_pack(msgs)       # 지속 피해로 죽어도 무리 전술은 즉시 다시 센다
                 if not self._alive_enemies():

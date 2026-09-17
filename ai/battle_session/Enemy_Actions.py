@@ -12,7 +12,7 @@ from ai.battle.Skills import skill_atb_drain, frost_ward_retaliate, _resolve_met
 from ai.battle.EliteKit import (
     ASSASSIN_MARK_BONUS, ICE_SLIME_ARMOR_REDUCTION,
 )
-from ai.battle.BossKit import is_midboss
+from ai.battle.BossKit import is_midboss, is_finalboss
 from ai.battle.MonsterKit import (
     is_goblin, goblin_pack_bonus, goblin_wants_to_flee, BAT_TYPE,
 )
@@ -178,6 +178,9 @@ class EnemyActionsMixin:
                 # None이면 예고/균열을 이미 처리·로그한 것이고, 나머지 행동
                 # (일반공격/몸통박치기2/관망)은 아래 공통 경로를 그대로 탄다.
                 action = self._midboss_pre_action(enemy, msgs)
+            elif is_finalboss(enemy):
+                # 최종 보스 — 4페이즈(원소 순환·소환·잠식·종언)는 Boss_Actions가 결정·실행한다
+                action = self._finalboss_pre_action(enemy, msgs)
             else:
                 # ── 엘리트 사전 처리 (버프/스택/즉시효과) — 결정 전에 실행 ──
                 if getattr(enemy, "elite_leader", False):
