@@ -26,7 +26,11 @@ from core.Balance_Hook import BalanceHook
 from game.Player_Class import create_player_by_job
 from game.Map import NORMAL_LAYERS
 from game.Enemy_Class import Make_MidBoss, Make_FinalBoss
-from game.Lv import LV_, Allocate_Stat_Points, auto_resolve_skill_choices
+from game.Lv import LV_, Allocate_Stat_Points
+try:
+    from game.Lv import auto_resolve_skill_choices      # 2차 8번 이후 트리
+except ImportError:                                      # 2택 1이 없던 트리에 대고 돌릴 때
+    auto_resolve_skill_choices = None
 import random as _random_mod
 from app.Map import (
     _make_enemies, _make_elite_encounter,
@@ -41,6 +45,12 @@ MAIN_STAT = {"전사": "stg", "마법사": "sp", "탱커": "arm", "도적": "stg
 AI_MODE = os.environ.get("AI_MODE", "balanced")
 # 스킬 2택 1 정책 — new(신규 스킬) / old(기존 스킬) / random
 SKILL_PICK = os.environ.get("SKILL_PICK", "new")
+# 포션을 세션에도 넘길지 — 1(기본): 실제 게임(app/Battle.py _start_battle)처럼 BattleSession(items=…)에 넘기고
+#   매 step AI 스냅샷(player.items)을 세션 목록과 맞춘다.
+# 0: 2026-09-17 이전 방식 — 포션이 스냅샷에만 있어 AI가 고르면 세션이 "해당 아이템이 없습니다"로
+#   차례를 버린다(HP가 낮을 때마다 반복). Combat Content Brief 2차 시리즈(3~8번) 스윕은 이 방식으로 쟀다 —
+#   그 결과를 재현할 때만 SESSION_ITEMS=0.
+SESSION_ITEMS = os.environ.get("SESSION_ITEMS", "1") == "1"
 
 
 def pick_target(bs):
@@ -82,7 +92,8 @@ def build_player(job, level):
         if pts > 0:
             Allocate_Stat_Points(p, {MAIN_STAT[job]: pts})
         # 스킬 2택 1(2차 8번) — 시뮬은 SKILL_PICK 정책으로 확정 (random은 (직업,레벨)마다 고정 시드)
-        auto_resolve_skill_choices(p, SKILL_PICK, rng=_random_mod.Random(f"{job}|{level}"))
+        if auto_resolve_skill_choices is not None:
+            auto_resolve_skill_choices(p, SKILL_PICK, rng=_random_mod.Random(f"{job}|{level}"))
     _PLAYER_CACHE[key] = p
     return p
 
@@ -148,7 +159,8 @@ def run_one(job, level, btype, stats):
     p = build_player(job, level)
     esnaps, origins, is_boss = build_battle(btype, level, job)
     bs = BattleSession(player_snap(p, start_items(level)),
-                       enemies=esnaps, enemy_origins=origins, is_boss=is_boss)
+                       enemies=esnaps, enemy_origins=origins, is_boss=is_boss,
+                       items=start_items(level) if SESSION_ITEMS else None)
     bs.battle_meta = {"source": "ai", "battle_type": btype}
     ai = PlayerAI(AI_MODE)
     msgs_all = []
@@ -167,6 +179,8 @@ def run_one(job, level, btype, stats):
             if ti is not None and a.action_type in ("attack", "skill"):
                 s = f"attack:{ti}" if a.action_type == "attack" else f"{s}:{ti}"
             r = bs.step(s)
+            if SESSION_ITEMS:
+                bs.player.items = list(bs.items)    # 쓴 포션을 AI 스냅샷에서도 지운다
         else:
             r = bs.step("auto")
         msgs_all.extend(r.get("messages", []))
