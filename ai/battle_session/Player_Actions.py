@@ -5,7 +5,7 @@ from __future__ import annotations
 from random import randint, random as _random
 
 from ai.battle import (
-    apply_element_and_react, ITEM_META, Debuff,
+    apply_element_and_react, ITEM_META, Debuff, roll_multi_hit_count,
     DamageCalc, execute_skill, SKILL_META, TurnLog,
     execute_single_hit, consume_skill_mp,
 )
@@ -143,14 +143,22 @@ class PlayerActionsMixin:
             ))
             return "ok"
 
-        hits = meta.get("hits", 1)
-        msgs.append(f"{skill_name}!")
+        # 타수: 고정(hits) 또는 multi_hit의 확률 굴림.
+        #   굴림식은 ai/battle/Skills.py의 roll_multi_hit_count 하나만 쓴다.
+        is_multi_hit = meta.get("type", "") == "multi_hit"
+        hits = roll_multi_hit_count(meta, self.player) if is_multi_hit else meta.get("hits", 1)
+        dmg_decay = meta.get("dmg_decay", 1.0) if is_multi_hit else 1.0
+        # ★ "{스킬명}!"이 아니라 "{스킬명} 사용!" — 프론트 분류기(BattleSequencer의
+        #   _classifyMessages)가 '사용'을 플레이어 행동 신호로 쓴다. 전엔 이 줄이
+        #   misc로 떨어져 전투 로그 맨 끝에 뒤늦게 찍혔다(타격 줄보다 나중에).
+        msgs.append(f"{skill_name} 사용!" + (f" ({hits}타!)" if is_multi_hit else ""))
 
         total_hp_dmg = 0
         total_shield_dmg = 0
         attempted = 0
         retargeted = False
         bleed_done = False
+        dice_atb_done = False
         hits_detail = []
         cur = target
 
@@ -164,7 +172,12 @@ class PlayerActionsMixin:
                 retargeted = True
 
             attempted += 1
-            raw, dodge, crit = execute_single_hit(skill_name, self.player, cur)
+            # multi_hit은 execute_skill의 한 방 계산과 수치를 맞춘다 —
+            #   총 타수(유령 회피 페널티용) 전달 + 타별 감쇠 dmg_decay**(hi-1).
+            raw, dodge, crit = execute_single_hit(
+                skill_name, self.player, cur, hit_count=hits if is_multi_hit else 1)
+            if is_multi_hit and not dodge:
+                raw = int(raw * (dmg_decay ** (hi - 1)))
 
             if dodge:
                 msgs.append(f"{hi}타: {cur.name}이(가) 회피했다!")
@@ -177,12 +190,20 @@ class PlayerActionsMixin:
             # 집중 물약 — 각 타에 동일 배율
             if self._next_skill_bonus > 1.0 and dmg > 0:
                 dmg = int(dmg * self._next_skill_bonus)
-            # 도적 주사위 — 배율/강제크리 각 타 적용, 출혈은 스킬 전체 1회
+            # 도적 주사위 — 배율/강제크리 각 타 적용, 출혈/ATB 보너스는 스킬 전체 1회
             if dice_info:
                 dmg = int(round(dmg * dice_info["mult"]))
                 if dice_info["force_crit"] and not crit:
                     dmg = int(dmg * 1.5)
                     crit = True
+                # ★ 주사위 6의 ATB +20은 "공격 1회당 1번" 보상이다 — 단일 타격
+                #   경로(_apply_rogue_dice)와 같은 값이 나오게 첫 명중에서만 준다.
+                #   (타마다 주면 연속찌르기 4타에 ATB +80이 되어 도적 턴이 폭주)
+                if dice_info["force_crit"] and not dice_atb_done:
+                    msgs.append("💥 주사위 6 — 치명타 확정!")
+                    self.player_atb += 20.0
+                    msgs.append("⚡ ATB +20!")
+                    dice_atb_done = True
                 if dice_info["bleed"] and not bleed_done and hasattr(cur, "apply_status_effect"):
                     from ai.battle.Entity import StatusEffect
                     cur.apply_status_effect(StatusEffect(
@@ -492,8 +513,15 @@ class PlayerActionsMixin:
             dice_info = (self._roll_rogue_dice(msgs)
                          if _stype_for_dice in self._ATTACK_SKILL_TYPES else None)
 
-            # ── 연속공격류: hits>1 physical/magical은 개별 타격 판정 경로 ──
-            if meta.get("hits", 1) > 1 and _stype_for_dice in ("physical", "magical"):
+            # ── 연속 타격류는 타격별 판정 경로 ──
+            #   · hits>1 physical/magical : 연속공격1/2 (고정 타수)
+            #   · multi_hit               : 연속찌르기 (1~4타 확률 굴림)
+            #   전엔 multi_hit이 이 분기를 안 타서 execute_skill이 합계 한 개만
+            #   돌려줬고, 로그가 "연속찌르기 사용 → 21 데미지" 한 줄로만 나왔다
+            #   (연속공격은 "1타/2타/총합"). 1타에 적을 죽였을 때 남은 타를
+            #   다른 적에게 넘기는 재타겟도 이 경로에만 있다.
+            if _stype_for_dice == "multi_hit" or (
+                    meta.get("hits", 1) > 1 and _stype_for_dice in ("physical", "magical")):
                 return self._exec_multi_hit_skill(skill_name, meta, target, msgs, dice_info)
 
             dmg, mp_lack, debuff_name = execute_skill(

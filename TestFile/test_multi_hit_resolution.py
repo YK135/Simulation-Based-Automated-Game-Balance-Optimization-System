@@ -10,6 +10,12 @@ test_multi_hit_resolution.py — 연속공격류 개별 타격 판정 회귀 테
   · MP 1회 소모 / skills_used +1 / 전사 카운트 = 수행 타격 수
   · multi_shield 스킬 1회당 1번
   · RL 로그 multi_hit 상세 구조
+  · 연속찌르기(multi_hit 타입)도 같은 타격별 경로 — 예전엔 execute_skill이
+    합계 한 개만 돌려줘서 로그가 "연속찌르기 사용 → N 데미지" 한 줄이었다
+  · 타별 감쇠(dmg_decay 0.68) / 주사위 6의 ATB +20은 스킬당 1회
+  · 메시지가 프론트 분류기(BattleSequencer._classifyMessages)가 읽는 형식인지
+    — "사용" 선언 + "N타: ...에게 N 피해" + "총 N 피해". 이 형식이 깨지면
+    데미지 숫자 팝업/피격 모션이 조용히 사라진다(실제로 발생했던 버그)
 
 실행: python3 test_multi_hit_resolution.py
 """
@@ -162,6 +168,87 @@ def main():
     bs9.step("skill:연속공격1")
     check("1v2 사용 → 실드 60 (1번만, 타별 아님)",
           abs(bs9.player.shield - 60) < 1.0, f"shield={bs9.player.shield}")
+
+    print("\n[9] 연속찌르기(multi_hit)도 타격별 경로를 탄다")
+    # ★ 예전엔 multi_hit 타입이 이 경로를 안 타서 execute_skill의 합계 한 개만
+    #   나왔다 — 로그가 "연속찌르기 사용 → N 데미지" 한 줄(전사는 타별).
+    # ★ Player_Actions가 `from ai.battle import roll_multi_hit_count`로 이름을
+    #   바인딩해 두므로, ai.battle.Skills 쪽을 갈아도 안 먹는다 — 호출부 모듈의
+    #   이름을 패치해야 한다.
+    import ai.battle_session.Player_Actions as PA
+    p10 = mk_player(job="도적", skills=["연속찌르기"])
+    # ★ luc=0 — 크리(luc×0.5%)가 한 타에만 터지면 감쇠 단조성이 깨져
+    #   [10]이 ~14% 확률로 간헐 실패한다. multi_hit은 skill_mult 1.0 고정이고
+    #   luc_bonus도 없어서 luc을 0으로 둬도 감쇠 검증에 영향이 없다.
+    p10.luc = 0
+    bs10 = BattleSession(p10, enemies=[mk_enemy()])
+    bs10.player.luc = 0
+    orig_roll = PA.roll_multi_hit_count
+    PA.roll_multi_hit_count = lambda meta, atk: 3          # 타수 고정
+    try:
+        r10 = bs10.step("skill:연속찌르기")
+    finally:
+        PA.roll_multi_hit_count = orig_roll
+    lines10 = hit_lines(r10["messages"])
+    check("3타 개별 로그", len(lines10) == 3, str(lines10))
+    check("선언에 타수 표기", any("연속찌르기 사용!" in m and "(3타!)" in m
+                                 for m in r10["messages"]),
+          str([m for m in r10["messages"] if "연속찌르기" in m]))
+    check("총합 메시지 존재", any(m.startswith("총 ") for m in r10["messages"]))
+    check("MP 1회만 소모 (300-14=286)", abs(bs10.player.mp - 286) < 0.5,
+          f"mp={bs10.player.mp}")
+    check("RL 로그 multi_hit 상세 기록",
+          bs10.rl_log and bs10.rl_log[0]["result"].get("multi_hit") is not None)
+
+    print("\n[10] 타별 감쇠 (dmg_decay 0.68)")
+    mh10 = bs10.rl_log[0]["result"]["multi_hit"]["hits"]
+    dmgs = [h["damage"] for h in mh10 if not h["dodge"]]
+    check("타가 갈수록 피해 감소", len(dmgs) == 3 and dmgs[0] > dmgs[1] > dmgs[2],
+          str(dmgs))
+    # 0.68^1 = 0.68, 0.68^2 = 0.4624 — 난수 폭(0.9~1.1)을 감안해 넉넉히 검사
+    check("2타/1타 비율이 0.68 근방", 0.50 < dmgs[1] / dmgs[0] < 0.90,
+          f"ratio={dmgs[1] / dmgs[0]:.3f} dmgs={dmgs}")
+    check("3타/1타 비율이 0.46 근방", 0.33 < dmgs[2] / dmgs[0] < 0.65,
+          f"ratio={dmgs[2] / dmgs[0]:.3f} dmgs={dmgs}")
+
+    print("\n[11] 주사위 6의 ATB +20은 스킬당 1회 (타별 아님)")
+    # 타마다 주면 4타에 ATB +80이 되어 도적 턴이 폭주한다.
+    p11 = mk_player(job="도적", skills=["연속찌르기"])
+    bs11 = BattleSession(p11, enemies=[mk_enemy()])
+    orig_dice = PA.PlayerActionsMixin._roll_rogue_dice
+    PA.PlayerActionsMixin._roll_rogue_dice = lambda self, msgs: {
+        "mult": 1.0, "force_crit": True, "bleed": False, "value": 6}
+    PA.roll_multi_hit_count = lambda meta, atk: 4
+    atb_before = bs11.player_atb
+    try:
+        r11 = bs11.step("skill:연속찌르기")
+    finally:
+        PA.PlayerActionsMixin._roll_rogue_dice = orig_dice
+        PA.roll_multi_hit_count = orig_roll
+    gained = bs11.player_atb - atb_before
+    check("4타여도 ATB 보너스 메시지 1번",
+          sum(1 for m in r11["messages"] if "ATB +20" in m) == 1,
+          str([m for m in r11["messages"] if "ATB" in m]))
+    check("치명타 확정 메시지도 1번",
+          sum(1 for m in r11["messages"] if "치명타 확정" in m) == 1,
+          str([m for m in r11["messages"] if "치명타 확정" in m]))
+    check("4타 전부 치명타 처리", len(hit_lines(r11["messages"])) == 4
+          and all("치명타" in m for m in hit_lines(r11["messages"])),
+          str(hit_lines(r11["messages"])))
+
+    print("\n[12] 프론트 분류기가 읽는 메시지 형식 유지")
+    # BattleSequencer._classifyMessages가 damage 그룹으로 넣는 조건:
+    #   "에게" + ("데미지" 또는 "피해")  /  "총 ...피해"
+    # player 그룹 조건: "사용" 포함. 둘 중 하나라도 어긋나면 팝업이 사라진다.
+    for label, msgs in (("연속공격1", BattleSession(mk_player(), enemies=[mk_enemy()])
+                                        .step("skill:연속공격1")["messages"]),
+                        ("연속찌르기", r10["messages"])):
+        hits_ok = [m for m in msgs if "에게" in m and ("피해" in m or "데미지" in m)]
+        total_ok = [m for m in msgs if m.startswith("총 ") and "피해" in m]
+        decl_ok = [m for m in msgs if "사용" in m]
+        check(f"{label}: 타격 줄이 damage 조건 충족", len(hits_ok) >= 1, str(msgs))
+        check(f"{label}: 합계 줄이 damage 조건 충족", len(total_ok) == 1, str(msgs))
+        check(f"{label}: 선언 줄이 player 조건('사용') 충족", len(decl_ok) >= 1, str(msgs))
 
     print("\n" + "=" * 56)
     print(f" 결과: {PASS} 통과 / {FAIL} 실패")

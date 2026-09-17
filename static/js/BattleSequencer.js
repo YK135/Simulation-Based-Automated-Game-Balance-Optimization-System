@@ -141,8 +141,15 @@ function _classifyMessages(messages, bs) {
         }
         if (isEnemyHP) continue;
 
-        // AoE 후속 데미지 ("└ XXX에게 N 데미지")
-        if (m.trim().startsWith('└') || m.includes('에게') && m.includes('데미지')) {
+        // 피해 결과 줄 — "└ XXX에게 N 데미지"(AoE 후속),
+        //   "N타: XXX에게 N 피해!"(연속공격/연속찌르기), "XXX에게 추가 N 피해!"(원소 반응)
+        //   ★ 예전엔 '데미지'만 봐서 '피해' 표기를 쓰는 타격별 경로의 메시지가
+        //     전부 misc로 떨어졌다 — groups.damage가 비면 시퀀서의 "데미지 적용 +
+        //     hurt" 단계 자체가 건너뛰어져서, 전사 연속공격은 데미지 숫자 팝업·
+        //     피격 모션·히트 플래시가 하나도 안 나왔다(무성 버그).
+        if (m.trim().startsWith('└')
+            || (m.includes('에게') && (m.includes('데미지') || m.includes('피해')))
+            || /^총 .*(피해|데미지)/.test(m.trim())) {     // 연속 타격 합계 줄
             groups.damage.push(m);
             continue;
         }
@@ -176,7 +183,7 @@ function _msgCls(msg) {
     if (msg.includes('회피') || msg.includes('MISS')) return 'system';
     if (msg.includes('회복') || msg.includes('HP +')) return 'heal';
     if (msg.includes('사용') || msg.includes('스킬') || msg.includes('패시브')) return 'skill';
-    if (msg.includes('데미지')) return 'dmg';
+    if (msg.includes('데미지') || msg.includes('피해')) return 'dmg';   // 타격별 경로는 '피해' 표기
     if (msg.includes('처치') || msg.includes('VICTORY')) return 'crit';
     return '';
 }

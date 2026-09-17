@@ -319,21 +319,66 @@ def consume_skill_mp(skill_name: str, attacker: EntitySnapshot) -> bool:
     return False
 
 
+def roll_multi_hit_count(meta: dict, attacker: EntitySnapshot) -> int:
+    """multi_hit(연속찌르기류)의 이번 시전 타수를 굴린다.
+    1타는 확정이고, 2타부터는 매 타마다 luc 기반 확률로 이어진다(실패 시 즉시 중단).
+    ★ execute_skill의 multi_hit 분기와 ai/battle_session/Player_Actions.py의
+      타격별 경로가 이 함수 하나를 공유한다 — 두 곳에 확률식을 두면
+      "시뮬과 실전의 타수 분포가 다르다"는 형태로 조용히 어긋난다.
+    """
+    base_prob  = meta["base_prob"]
+    luc_mult   = meta["luc_mult"]
+    prob_decay = meta["prob_decay"]
+    max_hits   = meta["max_hits"]
+
+    hit_count = 1
+    for hit_index in range(1, max_hits):
+        prob = max(base_prob, min(85, attacker.luc * luc_mult - hit_index * prob_decay))
+        if randint(1, 100) <= prob:
+            hit_count += 1
+        else:
+            break
+    return hit_count
+
+
 def execute_single_hit(
     skill_name: str,
     attacker: EntitySnapshot,
     defender: EntitySnapshot,
+    hit_count: int = 1,
 ) -> tuple[int, bool, bool]:
     """
-    hits 기반 연속공격용 단일 타격 판정.
+    연속 타격류(hits>1 physical/magical, multi_hit)의 단일 타격 판정.
     MP/원소/상태이상/실드 적용은 호출부가 처리하고, 여기서는 1타의
     기본 데미지/회피/크리티컬만 계산한다.
+
+    hit_count: 이번 시전의 총 타수 — 유령의 dodge_penalty_per_extra_hit
+      (다단히트일수록 회피율 감소)에 쓰인다. physical/magical 경로는
+      타격마다 독립 판정이라 1을 유지하고(기존 동작 불변), multi_hit은
+      execute_skill의 한 방 계산과 수치를 맞추기 위해 굴린 총 타수를 넘긴다.
     """
     meta = _resolve_meta(skill_name, attacker)
     if not meta:
         return 0, False, False
 
     stype = meta.get("type", "")
+
+    # multi_hit(연속찌르기류) — execute_skill의 루프 1회분과 동일한 계산.
+    #   ★ skill_mult은 표에 없고 항상 1.0 (execute_skill과 같은 값 — 여기서
+    #     meta.get("mult", 1.0)을 쓰면 나중에 표에 mult가 붙는 순간 두 경로가
+    #     조용히 달라진다).
+    if stype == "multi_hit":
+        raw, dodge, crit = DamageCalc.physical(
+            attacker.effective_stg(),
+            attacker.luc,
+            defender.effective_arm(),
+            defender.luc,
+            skill_mult=1.0,
+            attacker=attacker,
+            defender=defender,
+            hit_count=hit_count,
+        )
+        return int(raw), dodge, crit
 
     if stype == "physical":
         raw, dodge, crit = DamageCalc.physical(
@@ -439,19 +484,8 @@ def execute_skill(
 
     if stype == "multi_hit":
         total = 0
-        hit_count = 1
-        base_prob = meta["base_prob"]
-        luc_mult = meta["luc_mult"]
-        prob_decay = meta["prob_decay"]
         dmg_decay = meta["dmg_decay"]
-        max_hits = meta["max_hits"]
-
-        for hit_index in range(1, max_hits):
-            prob = max(base_prob, min(85, attacker.luc * luc_mult - hit_index * prob_decay))
-            if randint(1, 100) <= prob:
-                hit_count += 1
-            else:
-                break
+        hit_count = roll_multi_hit_count(meta, attacker)
 
         # multi_hit은 hit_count 개수만큼 다단히트 →
         # defender의 dodge_penalty_per_extra_hit이 적용되어 유령 회피율 감소.
