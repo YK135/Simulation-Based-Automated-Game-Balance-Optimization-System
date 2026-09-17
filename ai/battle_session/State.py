@@ -15,6 +15,7 @@ from ai.battle.EliteKit import (
 from ai.battle.BossKit import (
     is_midboss, MIDBOSS_PHASE_LABEL, MIDBOSS_RIFT_INTERVAL,
 )
+from ai.battle.Elements import RESONANCE_MAX_STACK as _RESONANCE_MAX
 from ai.battle.MonsterKit import (
     is_goblin, GOBLIN_PACK_STG_CAP, GOBLIN_PACK_STG_PER_ALLY, PRIEST_TYPE, PRIEST_QUICK_REVIVE_SKILL,
 )
@@ -297,6 +298,10 @@ class StateMixin:
         }
         residual = 0
         r_hp = (hp - prev_hp) - hp_net
+        if getattr(entity, "fled", False):
+            # 달아난 개체(고블린 겁쟁이)는 hp를 0으로 내려 전투에서 빼는 것이지 피해가 아니다 —
+            # 숫자를 띄우지 않고 잔차로도 세지 않는다 (달아난 뒤에는 피해·회복 대상이 되지 않는다)
+            r_hp = 0.0
         if abs(r_hp) >= 0.5:
             residual += 1
             kind = "heal" if r_hp > 0 else "damage"
@@ -626,6 +631,11 @@ class StateMixin:
             # ── 플레이어 상태이상 ──
             "player_buffs":   p_status["buffs"],
             "player_debuffs": p_status["debuffs"],
+            # 마법사 원소 공명 단계 (표시 전용 — Elements.mage_resonance_*). 마법사가 아니면 None
+            "player_resonance": (
+                {"element": self.player.resonance_element, "stack": self.player.resonance_stack,
+                 "max": _RESONANCE_MAX}
+                if getattr(self.player, "job", "") == "마법사" and self.player.resonance_stack > 0 else None),
             "player_element_aura":   player_element_aura,
             "player_status_effects": player_status_effects,
             "enemy_element_aura":    enemy_element_aura,
