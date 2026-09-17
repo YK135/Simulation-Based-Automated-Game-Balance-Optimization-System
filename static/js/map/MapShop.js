@@ -19,7 +19,7 @@ function _showShopPanel(r) {
              data-item-id="${item.id}"
              data-tooltip-item="${item.id}"
              data-price="${item.price}"
-             title="${(typeof ITEM_DESCRIPTIONS !== "undefined" && ITEM_DESCRIPTIONS[item.id]) || item.effect || ""}">
+             title="${(typeof ITEM_DESCRIPTIONS !== "undefined" && ITEM_DESCRIPTIONS[item.id]) || item.desc || item.effect || ""}">
             <span class="shop-item-icon" data-icon-for="${item.id}" data-icon-emoji="${item.icon || ""}"></span>
             <span class="shop-item-name">${item.name}</span>
             <span class="shop-item-effect">${item.effect}</span>

@@ -80,6 +80,8 @@ check("전부 보유 → 제시 없음", relic_choices(list(RELIC_IDS)) == [])
 check("상점 진열: 아직 없는 것만, type relic, 가격 200", [x["id"] for x in shop_relic_items([RELIC_GREED_SEAL])] ==
       [r for r in RELIC_IDS if r != RELIC_GREED_SEAL] and all(x["type"] == "relic" and x["price"] == RELIC_SHOP_PRICE
                                                              for x in shop_relic_items([])))
+check("상점 행: effect는 짧은 문구(≤20자), desc는 전체 설명", all(len(x["effect"]) <= 20 and x["desc"] == RELIC_META[x["id"]]["desc"]
+      for x in shop_relic_items([])), [x["effect"] for x in shop_relic_items([])])
 check("relic_list_public: id·name·icon·desc", relic_list_public([RELIC_HOURGLASS])[0]["name"] == "깨진 모래시계"
       and set(relic_list_public([RELIC_HOURGLASS])[0]) >= {"id", "name", "icon", "desc"})
 

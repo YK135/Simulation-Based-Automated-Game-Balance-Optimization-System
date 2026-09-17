@@ -26,18 +26,22 @@ RELIC_SHOP_PRICE = 200       # 상점 판매가 (영구 효과 — 특수 아이
 RELIC_META = {
     RELIC_HOURGLASS: {
         "id": RELIC_HOURGLASS, "name": "깨진 모래시계", "icon": "⏳", "job": "",
+        "short": f"잔여 ATB 이월 ×{HOURGLASS_ATB_MULT:.0f}",
         "desc": f"전투 종료 시 잔여 ATB가 {HOURGLASS_ATB_MULT:.0f}배로 다음 전투에 이월된다",
     },
     RELIC_GREED_SEAL: {
         "id": RELIC_GREED_SEAL, "name": "탐욕의 인장", "icon": "💰", "job": "",
+        "short": f"골드 +{int(GREED_GOLD_BONUS * 100)}% · 포션칸 −{GREED_POTION_SLOT_PENALTY}",
         "desc": f"골드 획득 +{int(GREED_GOLD_BONUS * 100)}%, 대신 포션 슬롯 −{GREED_POTION_SLOT_PENALTY}",
     },
     RELIC_FROST_MARK: {
         "id": RELIC_FROST_MARK, "name": "서리 사냥꾼의 각인", "icon": "❄", "job": "",
+        "short": f"ice 적에 물리 +{int(FROST_MARK_PHYS_BONUS * 100)}%",
         "desc": f"ice가 부착된 적에게 주는 물리 피해 +{int(FROST_MARK_PHYS_BONUS * 100)}%, 파쇄를 터뜨리면 ATB +{int(FROST_MARK_SHATTER_ATB)}",
     },
     RELIC_PRIEST_REMAINS: {
         "id": RELIC_PRIEST_REMAINS, "name": "사제의 유해", "icon": "💀", "job": "",
+        "short": f"전투당 1회 부활 {int(REMAINS_REVIVE_HP_RATIO * 100)}%",
         "desc": f"전투당 1회, HP가 0이 될 때 최대 HP {int(REMAINS_REVIVE_HP_RATIO * 100)}%로 되살아난다",
     },
 }
@@ -77,8 +81,9 @@ def relic_choices(owned, job: str = "", k: int = RELIC_OFFER_COUNT, rng_sample=s
 
 def shop_relic_items(owned, job: str = "") -> list:
     """상점 진열용 — 아직 없는 유물을 app/Map.py의 상품 dict 형식으로."""
+    # effect는 카드에 들어가는 짧은 문구(다른 상품의 "HP +60%"와 같은 길이), desc는 툴팁용 전체 설명
     return [{
         "id": rid, "name": RELIC_META[rid]["name"], "type": "relic",
-        "effect": RELIC_META[rid]["desc"], "price": RELIC_SHOP_PRICE,
-        "icon": RELIC_META[rid]["icon"],
+        "effect": RELIC_META[rid]["short"], "desc": RELIC_META[rid]["desc"],
+        "price": RELIC_SHOP_PRICE, "icon": RELIC_META[rid]["icon"],
     } for rid in available_relics(owned, job)]
