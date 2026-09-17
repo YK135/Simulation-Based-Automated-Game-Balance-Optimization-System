@@ -160,12 +160,18 @@ class DamageCalc:
 
 def _apply_damage_with_shield(defender: EntitySnapshot, dmg: int) -> int:
     actual = dmg
+    absorbed = 0
     if defender.shield > 0:
         absorbed = min(defender.shield, actual)
         defender.shield -= absorbed
         actual -= absorbed
+    before = defender.hp
     defender.hp = max(0, defender.hp - actual)
     defender.last_damage_taken = actual
+    # 표시 전용 장부 (시뮬 경로는 hit_ledger=None이라 비교 한 번으로 끝난다)
+    if getattr(defender, "hit_ledger", None) is not None:
+        defender._record_hit("absorb", absorbed)
+        defender._record_hit("damage", before - defender.hp)
     return actual
 
 

@@ -95,6 +95,7 @@ class EliteActionsMixin:
         heal = min(hp_damage * BAT_LIFESTEAL_RATIO, heal_cap)
         before = enemy.hp
         enemy.hp = min(enemy.maxhp, enemy.hp + heal)
+        enemy._record_hit("heal", enemy.hp - before)
         gained = int(enemy.hp - before)
         if gained > 0:
             msgs.append(f"{enemy.name}이(가) 피해를 흡수해 HP를 회복했다. (+{gained})")
@@ -217,6 +218,8 @@ class EliteActionsMixin:
             if not dead_allies:
                 return False
             priest.elite_phase = PRIEST_PHASE_PREPARING
+            self._note_fx("부활 의식 준비", "ritual")
+            self._note_fx_target("enemy", self._enemy_slot_of(dead_allies[0]))
             msgs.append(f"{priest.name}이(가) 부활 의식을 시작했다!")
             msgs.append("의식이 완성되기 전에 사제를 처치해야 한다!")
             return True
@@ -227,7 +230,11 @@ class EliteActionsMixin:
                 priest.elite_phase = PRIEST_PHASE_IDLE
                 return False
             target = dead_allies[0]
+            self._note_fx("부활 의식 완성", "ritual")
+            self._note_fx_target("enemy", self._enemy_slot_of(target))
+            revive_before = target.hp
             target.hp = target.maxhp * PRIEST_REVIVE_HP_RATIO
+            target._record_hit("heal", target.hp - revive_before)
             # reward_eligible은 건드리지 않는다 — 보상은 전투 종료 시 최종
             # 상태 기준으로 딱 한 번만 계산되므로(_get_defeated_list), 여기서
             # False로 마킹하면 "추가 보상 방지"가 아니라 이 동료를 처치한

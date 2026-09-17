@@ -266,7 +266,9 @@ class PlayerActionsMixin:
             if alive_cnt >= 2:
                 cap = self.player.maxhp * meta.get("multi_shield_cap", 0.0)
                 gained = self.player.maxhp * msh
+                sh_before = self.player.shield
                 self.player.shield = min(cap, self.player.shield + gained)
+                self.player._record_hit("shield", self.player.shield - sh_before)
                 msgs.append(f"🛡 다대일 대응! 실드 +{int(gained)} "
                             f"(현재 {int(self.player.shield)})")
 
@@ -499,7 +501,9 @@ class PlayerActionsMixin:
                     cap = meta.get("shield_cap", 0.0)
                     ratio = min(sph * hit_targets, cap)
                     gained = self.player.maxhp * ratio
+                    sh_before = self.player.shield
                     self.player.shield = max(self.player.shield, gained)
+                    self.player._record_hit("shield", self.player.shield - sh_before)
                     msgs.append(f"🛡 {skill_name} — {hit_targets}명 명중! 실드 +{int(gained)} "
                                 f"(maxhp {int(ratio*100)}%)")
                 self.skills_used += 1   # ★ AoE 스킬 사용 성공 (Phase 3)
@@ -608,7 +612,9 @@ class PlayerActionsMixin:
                     if alive_cnt >= 2:
                         cap = self.player.maxhp * meta.get("multi_shield_cap", 0.0)
                         gained = self.player.maxhp * msh
+                        sh_before = self.player.shield
                         self.player.shield = min(cap, self.player.shield + gained)
+                        self.player._record_hit("shield", self.player.shield - sh_before)
                         msgs.append(f"🛡 다대일 대응! 실드 +{int(gained)} "
                                     f"(현재 {int(self.player.shield)})")
 
@@ -643,8 +649,10 @@ class PlayerActionsMixin:
                 # ── 포션 (HP/MP 회복) ──
                 if meta.get("stat") == "hp":
                     before = int(self.player.hp)
+                    hp_before = self.player.hp
                     amount = meta["amount"](self.player)
                     self.player.hp = min(self.player.maxhp, self.player.hp + amount)
+                    self.player._record_hit("heal", self.player.hp - hp_before)
                     msgs.append(f"{item_name} 사용 → HP {before} → {int(self.player.hp)} (+{amount})")
                 elif meta.get("stat") == "mp":
                     before = int(self.player.mp)
@@ -659,7 +667,9 @@ class PlayerActionsMixin:
                     msgs.append(f"💣 {item_name} 사용!")
                     for tgt in alive:
                         dmg = max(1, int(tgt.maxhp * ratio))
+                        hp_before = tgt.hp
                         tgt.hp = max(0, tgt.hp - dmg)
+                        tgt._record_hit("damage", hp_before - tgt.hp, element="", reaction="")
                         msgs.append(f"  └ {tgt.name}에게 {dmg} 피해")
                         # 속도 디버프 (거미줄 폭탄)
                         if meta.get("debuff_stat"):
@@ -686,7 +696,9 @@ class PlayerActionsMixin:
                         msgs.append(f"🧪 {item_name} → {tgt.name}")
                         # 직접 피해 + 원소 반응/부착
                         dmg = apply_element_and_react(self.player, tgt, elem, dmg, msgs)
+                        hp_before = tgt.hp
                         tgt.hp = max(0, tgt.hp - dmg)
+                        tgt._record_hit("damage", hp_before - tgt.hp)
                         msgs.append(f"  └ {tgt.name}에게 {dmg} 피해")
 
                 # ── 버프 (집중물약/신속물약) ──

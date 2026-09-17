@@ -304,11 +304,19 @@ img.combatant-art {
     position: absolute;
     left: 50%;
     /* 스프라이트 머리 위 — TARGET 배지(.combatant 상단)와 겹치지 않게 띄운다.
-       같은 슬롯에 숫자가 여러 개면 JS가 인덱스별로 top을 더 올린다. */
+       같은 슬롯에 숫자가 여러 개면 JS가 누적 오프셋으로 top을 더 올린다. */
     top: -12px;
     z-index: 6;
     pointer-events: none;
-    font-family: 'Cinzel', Georgia, serif;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 1px;
+    /* ★ 'Cinzel'을 1순위로 적어뒀었는데 index.html이 불러오는 웹폰트는
+       Cormorant Garamond 하나뿐 — Cinzel은 조용히 무시되고 실제로는 Georgia로
+       그려지고 있었다. 지금 보이는 모양(=Georgia)을 그대로 유지하면서
+       선언만 사실에 맞춘다. */
+    font-family: Georgia, 'Times New Roman', serif;
     font-weight: 700;
     font-size: 26px;
     line-height: 1;
@@ -319,22 +327,65 @@ img.combatant-art {
         0 2px 5px rgba(0, 0, 0, 0.8);
     animation: dmgFloat 1.05s cubic-bezier(0.22, 1, 0.36, 1) forwards;
     --dx: 0px;
+    /* 색 기본값 — 아래 .tone-* 가 덮어쓴다.
+       색을 변수로 둬야 치명타 규칙이 색을 빼앗지 않고 크기/발광만 키울 수 있다
+       (전에는 .crit이 color를 금색으로 고정해서 원소 색이 사라졌다). */
+    --dmg-tone: #fff3e0;
+    --dmg-glow: 255, 235, 205;
 }
 
-.dmg-popup.dmg    { color: #fff3e0; }
+.dmg-popup.dmg    { color: var(--dmg-tone); }
 .dmg-popup.heal   { color: #86e08a; }
 .dmg-popup.shield { color: #a8d4f0; }
 
-/* 치명타 — 더 크고 금색, 살짝 기울여 강조 */
+/* ── 피해 속성별 색 (static/js/battle/BattleEffects.js의 _hitToneClass와 짝) ──
+   서버 hits의 element/reaction/via로 결정된다.
+   --dmg-glow는 rgba()에 넣을 "R, G, B" 성분 — 치명타/반응 발광에 재사용. */
+.dmg-popup.tone-physical  { --dmg-tone: #fff3e0; --dmg-glow: 255, 235, 205; }  /* 기본 공격 */
+.dmg-popup.tone-skill     { --dmg-tone: #ffe3a0; --dmg-glow: 255, 205, 110; }  /* 무원소 물리 스킬 */
+.dmg-popup.tone-item      { --dmg-tone: #d9cdb0; --dmg-glow: 210, 195, 155; }  /* 폭탄류 */
+.dmg-popup.tone-fire      { --dmg-tone: #ff8a5c; --dmg-glow: 255, 115, 60;  }
+.dmg-popup.tone-ice       { --dmg-tone: #6fd8f0; --dmg-glow: 85, 205, 235;  }
+.dmg-popup.tone-lightning { --dmg-tone: #ffd84d; --dmg-glow: 255, 210, 70;  }
+.dmg-popup.tone-bleed     { --dmg-tone: #ff5c72; --dmg-glow: 235, 65, 90;   }  /* 도적 출혈 */
+/* 원소 반응 — 원소색보다 한 단계 밝게 (반응이 "상위 결과"로 읽히게) */
+.dmg-popup.tone-melt      { --dmg-tone: #ffb066; --dmg-glow: 255, 150, 85;  }
+.dmg-popup.tone-overload  { --dmg-tone: #c98cff; --dmg-glow: 190, 125, 255; }
+.dmg-popup.tone-shatter   { --dmg-tone: #cdefff; --dmg-glow: 165, 225, 255; }
+
+/* 반응 라벨 — 색만으로는 화염/융해처럼 인접 색조가 구분이 안 되므로
+   숫자 위에 작은 글자를 얹는다. 숫자보다 흐리게 해서 시선은 숫자에 남긴다. */
+.dmg-popup-tag {
+    /* 한글이라 숫자용 세리프(Georgia)가 아니라 UI 본문과 같은 스택을 쓴다 */
+    font-family: 'D2Coding', 'Menlo', 'Consolas', monospace;
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: 0.12em;
+    opacity: 0.9;
+}
+
+/* 원소 반응은 치명타가 아니어도 발광을 얹어 "특별한 한 방"으로 보이게 */
+.dmg-popup.tone-melt,
+.dmg-popup.tone-overload,
+.dmg-popup.tone-shatter {
+    text-shadow:
+        0 0 3px rgba(0, 0, 0, 0.95),
+        0 0 12px rgba(var(--dmg-glow), 0.9),
+        0 2px 5px rgba(0, 0, 0, 0.8);
+}
+
+/* 치명타 — 더 크고 기울여 강조. 색은 속성 색을 유지하고 발광만 키운다.
+   ★ 위 .tone-* 규칙들과 명시도가 같으므로(클래스 2개) 반드시 뒤에 와야
+     text-shadow 덮어쓰기가 먹는다 — 순서 바꾸지 말 것. */
 .dmg-popup.crit {
     font-size: 38px;
-    color: #ffd76a;
     text-shadow:
         0 0 4px rgba(0, 0, 0, 0.95),
-        0 0 14px rgba(255, 190, 60, 0.85),
+        0 0 16px rgba(var(--dmg-glow), 0.9),
         0 2px 6px rgba(0, 0, 0, 0.85);
     animation-name: dmgFloatCrit;
 }
+.dmg-popup.crit .dmg-popup-tag { font-size: 13px; }
 
 @keyframes dmgFloat {
     0%   { transform: translate(calc(-50% + var(--dx)), 0)     scale(0.55); opacity: 0; }

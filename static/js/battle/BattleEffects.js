@@ -140,8 +140,12 @@ function _scheduleSetState(target, state, delay) {
    데미지 숫자 팝업 + 피격 플래시
    ───────────────────────────────────────────────────────────
    서버 응답의 구조화 필드 bs.hits를 그대로 쓴다 (한글 메시지 파싱 없음).
-     hits: [{target:'player'|'enemy', slot, amount, kind, crit}]
-     kind: 'damage' | 'heal' | 'shield'
+     hits: [{target:'player'|'enemy', slot, amount, kind, crit,
+             element, reaction, via}]
+     kind:     'damage' | 'heal' | 'shield'
+     element:  'fire' | 'ice' | 'lightning' | 'physical' | 'bleed' | ''
+     reaction: 'melt' | 'shatter' | 'overload' | ''
+     via:      'attack' | 'skill' | 'item' | 'dot' | ''
    호출 시점은 BattleSequencer의 "데미지 적용 + hurt" 단계 — hurt 시트가
    시작되는 그 프레임에 숫자와 플래시가 같이 뜬다.
    ═══════════════════════════════════════════════════════════ */
@@ -163,22 +167,93 @@ const _HIT_STYLE = {
     shield: { cls: 'shield', sign: '+', color: null },
 };
 
-/** 숫자 하나를 슬롯 위에 띄움 (CSS 애니메이션으로 상승+페이드) */
-function showDamagePopup(target, slot, amount, kind, isCrit, index) {
+/* ── 데미지 숫자 색(tone) 결정 ──────────────────────────────
+   우선순위: 원소 반응 > 원소 > 행동 종류.
+     반응이 최우선인 이유 — 반응은 원소 조합으로만 나오는 "잘한 플레이"라
+     그 한 방을 즉시 알아봐야 한다(마법사 정체성).
+   실제 색값은 static/css/battle/BattleCombatant.css의 .tone-* 규칙에 있다
+   (JS는 클래스명만 정하고 색은 CSS 한 곳에서만 관리 — 두 곳에 색을 두면
+   테마 수정 때 어긋난다). 플래시 색만 CSS 변수를 읽을 수 없어 여기 둔다. */
+const _TONE_BY_REACTION = {
+    melt:     'tone-melt',
+    overload: 'tone-overload',
+    shatter:  'tone-shatter',
+};
+const _TONE_BY_ELEMENT = {
+    fire:      'tone-fire',
+    ice:       'tone-ice',
+    lightning: 'tone-lightning',
+    bleed:     'tone-bleed',      // 도적 출혈 — 엔진 원소는 아니고 표시용 값
+};
+const _TONE_BY_VIA = {
+    skill: 'tone-skill',          // 무원소 물리 스킬 (강타/연속공격/몸통박치기…)
+    item:  'tone-item',           // 폭탄류 (무원소)
+};
+// 실루엣 마스크 플래시 색 — .tone-*의 대표색과 같은 계열로 맞춘다
+const _FLASH_BY_TONE = {
+    'tone-melt':      '#ffc089',
+    'tone-overload':  '#d7a8ff',
+    'tone-shatter':   '#dcf3ff',
+    'tone-fire':      '#ffa478',
+    'tone-ice':       '#93e4f7',
+    'tone-lightning': '#ffe68a',
+    'tone-bleed':     '#ff8b9c',
+    'tone-skill':     '#fff0c4',
+    'tone-item':      '#ebe2cb',
+    'tone-physical':  '#ffffff',
+};
+const _REACTION_LABEL = { melt: '융해', overload: '과부하', shatter: '파쇄' };
+
+/** 반응 라벨 — 같은 대상에게 한 step에 여러 번 터졌으면 횟수를 붙인다.
+    숫자는 대상당 1개로 합쳐지므로(연속공격 4타도 숫자 하나) 라벨이 횟수를
+    대신 전한다. hit.reaction_count는 서버 장부(State._hits_from_snapshot)가 센 값. */
+function _reactionTag(hit) {
+    const name = _REACTION_LABEL[hit.reaction];
+    if (!name) return '';
+    const n = (hit.reaction_count || {})[hit.reaction] || 0;
+    return n > 1 ? `${name} ×${n}` : name;
+}
+
+function _hitToneClass(hit) {
+    if (!hit) return 'tone-physical';
+    return _TONE_BY_REACTION[hit.reaction]
+        || _TONE_BY_ELEMENT[hit.element]
+        // physical / 무원소는 기본 공격인지 스킬인지로만 나눈다
+        || _TONE_BY_VIA[hit.via]
+        || 'tone-physical';
+}
+
+/** 숫자 하나를 슬롯 위에 띄움 (CSS 애니메이션으로 상승+페이드)
+    opts: {tone, tagLabel, yOffset} — 색/반응 라벨/세로 위치 */
+function showDamagePopup(target, slot, amount, kind, isCrit, index, opts) {
     const host = _hitHostElement(target, slot);
     if (!host || !amount) return;
+    opts = opts || {};
 
     const style = _HIT_STYLE[kind] || _HIT_STYLE.damage;
     const el = document.createElement('div');
-    el.className = 'dmg-popup ' + style.cls + (isCrit ? ' crit' : '');
-    el.textContent = style.sign + amount;
+    el.className = 'dmg-popup ' + style.cls
+                 + (opts.tone ? ' ' + opts.tone : '')
+                 + (isCrit ? ' crit' : '');
 
-    // 여러 숫자가 겹치지 않게 흩뿌림 — 좌우는 번갈아, 세로는 인덱스마다 더 높이.
-    //   (좌우만 벌리면 같은 높이에 나란히 떠서 서로 가린다)
-    //   세로 간격은 치명타 글자(38px)가 아래 숫자를 덮지 않을 만큼 벌린다.
+    // 반응(융해/과부하/파쇄)은 숫자 위에 작은 라벨을 얹는다 — 색만으로는
+    // 화염과 융해처럼 인접한 색조를 구분하기 어렵다.
+    if (opts.tagLabel) {
+        const lab = document.createElement('span');
+        lab.className = 'dmg-popup-tag';
+        lab.textContent = opts.tagLabel;
+        el.appendChild(lab);
+    }
+    const num = document.createElement('span');
+    num.className = 'dmg-popup-num';
+    num.textContent = style.sign + amount;
+    el.appendChild(num);
+
+    // 여러 숫자가 겹치지 않게 흩뿌림 — 좌우는 번갈아, 세로는 호출부가 누적해
+    // 넘겨준 yOffset만큼 더 높이 띄운다(라벨 있는 팝업은 더 높아서 간격이 다름).
     const spread = (index % 2 === 0 ? 1 : -1) * (10 + index * 6);
     el.style.setProperty('--dx', spread + 'px');
-    el.style.top = (-12 - index * 34) + 'px';
+    el.style.top = (-12 - (opts.yOffset || 0)) + 'px';
     el.style.animationDelay = (index * 90) + 'ms';
 
     host.appendChild(el);
@@ -188,10 +263,11 @@ function showDamagePopup(target, slot, amount, kind, isCrit, index) {
 }
 
 /** 피격 플래시 — 스프라이트가 있으면 실루엣 마스크, 없으면 CSS 클래스 폴백 */
-function flashHitOn(target, slot, isCrit) {
+function flashHitOn(target, slot, isCrit, tone) {
     const charTarget = (target === 'player') ? 'player_battle' : ('enemy_battle:' + slot);
+    const color = _FLASH_BY_TONE[tone] || '#ffffff';
     const masked = (typeof flashHitMask === 'function')
-        ? flashHitMask(charTarget, { color: isCrit ? '#ffe9a8' : '#ffffff', duration: isCrit ? 200 : 140 })
+        ? flashHitMask(charTarget, { color: color, duration: isCrit ? 200 : 140 })
         : false;
 
     if (masked) return;
@@ -199,6 +275,7 @@ function flashHitOn(target, slot, isCrit) {
     // 이모지 폴백 — 마스크할 알파가 없으므로 슬롯 전체를 짧게 때린다.
     //   ★ filter로 하면 .combatant-art에 이미 걸린 drop-shadow(발광)를
     //     덮어써서 사라지므로, 두 filter를 합성해 둔 CSS 클래스를 쓴다.
+    //     (원소별 색은 마스크 경로에서만 반영 — 이모지엔 칠할 실루엣이 없다)
     const host = _hitHostElement(target, slot);
     if (!host) return;
     host.classList.remove('hit-punch');
@@ -207,21 +284,36 @@ function flashHitOn(target, slot, isCrit) {
     setTimeout(function () { host.classList.remove('hit-punch'); }, 260);
 }
 
-/** bs.hits 전체를 재생 (숫자 + 플래시). 대상별로 index를 나눠 겹침 방지 */
+// 세로 간격 — 치명타 글자(38px)가 아래 숫자를 덮지 않을 만큼. 반응 라벨이
+// 붙은 팝업은 라벨 높이만큼 더 차지하므로 따로 잡는다.
+const _POPUP_STEP_Y     = 34;
+const _POPUP_STEP_Y_TAG = 48;
+
+/** bs.hits 전체를 재생 (숫자 + 플래시). 대상별로 index/세로위치를 나눠 겹침 방지 */
 function playHitFeedback(hits, filterTarget) {
     if (!Array.isArray(hits) || hits.length === 0) return;
 
-    const perHost = {};
+    const perHost = {};      // 슬롯별 팝업 개수 (좌우 흩뿌림/지연용)
+    const perHostY = {};     // 슬롯별 누적 세로 오프셋
     for (const h of hits) {
         if (!h || !h.amount) continue;
         if (filterTarget && h.target !== filterTarget) continue;
 
         const key = h.target + ':' + h.slot;
-        perHost[key] = (perHost[key] || 0);
-        showDamagePopup(h.target, h.slot, h.amount, h.kind, h.crit, perHost[key]);
-        perHost[key]++;
+        perHost[key]  = (perHost[key]  || 0);
+        perHostY[key] = (perHostY[key] || 0);
 
-        if (h.kind === 'damage') flashHitOn(h.target, h.slot, h.crit);
+        // 색/라벨은 피해에만 — 회복(초록)·실드(파랑)는 kind가 곧 의미다
+        const isDamage = h.kind === 'damage';
+        const tone = isDamage ? _hitToneClass(h) : '';
+        const tagLabel = isDamage ? _reactionTag(h) : '';
+
+        showDamagePopup(h.target, h.slot, h.amount, h.kind, h.crit, perHost[key],
+                        { tone: tone, tagLabel: tagLabel, yOffset: perHostY[key] });
+        perHost[key]++;
+        perHostY[key] += tagLabel ? _POPUP_STEP_Y_TAG : _POPUP_STEP_Y;
+
+        if (isDamage) flashHitOn(h.target, h.slot, h.crit, tone);
     }
 }
 

@@ -117,6 +117,15 @@ def is_element_immune(defender, attack_element: str) -> bool:
     return immune == attack_element
 
 
+def _stamp(defender, element: str, reaction: str, damage: int) -> None:
+    """UI 데미지 숫자 색 구분용 태그를 defender에 남긴다 (표시 전용, 쓰기만).
+    피해가 0이면 남기지 않는다 — 원소 부착만 하는 호출
+    (try_apply_element_aura_and_status, 면역 무효화)까지 태그를 덮어써 버리면
+    같은 step에 뒤따르는 DoT 피해가 엉뚱한 색으로 표시된다."""
+    if damage > 0 and hasattr(defender, "_stamp_last_hit"):
+        defender._stamp_last_hit(element, reaction)
+
+
 def apply_element_and_react(
     attacker,
     defender,
@@ -146,10 +155,13 @@ def apply_element_and_react(
             messages.append(f"{defender.name}의 원소 큐가 초기화되었다.")
             _restore_innate_element(defender, messages)   # 원소 슬라임 고유 원소 복구
             _elite_ice_slime_break(defender, messages)     # 엘리트 빙결 슬라임: 갑옷 파쇄
+            _stamp(defender, "physical", "shatter", base_damage + bonus)
             return base_damage + bonus
+        _stamp(defender, "physical", "", base_damage)
         return base_damage
 
     status_bonus = 0
+    reacted = ""          # UI 색 구분용 — 이번 타격에서 실제로 터진 반응명
 
     if len(q) == 0:
         defender.element_queue.append(attack_element)
@@ -166,6 +178,7 @@ def apply_element_and_react(
             key = (existing, attack_element)
             reaction_name = REACTIONS.get(key)
             if reaction_name:
+                reacted = reaction_name
                 eff = REACTION_EFFECTS[reaction_name]
                 bonus_mult = eff["bonus_mult"]
                 # ── 마법사 패시브: 원소 반응 피해 +5%p — 융해/과부하만 ──
@@ -207,6 +220,7 @@ def apply_element_and_react(
             label = ELEMENT_STATUS_LABEL[effect_type]
             messages.append(f"{defender.name}에게 {label} 상태가 부여되었다. ({turns}T)")
 
+    _stamp(defender, attack_element, reacted, base_damage)
     return base_damage
 
 

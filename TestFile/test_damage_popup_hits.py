@@ -18,6 +18,8 @@ ai/Battlesession.py의 step):
   5. 회복은 kind=heal, 실드 획득은 kind=shield
   6. 전투 중 새로 생긴 개체(분열/부활)가 있어도 인덱스 매핑이 깨지지 않는다
   7. 모든 이벤트는 crit 키를 갖는다 (프론트가 존재 여부를 안 따져도 되게)
+  8. 색 구분용 태그(element/reaction/via)가 출처별로 맞게 붙는다
+  9. 태그는 step마다 초기화된다 (지난 턴 원소가 이번 DoT에 묻지 않는다)
 """
 import sys, os, io, contextlib
 from random import seed
@@ -27,6 +29,7 @@ from game.Player_Class import create_player_by_job
 from game.Enemy_Class import Make_Goblin
 from ai.Battlesession import BattleSession
 from ai.battle import EntitySnapshot
+from ai.battle.Entity import StatusEffect
 
 PASS = 0
 FAIL = 0
@@ -209,6 +212,175 @@ def test_crit_attribution_single_target_only():
           f"hits={dmg_single}")
 
 
+# ═══════════════════════════════════════════════
+# 색 구분용 태그 (element / reaction / via)
+# ═══════════════════════════════════════════════
+def _tanky(s):
+    """양쪽을 안 죽게 만들어 원하는 턴까지 확실히 굴린다."""
+    s.player.hp = s.player.maxhp = 999_999.0
+    s.player.mp = s.player.maxmp = 999.0
+    s.enemies[0].hp = s.enemies[0].maxhp = 999_999.0
+    return s
+
+
+def _player_turn_step(s, action, prep=None):
+    """플레이어 차례가 올 때까지 auto로 넘긴 뒤 원하는 행동 1회 → hits 반환.
+    (ATB 때문에 첫 step이 적 턴일 수 있어서 그냥 step 한 번은 못 쓴다)"""
+    with contextlib.redirect_stdout(io.StringIO()):
+        for _ in range(40):
+            if s.done:
+                return []
+            if s._peek_next_actor()[0] == "player":
+                if prep:
+                    prep(s)
+                return s.step(action)["hits"]
+            s.step("auto")
+    return []
+
+
+def _learn(s, *names):
+    s.player.learned_skills = list(dict.fromkeys(list(s.player.learned_skills) + list(names)))
+    return s
+
+
+def _first_enemy_damage(hits):
+    for h in hits:
+        if h["target"] == "enemy" and h["kind"] == "damage":
+            return h
+    return None
+
+
+def test_hit_tags_present_on_every_event():
+    print("\n[8] 모든 이벤트가 element/reaction/via 키를 갖는다")
+    seed(20260917)
+    s = _tanky(_make_session())
+    hits = _player_turn_step(s, "attack")
+    check("피해 이벤트 발생", len(hits) > 0, f"hits={hits}")
+    keys = ("element", "reaction", "via", "crit")
+    check("모든 이벤트에 태그 키 존재",
+          all(all(k in h for k in keys) for h in hits), f"hits={hits}")
+
+
+def test_tag_physical_attack_vs_skill():
+    print("\n[9] 기본 공격 = via:attack / 물리 스킬 = via:skill, 둘 다 element:physical")
+    seed(20260917)
+    ev = _first_enemy_damage(_player_turn_step(_tanky(_make_session()), "attack"))
+    check("기본 공격: element=physical, via=attack",
+          ev is not None and ev["element"] == "physical" and ev["via"] == "attack",
+          f"ev={ev}")
+
+    seed(20260917)
+    s = _learn(_tanky(_make_session("전사")), "강타1")
+    ev = _first_enemy_damage(_player_turn_step(s, "skill:강타1"))
+    check("물리 스킬: element=physical, via=skill",
+          ev is not None and ev["element"] == "physical" and ev["via"] == "skill",
+          f"ev={ev}")
+    check("반응 없음", ev is not None and ev["reaction"] == "", f"ev={ev}")
+
+
+def test_tag_elements():
+    print("\n[10] 원소 스킬의 element 태그")
+    for skill, elem in (("파이어볼1", "fire"), ("아이스볼릿1", "ice"), ("라이트닝1", "lightning")):
+        seed(20260917)
+        s = _learn(_tanky(_make_session("마법사")), skill)
+        ev = _first_enemy_damage(_player_turn_step(s, f"skill:{skill}"))
+        check(f"{skill} → element={elem}",
+              ev is not None and ev["element"] == elem, f"ev={ev}")
+
+
+def test_tag_reactions():
+    print("\n[11] 원소 반응(융해/과부하/파쇄)의 reaction 태그")
+
+    def attach(elem):
+        def _p(s):
+            s.enemies[0].element_queue = [elem]
+        return _p
+
+    seed(20260917)
+    s = _learn(_tanky(_make_session("마법사")), "파이어볼1")
+    ev = _first_enemy_damage(_player_turn_step(s, "skill:파이어볼1", attach("ice")))
+    check("ice→fire = melt", ev is not None and ev["reaction"] == "melt", f"ev={ev}")
+    check("melt에도 element=fire 유지",
+          ev is not None and ev["element"] == "fire", f"ev={ev}")
+
+    seed(20260917)
+    s = _learn(_tanky(_make_session("마법사")), "라이트닝1")
+    ev = _first_enemy_damage(_player_turn_step(s, "skill:라이트닝1", attach("fire")))
+    check("fire→lightning = overload",
+          ev is not None and ev["reaction"] == "overload", f"ev={ev}")
+
+    # 파쇄는 물리 공격이 ice 큐를 때릴 때 — 마법사 패시브에서 제외된 반응
+    seed(20260917)
+    ev = _first_enemy_damage(
+        _player_turn_step(_tanky(_make_session("전사")), "attack", attach("ice")))
+    check("물리 vs ice = shatter",
+          ev is not None and ev["reaction"] == "shatter", f"ev={ev}")
+    check("shatter는 element=physical",
+          ev is not None and ev["element"] == "physical", f"ev={ev}")
+
+
+def test_tag_dot_is_separated_from_the_attack_in_the_same_step():
+    print("\n[12] 같은 step의 DoT와 피격이 각각 자기 태그를 갖는다")
+    # ★ 이게 태그를 "행동 로그"가 아니라 "대상별"로 남기는 이유.
+    #   적 턴 = (적의 출혈 틱 → 적이 플레이어를 때림) 이 한 step에 같이 일어난다.
+    #   로그 한 줄로 색을 정하면 적의 출혈 피해까지 물리색이 된다.
+    seed(20260917)
+    s = _tanky(_make_session("도적"))
+    s.enemies[0].apply_status_effect(StatusEffect(effect_type="bleed", turns=9, name="bleed"))
+    found = None
+    with contextlib.redirect_stdout(io.StringIO()):
+        for _ in range(40):
+            if s.done:
+                break
+            actor = s._peek_next_actor()[0]
+            hits = s.step("attack" if actor == "player" else "auto")["hits"]
+            dot = [h for h in hits if h["target"] == "enemy" and h["via"] == "dot"]
+            hurt = [h for h in hits if h["target"] == "player" and h["kind"] == "damage"]
+            if dot and hurt:
+                found = (dot[0], hurt[0])
+                break
+    check("DoT + 피격이 같은 step에 잡힌 케이스 발견", found is not None)
+    if found:
+        dot, hurt = found
+        check("출혈 DoT: element=bleed, via=dot",
+              dot["element"] == "bleed" and dot["via"] == "dot", f"dot={dot}")
+        check("같은 step의 플레이어 피격은 물리로 유지",
+              hurt["element"] == "physical", f"hurt={hurt}")
+
+
+def test_tags_reset_each_step():
+    print("\n[13] 태그는 step 진입 시 초기화된다")
+    seed(20260917)
+    s = _learn(_tanky(_make_session("마법사")), "파이어볼1")
+    _player_turn_step(s, "skill:파이어볼1")     # 적에게 fire 태그가 남은 상태
+    check("직전 step이 fire를 남겼다",
+          getattr(s.enemies[0], "last_hit_element", "") == "fire",
+          f"tag={getattr(s.enemies[0], 'last_hit_element', None)}")
+    s._hp_snapshot()                            # 다음 step 진입
+    check("스냅샷 후 element 태그 초기화",
+          getattr(s.enemies[0], "last_hit_element", "") == "", )
+    check("스냅샷 후 via 태그 초기화",
+          getattr(s.enemies[0], "last_hit_via", "") == "", )
+    check("플레이어 태그도 초기화",
+          getattr(s.player, "last_hit_element", "") == "", )
+
+
+def test_aura_only_call_does_not_stamp():
+    print("\n[14] 피해 0인 원소 부착만으로는 태그를 남기지 않는다")
+    # 부착 전용 호출(try_apply_element_aura_and_status)이 태그를 덮어쓰면
+    # 같은 step의 DoT 피해가 엉뚱한 색으로 표시된다.
+    from ai.battle.Elements import apply_element_and_react
+    s = _make_session()
+    en = s.enemies[0]
+    en.last_hit_element = ""
+    apply_element_and_react(s.player, en, "fire", 0, [])
+    check("damage=0 → element 태그 없음",
+          getattr(en, "last_hit_element", "") == "",
+          f"tag={getattr(en, 'last_hit_element', None)}")
+    check("큐에는 정상 부착 (기존 동작 불변)",
+          en.element_queue == ["fire"], f"q={en.element_queue}")
+
+
 def main():
     print("=" * 56)
     print(" 데미지 숫자 팝업 hits 필드 회귀 테스트")
@@ -221,6 +393,13 @@ def main():
     test_heal_and_shield_kinds()
     test_new_entity_midbattle_does_not_break_mapping()
     test_crit_attribution_single_target_only()
+    test_hit_tags_present_on_every_event()
+    test_tag_physical_attack_vs_skill()
+    test_tag_elements()
+    test_tag_reactions()
+    test_tag_dot_is_separated_from_the_attack_in_the_same_step()
+    test_tags_reset_each_step()
+    test_aura_only_call_does_not_stamp()
 
     print("\n" + "=" * 56)
     print(f" 결과: {PASS} 통과 / {FAIL} 실패")

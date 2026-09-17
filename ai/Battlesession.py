@@ -184,11 +184,15 @@ class BattleSession(
     def step(self, action: str) -> dict:
         """공개 진입점 — 행동 전후를 (state, action, result)로 자동 기록."""
         pre = self._rl_pre(action)
-        hp_before = self._hp_snapshot()          # 데미지 숫자 팝업용 (UI)
-        out = self._step_core(action)
-        self._rl_post(pre, out)
-        if isinstance(out, dict):
-            out["hits"] = self._hits_from_snapshot(hp_before)
+        hp_before = self._hp_snapshot(action)    # 데미지 숫자 팝업용 (UI) — 피격 장부도 켠다
+        try:
+            out = self._step_core(action)
+            self._rl_post(pre, out)
+            if isinstance(out, dict):
+                out["hits"] = self._hits_from_snapshot(hp_before)
+                out["action_fx"] = self._action_fx(hp_before)
+        finally:
+            self._close_hit_ledgers()            # 예외가 나도 장부가 켜진 채 남지 않게
         return out
 
     def _step_core(self, action: str) -> dict:

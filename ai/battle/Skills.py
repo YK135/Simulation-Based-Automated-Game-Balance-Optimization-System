@@ -458,12 +458,18 @@ def execute_skill(
     if stype == "heal":
         heal = meta["base_heal"] + attacker.sp * meta["sp_mult"]
         heal = min(heal, attacker.maxhp * meta["cap"])
+        before = attacker.hp
         attacker.hp = min(attacker.maxhp, attacker.hp + int(heal))
+        if getattr(attacker, "hit_ledger", None) is not None:   # 표시 전용 장부
+            attacker._record_hit("heal", attacker.hp - before)
         return 0, False, "heal"
 
     if stype == "shield":
         new_shield = attacker.maxhp * meta["shield_mult"]
+        before = attacker.shield
         attacker.shield = max(attacker.shield, new_shield)
+        if getattr(attacker, "hit_ledger", None) is not None:   # 표시 전용 장부
+            attacker._record_hit("shield", attacker.shield - before)
         return 0, False, "shield"
 
     if stype == "tank_attack":

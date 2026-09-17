@@ -148,6 +148,27 @@ class EntitySnapshot:
     # 시뮬레이터)에도 전달하기 위한 것. 기본 0.0이라 기존 호출부는 영향 없음.
     atb_remainder: float = 0.0
 
+    # ── UI 데미지 숫자 색 구분용 태그 (표시 전용 — 전투 로직은 절대 읽지 않는다) ──
+    # "이 대상이 마지막으로 받은 피해가 무슨 속성/반응이었나"를 기록만 한다.
+    #   last_hit_element : "fire"/"ice"/"lightning"/"physical"/"bleed"/""
+    #                      ★ "bleed"는 엔진의 원소가 아니다(element_queue에 절대
+    #                        안 들어감) — 출혈 DoT를 색으로 구분하기 위한 표시용 값.
+    #   last_hit_reaction: "melt"/"shatter"/"overload"/""
+    #   last_hit_via     : "dot"(상태이상 지속피해) — 나머지(공격/스킬/아이템)는
+    #                      이 시점에 알 수 없어서 세션이 TurnLog로 유도한다.
+    # 쓰는 곳: Elements.apply_element_and_react(), 아래 tick_status_effects().
+    # 읽는 곳: ai/battle_session/State.py._hits_from_snapshot() 한 곳뿐.
+    # step() 진입 시 _hp_snapshot()이 전부 ""로 지우므로 지난 턴 값이 안 묻는다.
+    last_hit_element: str = ""
+    last_hit_reaction: str = ""
+    last_hit_via: str = ""
+    # 표시 전용 피격 장부 — UI 숫자/이펙트를 "순변화량"이 아니라 실제로 일어난
+    #   피해·흡수·회복·실드 획득 단위로 만들기 위한 기록. None이면 기록하지 않는다
+    #   (시뮬 경로의 기본값 — 추가 비용 0). BattleSession이 step 진입 시 []로 켜고
+    #   끝나면 다시 None으로 끈다. 전투 계산은 이 값을 절대 읽지 않는다.
+    #   항목: {"kind": damage|absorb|heal|shield, "amount", "via", "element", "reaction"}
+    hit_ledger: list | None = None
+
     # 하위 호환 property
     @property
     def element_aura(self) -> str:
@@ -211,6 +232,7 @@ class EntitySnapshot:
             heal = self.maxhp * 0.10
             before = self.hp
             self.hp = min(self.maxhp, self.hp + heal)
+            self._record_hit("heal", self.hp - before, via="passive")
             healed = int(self.hp - before)
             if healed > 0:
                 return f"[전사 패시브] 자동회복 +{healed} HP"
@@ -241,6 +263,7 @@ class EntitySnapshot:
             heal = self.maxhp * 0.10
             before = self.hp
             self.hp = min(self.maxhp, self.hp + heal)
+            self._record_hit("heal", self.hp - before, via="passive")
             gained = int(self.hp - before)
             if gained > 0:
                 return f"[탱커 패시브] 마법피격 → HP +{gained}"
@@ -290,6 +313,33 @@ class EntitySnapshot:
         import copy as _copy
         self.status_effects.append(_copy.copy(effect))
 
+    def _record_hit(self, kind: str, amount: float, via: str = "",
+                    element: str | None = None, reaction: str | None = None) -> None:
+        """hit_ledger에 한 줄 남긴다 (표시 전용 — 계산에 영향 없음).
+        amount는 실제로 변한 양(상한에 걸려 잘린 뒤의 값)을 넘겨야 한다.
+        element/reaction을 생략하면 직전 _stamp_last_hit 값을 쓴다 — 피해 적용
+        직전에 apply_element_and_react()가 도장을 찍는 순서를 그대로 이용한다."""
+        if self.hit_ledger is None or amount <= 0:
+            return
+        self.hit_ledger.append({
+            "kind":     kind,
+            "amount":   float(amount),
+            "via":      via,
+            "element":  self.last_hit_element  if element  is None else element,
+            "reaction": self.last_hit_reaction if reaction is None else reaction,
+        })
+
+    def _stamp_last_hit(self, element: str, reaction: str = "", via: str = "") -> None:
+        """받은 피해의 출처를 표시용으로 기록 (UI 데미지 숫자 색 구분).
+        ★ 전투 계산에는 전혀 쓰이지 않는다 — 쓰기 전용 필드다.
+        한 step 안에서 같은 대상을 여러 번 때리면 마지막 출처가 남는다
+        (숫자도 대상별 합계 1개라 색도 1개 — State._hits_from_snapshot 참고).
+        via는 확실히 아는 곳(DoT)에서만 채우고, 나머지는 세션이 TurnLog로 유도."""
+        self.last_hit_element  = element or ""
+        self.last_hit_reaction = reaction or ""
+        if via:
+            self.last_hit_via = via
+
     def tick_status_effects(self) -> list:
         """
         행동자 턴 시작 시 호출.
@@ -302,13 +352,19 @@ class EntitySnapshot:
         for eff in self.status_effects:
             if eff.effect_type == "ignite":
                 dmg = max(1, int(self.maxhp * eff.dot_rate))
+                before = self.hp
                 self.hp = max(0.0, self.hp - dmg)
+                self._stamp_last_hit("fire", via="dot")   # UI 숫자 색 (표시 전용)
+                self._record_hit("damage", before - self.hp, via="dot")
                 msgs.append(f"🔥 [{self.name}] 점화 -{dmg} HP")
             elif eff.effect_type == "bleed":
                 # 도적 주사위 출혈: 매턴 maxhp의 4~7% 랜덤 데미지 (크리 미적용)
                 rate = uniform(0.04, 0.07)
                 dmg = max(1, int(self.maxhp * rate))
+                before = self.hp
                 self.hp = max(0.0, self.hp - dmg)
+                self._stamp_last_hit("bleed", via="dot")  # UI 숫자 색 (표시 전용)
+                self._record_hit("damage", before - self.hp, via="dot")
                 msgs.append(f"🩸 [{self.name}] 출혈 -{dmg} HP")
             elif eff.effect_type == "frostbite":
                 msgs.append(f"❄ [{self.name}] 동상 — SPD 50% ({eff.turns}T 남음)")

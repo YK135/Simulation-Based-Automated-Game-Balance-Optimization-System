@@ -215,6 +215,10 @@ class EnemyActionsMixin:
     # ─────────────────────────────────────────────
     # 사제 전용 행동 (서포터형)
 
+    def _enemy_slot_of(self, unit) -> int:
+        """적 개체의 슬롯 번호 (동일 객체 기준 — 이름이 같은 개체가 여럿일 수 있다)."""
+        return next((i for i, e in enumerate(self.enemies) if e is unit), -1)
+
     def _priest_action(self, priest, msgs: list):
         """
         사제 행동 우선순위:
@@ -235,12 +239,15 @@ class EnemyActionsMixin:
             wounded = [a for a in allies if a.hp / max(a.maxhp, 1) <= 0.70]
             if wounded:
                 target_ally = min(wounded, key=lambda a: a.hp / max(a.maxhp, 1))
+                self._note_fx_target("enemy", self._enemy_slot_of(target_ally))
                 meta = SKILL_META["사제힐"]
                 priest.mp -= meta["mp"]
                 heal = meta["base_heal"] + priest.sp * meta["sp_mult"]
                 heal = min(heal, target_ally.maxhp * meta["cap"])
                 before = int(target_ally.hp)
+                hp_before = target_ally.hp
                 target_ally.hp = min(target_ally.maxhp, target_ally.hp + int(heal))
+                target_ally._record_hit("heal", target_ally.hp - hp_before)
                 gained = int(target_ally.hp) - before
                 msgs.append(f"{priest.name} → 사제힐! {target_ally.name} HP +{gained}")
                 self.logs.append(TurnLog(
@@ -255,6 +262,7 @@ class EnemyActionsMixin:
         # ── 2) 사제축복 (30% 확률) ──
         if priest.mp >= 12 and allies and _random() < 0.30:
             target_ally = max(allies, key=lambda a: a.effective_stg())
+            self._note_fx_target("enemy", self._enemy_slot_of(target_ally))
             meta = SKILL_META["사제축복"]
             priest.mp -= meta["mp"]
             target_ally.apply_buff(Buff(

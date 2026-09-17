@@ -33,12 +33,30 @@ function _seqSleep(ms) {
 // 기존 고정 대기시간(SEQ_TIMING.*)이 폴백으로 그대로 적용되어 회귀 없음.
 // section: 'player_battle' | 'enemy_battle', stateName: 'attack'|'skill'|'hurt'|'dead'
 function _animDuration(section, name, stateName, fallbackMs) {
+    const sheet = _sheetDuration(section, name, stateName);
+    return sheet === null ? fallbackMs : sheet + 150;         // +150ms 여유 버퍼
+}
+
+// 시트 자체가 재생되는 순수 시간 (여유 버퍼 제외). 시트가 아니면 null.
+//   ★ 임팩트 지점(데미지 숫자/플래시)은 반드시 이 값 기준으로 잡아야 한다.
+//     버퍼가 포함된 _animDuration에 비율을 곱하면 타격 프레임보다 늦게 터진다 —
+//     8프레임 시트에서 0.55 × (시트+150) 은 6번째 프레임(이미 회수 동작)이고,
+//     0.55 × 시트 는 5번째 프레임(실제 타격 프레임)이다.
+function _sheetDuration(section, name, stateName) {
     const meta = (typeof getCharImage === 'function') ? getCharImage(section, name, stateName) : null;
     if (meta && typeof meta === 'object' && meta.type === 'sheet' && meta.frames > 1) {
-        const fps = meta.fps || 8;
-        return Math.ceil((meta.frames / fps) * 1000) + 150;   // +150ms 여유 버퍼
+        return Math.ceil((meta.frames / (meta.fps || 8)) * 1000);
     }
-    return fallbackMs;
+    return null;
+}
+
+// 모션 전체 시간(actionTime) 중 "타격이 실제로 닿는" 지점.
+//   시트가 있으면 시트 길이의 IMPACT_RATIO, 없으면(정지/이모지) 폴백 시간의 비율.
+//   반환 값은 항상 actionTime 이하 — 남는 시간은 호출부가 hurt 단계에 흡수시킨다.
+function _impactWait(section, name, stateName, actionTime, ratio) {
+    const sheet = _sheetDuration(section, name, stateName);
+    const base = sheet === null ? actionTime : sheet;
+    return Math.min(actionTime, Math.round(base * ratio));
 }
 
 function _deathAnimDuration(section, name) {
@@ -228,6 +246,10 @@ async function playBattleSequence(action, bs) {
     // 처리하면 버튼을 누르고 모션 전체가 흐른 다음에야 숫자가 떠서 반응이
     // 느리게 느껴진다. 실제 게임처럼 모션 중간에 임팩트를 넣고, 남은 모션
     // 시간은 피격 단계가 이어서 소화한다(전체 페이싱 총합은 거의 동일).
+    //   ★ 비율은 _impactWait()가 "시트 길이"에 곱한다(여유 버퍼 제외).
+    //     8프레임 공격 시트에서 0.55 → 5번째 프레임 = 실제 타격 프레임.
+    //     마법사 mage_B(8f): 1~3 준비동작 / 4 시전 정점 / 5 발출 / 6~8 회수
+    //     박쥐   bat_B(8f) : 1~4 상승·날개접기 / 5~6 급강하(타격) / 7~8 복귀
     const IMPACT_RATIO = 0.55;
     let motionRemainder = 0;
 
@@ -264,7 +286,8 @@ async function playBattleSequence(action, bs) {
         if (isItem || isEscape) {
             await _seqSleep(actionTime);
         } else {
-            const impactWait = Math.round(actionTime * IMPACT_RATIO);
+            const impactWait = _impactWait('player_battle', job,
+                isSkill ? 'skill' : 'attack', actionTime, IMPACT_RATIO);
             motionRemainder = actionTime - impactWait;
             await _seqSleep(impactWait);
         }
@@ -373,7 +396,8 @@ async function playBattleSequence(action, bs) {
 
             // 임팩트 지점까지만 대기 (플레이어 공격과 같은 규칙 — 대칭 유지).
             //   남은 모션 시간은 아래 피격 단계가 이어서 소화한다.
-            const enemyImpactWait = Math.round(motionTime * IMPACT_RATIO);
+            const enemyImpactWait = _impactWait('enemy_battle', enemyName, motionState,
+                motionTime, IMPACT_RATIO);
             const enemyMotionRemainder = motionTime - enemyImpactWait;
             await _seqSleep(enemyImpactWait);
 

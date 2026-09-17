@@ -42,21 +42,137 @@ class StateMixin:
     #     연속공격(hits>1)이나 AoE의 타별 분해는 하지 않는다(그건 타격 사이트
     #     전부를 계측해야 하는 별개 작업). UI도 한 행동당 대상별 숫자 1개를
     #     띄우므로 현재 표시 수준과 일치한다.
-    def _hp_snapshot(self) -> dict:
-        """대상별 (hp, shield) 스냅샷 — step() 진입 시 호출."""
+    # 피해 출처 태그 필드 (ai/battle/Entity.py의 EntitySnapshot — 표시 전용)
+    _HIT_TAG_FIELDS = ("last_hit_element", "last_hit_reaction", "last_hit_via")
+
+    # TurnLog.action → hit.via. 로그에 없는 행동(watch/escape 등)은 피해를 주지
+    # 않으므로 매핑하지 않는다. counter(탱커 되갚기 / 도적 회피반격)는 반사 타격이라
+    # 기본 공격과 같은 색으로 묶는다.
+    _LOG_ACTION_TO_VIA = {
+        "attack": "attack", "counter": "attack",
+        "skill": "skill", "item": "item",
+    }
+
+    def _hp_snapshot(self, action: str = "") -> dict:
+        """step() 진입 시 호출 — (hp, shield) 스냅샷을 뜨고 피격 장부를 켠다.
+        action은 시전 대상 슬롯을 알아내는 데만 쓴다(없어도 동작)."""
+        # ★ 피해 출처 태그를 여기서 지운다. 안 지우면 지난 step의 원소가 남아
+        #   이번 step의 DoT 피해(태그를 안 남기는 경로도 있음)에 묻어 잘못된
+        #   색으로 표시된다.
+        for ent in [self.player] + list(self.enemies):
+            for f in self._HIT_TAG_FIELDS:
+                setattr(ent, f, "")
+            ent.hit_ledger = []          # 이번 step에 일어난 피해·회복을 한 줄씩 기록
+        self._fx_noted_targets = []      # 행동이 직접 알려준 시전 대상 (_note_fx_target)
+        self._fx_override = None         # TurnLog를 남기지 않는 행동의 시전 정보
+
         def pair(e):
             return (float(getattr(e, "hp", 0.0)), float(getattr(e, "shield", 0.0)))
+
+        # 이번 step의 행동자와 "시전 시점"의 대상 후보 — action_fx.targets는
+        # 행동이 끝난 뒤 추정하면 이번 공격으로 죽은 적이 빠지므로 여기서 뜬다.
+        actor, actor_idx = "", -1
+        if not getattr(self, "done", False):
+            try:
+                actor, actor_idx = self._peek_next_actor()
+            except Exception:                              # noqa: BLE001
+                actor, actor_idx = "", -1
+        alive = [en.hp > 0 for en in self.enemies]
         return {
             "player": pair(self.player),
             "enemies": [pair(en) for en in self.enemies],
             "log_len": len(self.logs),
+            "actor": actor if actor in ("player", "enemy") else "",
+            "actor_idx": actor_idx,
+            "alive": alive,
+            "target_idx": self._fx_target_slot(action, alive),
         }
 
+    def _fx_target_slot(self, action: str, alive: list) -> int:
+        """플레이어 단일 대상 행동이 실제로 겨눌 적 슬롯.
+        Player_Actions._player_action + Targeting._current_target과 같은 규칙:
+        'attack:N' / 'skill:이름:N'의 N이 살아 있으면 N, 아니면 현재 타깃,
+        그것도 죽었으면 살아 있는 첫 적."""
+        parts = str(action or "").split(":")
+        n = None
+        try:
+            if parts[0] == "attack" and len(parts) == 2:
+                n = int(parts[1])
+            elif parts[0] == "skill" and len(parts) == 3:
+                n = int(parts[2])
+        except ValueError:
+            n = None
+        if n is not None and 0 <= n < len(alive) and alive[n]:
+            return n
+        cur = getattr(self, "_target_idx", 0)
+        if 0 <= cur < len(alive) and alive[cur]:
+            return cur
+        return next((i for i, a in enumerate(alive) if a), -1)
+
+    @staticmethod
+    def _ledger_groups(entity, prev) -> dict:
+        """장부를 damage/heal/shield 세 묶음으로 나누고, 장부에 안 잡힌 변화량을
+        '잔차'로 채운다.
+
+        잔차가 생기는 경우: 기록 훅이 없는 경로로 HP/실드가 바뀐 경우(새 경로가
+        훅 없이 추가됐거나, 테스트가 hp를 직접 바꾼 경우). 잔차 덕분에 화면에서
+        숫자가 사라지지는 않지만, 실전 경로에서는 0이어야 정상이다 —
+        TestFile/test_hit_ledger.py가 무작위 전투로 이걸 검사한다.
+        """
+        prev_hp, prev_shield = prev
+        hp     = float(getattr(entity, "hp", 0.0))
+        shield = float(getattr(entity, "shield", 0.0))
+        ledger = getattr(entity, "hit_ledger", None) or []
+
+        groups = {"damage": [], "heal": [], "shield": []}
+        hp_net = sh_net = 0.0
+        for e in ledger:
+            k = e["kind"]
+            if k == "damage":
+                groups["damage"].append(e); hp_net -= e["amount"]
+            elif k == "absorb":
+                groups["damage"].append(e); sh_net -= e["amount"]
+            elif k == "heal":
+                groups["heal"].append(e);   hp_net += e["amount"]
+            elif k == "shield":
+                groups["shield"].append(e); sh_net += e["amount"]
+
+        stamp = {
+            "via":      getattr(entity, "last_hit_via", "") or "",
+            "element":  getattr(entity, "last_hit_element", "") or "",
+            "reaction": getattr(entity, "last_hit_reaction", "") or "",
+        }
+        residual = 0
+        r_hp = (hp - prev_hp) - hp_net
+        if abs(r_hp) >= 0.5:
+            residual += 1
+            kind = "heal" if r_hp > 0 else "damage"
+            groups[kind].append({"kind": kind, "amount": abs(r_hp), **stamp})
+        r_sh = (shield - prev_shield) - sh_net
+        if abs(r_sh) >= 0.5:
+            residual += 1
+            kind = "shield" if r_sh > 0 else "damage"
+            groups[kind].append({"kind": kind, "amount": abs(r_sh), **stamp})
+        groups["residual"] = residual
+        return groups
+
     def _hits_from_snapshot(self, before: dict) -> list:
-        """스냅샷 대비 변화량을 UI용 hit 이벤트 리스트로 변환.
-        kind: damage(피해, 실드로 흡수된 분 포함) / heal(회복) / shield(실드 획득)"""
+        """이번 step의 피격 장부를 UI용 hit 이벤트로 합친다.
+
+        집계 단위는 「대상 × 이벤트 종류」별 합계 1개다 — 같은 대상의 연타는
+        숫자 하나로 합치고, 같은 step의 피해와 회복은 서로 지우지 않고 따로 낸다
+        (예전 순변화량 방식은 출혈 16 + 흡혈 23.4가 heal 7 하나로 뭉개졌다).
+          kind: damage(HP 피해 + 실드 흡수) / heal(회복) / shield(실드 획득)
+
+        damage 이벤트의 태그 (프론트 팔레트는 BattleEffects.js의 _hitToneClass와 짝):
+          element        : 마지막 타격의 원소
+          reaction       : 이번 step에 이 대상에게 터진 마지막 반응
+          reaction_count : {반응명: 횟수} — 연타 파쇄 ×3 같은 표기용
+          via            : attack/skill/item/dot/passive
+        """
         if not before:
             return []
+        self._last_hit_residual = 0
 
         # 이번 step 동안 추가된 로그에서 크리티컬 여부 판정.
         #   로그에는 대상 슬롯 정보가 없어서, 피해를 입은 적이 1마리일 때만
@@ -67,26 +183,51 @@ class StateMixin:
         enemy_crit  = any(getattr(l, "actor", "") == "enemy" and getattr(l, "is_crit", False)
                           for l in new_logs)
 
-        def events(entity, prev, target, slot):
-            prev_hp, prev_shield = prev
-            hp     = float(getattr(entity, "hp", 0.0))
-            shield = float(getattr(entity, "shield", 0.0))
+        def via_from_logs(actor: str) -> str:
+            """행동 종류(기본공격/스킬/아이템)는 엔진 타격 지점에서 알 수 없어서
+            로그에서 유도한다. 크리 귀속과 같은 규칙 — player 로그는 적에게 준
+            피해, enemy 로그는 플레이어가 받은 피해에 대응한다."""
+            for l in reversed(new_logs):
+                if getattr(l, "actor", "") != actor:
+                    continue
+                v = self._LOG_ACTION_TO_VIA.get(getattr(l, "action", ""))
+                if v:
+                    return v
+            return ""
+
+        # 적이 받은 피해는 플레이어 행동, 플레이어가 받은 피해는 적 행동에서 유도
+        via_on_enemy  = via_from_logs("player")
+        via_on_player = via_from_logs("enemy")
+
+        def events(entity, prev, target, slot, via_fallback):
+            g = self._ledger_groups(entity, prev)
+            self._last_hit_residual += g["residual"]
             out = []
-            dmg = max(0.0, prev_hp - hp) + max(0.0, prev_shield - shield)
-            if int(round(dmg)) > 0:
+            dmg = g["damage"]
+            total = sum(e["amount"] for e in dmg)
+            if int(round(total)) > 0:
+                last = dmg[-1]
+                reactions = [e["reaction"] for e in dmg if e.get("reaction")]
+                count: dict = {}
+                for r in reactions:
+                    count[r] = count.get(r, 0) + 1
                 out.append({"target": target, "slot": slot,
-                            "amount": int(round(dmg)), "kind": "damage"})
-            heal = max(0.0, hp - prev_hp)
-            if int(round(heal)) > 0:
-                out.append({"target": target, "slot": slot,
-                            "amount": int(round(heal)), "kind": "heal"})
-            gained_shield = max(0.0, shield - prev_shield)
-            if int(round(gained_shield)) > 0:
-                out.append({"target": target, "slot": slot,
-                            "amount": int(round(gained_shield)), "kind": "shield"})
+                            "amount": int(round(total)), "kind": "damage",
+                            "element":  last.get("element", ""),
+                            "reaction": reactions[-1] if reactions else "",
+                            "reaction_count": count,
+                            # DoT·패시브는 기록 지점이 직접 남긴다 — 그 경우 로그 유도값보다 우선
+                            "via": last.get("via", "") or via_fallback})
+            for kind in ("heal", "shield"):
+                amt = sum(e["amount"] for e in g[kind])
+                if int(round(amt)) > 0:
+                    vias = [e.get("via", "") for e in g[kind] if e.get("via")]
+                    out.append({"target": target, "slot": slot,
+                                "amount": int(round(amt)), "kind": kind,
+                                "via": vias[-1] if vias else ""})
             return out
 
-        hits = events(self.player, before["player"], "player", -1)
+        hits = events(self.player, before["player"], "player", -1, via_on_player)
         for h in hits:
             if h["kind"] == "damage":
                 h["crit"] = bool(enemy_crit)
@@ -96,7 +237,7 @@ class StateMixin:
         for i, en in enumerate(self.enemies):
             if i >= len(prev_enemies):
                 continue                      # 전투 중 새로 생긴 개체(분열/부활)
-            enemy_hits.append(events(en, prev_enemies[i], "enemy", i))
+            enemy_hits.append(events(en, prev_enemies[i], "enemy", i, via_on_enemy))
 
         damaged = [e for group in enemy_hits for e in group if e["kind"] == "damage"]
         for e in damaged:
@@ -104,9 +245,142 @@ class StateMixin:
         for group in enemy_hits:
             hits.extend(group)
 
+        # 프론트가 키 존재 여부를 따지지 않아도 되게 전 이벤트에 기본값을 채운다
+        # (heal/shield 이벤트는 색이 kind로 정해지므로 원소 태그가 비어 있다).
         for h in hits:
             h.setdefault("crit", False)
+            h.setdefault("element", "")
+            h.setdefault("reaction", "")
+            h.setdefault("reaction_count", {})
+            h.setdefault("via", "")
         return hits
+
+    # ── 시전 이펙트 (action_fx) ─────────────────────────────────
+    # 시전당 1개. 피격 숫자(hits)와 층을 나눈다 — 버프·디버프처럼 수치가 안 변하는
+    # 행동도 이펙트를 내야 하고, 와이드 AoE는 대상이 셋이어도 한 장만 그려야 한다.
+    _FX_SELF_STYPES = ("buff", "heal", "shield")
+
+    def _note_fx_target(self, side: str, slot: int) -> None:
+        """시전 대상을 행동 코드가 직접 알려준다 (표시 전용).
+        스킬 메타만으로는 대상을 알 수 없는 경우에 쓴다 — 사제힐·사제축복은 메타상
+        heal/buff(자기 대상)지만 실제로는 다른 적에게 걸고, 축복은 HP가 안 변해서
+        장부로도 못 잡는다. 여기 남긴 대상이 있으면 추정 대상보다 우선한다."""
+        noted = getattr(self, "_fx_noted_targets", None)
+        if noted is None:
+            return
+        t = {"side": side, "slot": slot}
+        if t not in noted:
+            noted.append(t)
+
+    def _note_fx(self, name: str, stype: str, kind: str = "skill") -> None:
+        """TurnLog를 남기지 않는 행동(엘리트 사제 부활 의식)의 시전 정보를 남긴다."""
+        if hasattr(self, "_fx_override"):
+            self._fx_override = {"kind": kind, "name": name, "stype": stype}
+
+    def _action_fx(self, before: dict):
+        """이번 step에서 행동한 쪽의 시전 정보. 행동이 없었으면(상태 조회, 마비 실패) None."""
+        from ai.battle import SKILL_META, MONSTER_SKILL_META, ITEM_META
+        if not before or not before.get("actor"):
+            return None
+        actor, aidx = before["actor"], before.get("actor_idx", -1)
+        new_logs = self.logs[before.get("log_len", 0):]
+        log = next((l for l in new_logs
+                    if getattr(l, "actor", "") == actor
+                    and getattr(l, "action", "") != "counter"), None)
+        override = getattr(self, "_fx_override", None)
+        noted    = list(getattr(self, "_fx_noted_targets", None) or [])
+        if log is None and override is None:
+            return None
+        if override is not None:
+            return {"actor": actor, "actor_slot": aidx if actor == "enemy" else -1,
+                    "kind": override["kind"], "name": override["name"],
+                    "stype": override["stype"], "scope": "single",
+                    "element": "", "targets": noted}
+
+        kind   = log.action
+        detail = (log.action_detail or "")
+        name   = detail.split("(", 1)[0]          # '난사1(aoe)' / '강타1(mp_lack)' → 스킬명
+        stype, element, scope = "", "", "single"
+        if kind in ("skill", "skill_failed"):
+            meta = ((MONSTER_SKILL_META.get(name) if actor == "enemy" else None)
+                    or SKILL_META.get(name) or {})
+            stype   = meta.get("type", "")
+            element = meta.get("element", "")
+            if meta.get("aoe") or detail.endswith("(aoe)"):
+                scope = "aoe"
+            elif stype in self._FX_SELF_STYPES:
+                scope = "self"
+        elif kind == "item":
+            meta  = ITEM_META.get(name, {})
+            stype = meta.get("category", "")
+            element = meta.get("element", "")
+            if stype == "aoe_damage":
+                scope = "aoe"
+            elif stype not in ("element",):
+                scope = "self"
+        elif kind == "attack":
+            stype = "physical"
+            if actor == "enemy" and 0 <= aidx < len(self.enemies):
+                element = getattr(self.enemies[aidx], "attack_element", "") or ""
+        elif kind in ("watch", "escape", "escape_blocked"):
+            scope = "self"
+
+        # ── 대상: 시전 시점의 의도 대상 ∪ 이번 행동으로 수치가 변한 대상 ──
+        alive = before.get("alive", [])
+        targets: list = []
+
+        def add(side, slot):
+            t = {"side": side, "slot": slot}
+            if t not in targets:
+                targets.append(t)
+
+        if noted and kind not in ("skill_failed", "item_failed"):
+            # 행동이 대상을 직접 알려준 경우 — 자기 대상 스킬 메타라도 실제로는 남에게 건 것
+            if scope == "self":
+                scope = "single"
+            targets.extend(noted)
+        elif kind not in ("skill_failed", "item_failed"):
+            if scope == "self":
+                add(actor, aidx if actor == "enemy" else -1)
+            elif actor == "player":
+                if scope == "aoe":
+                    for i, a in enumerate(alive):
+                        if a:
+                            add("enemy", i)
+                else:
+                    ti = before.get("target_idx", 0)
+                    if 0 <= ti < len(alive):
+                        add("enemy", ti)
+            else:
+                add("player", -1)
+
+            # 실제로 수치가 변한 대상 — DoT/패시브는 행동의 결과가 아니므로 제외,
+            # 행동자 자신의 흡혈 같은 부수 회복도 대상이 아니다(scope=self는 위에서 이미 포함)
+            def touched(ent):
+                return any(not e.get("via") for e in (getattr(ent, "hit_ledger", None) or []))
+            if actor != "player" and touched(self.player):
+                add("player", -1)
+            for i, en in enumerate(self.enemies):
+                if actor == "enemy" and i == aidx:
+                    continue
+                if touched(en):
+                    add("enemy", i)
+
+        return {
+            "actor":      actor,
+            "actor_slot": aidx if actor == "enemy" else -1,
+            "kind":       kind,
+            "name":       name,
+            "stype":      stype,
+            "scope":      scope,
+            "element":    element,
+            "targets":    targets,
+        }
+
+    def _close_hit_ledgers(self) -> None:
+        """step이 끝나면 장부를 끈다 — 다음 step 전까지는 아무 것도 기록하지 않는다."""
+        for ent in [self.player] + list(self.enemies):
+            ent.hit_ledger = None
 
     def _live_inventory_dict(self) -> dict:
         """전투 중 self.items(원본 평탄 리스트 — 문자열)로부터 구조화 인벤토리
