@@ -4,7 +4,7 @@ battle_session/state.py — 상태 JSON
 from __future__ import annotations
 
 from ai.battle import (
-    _current_element,
+    _current_element, SKILL_META,
 )
 from ai.battle.EliteKit import (
     ASSASSIN_MARK_INTERVAL, BAT_SCREAM_INTERVAL,
@@ -417,7 +417,7 @@ class StateMixin:
     # ── 시전 이펙트 (action_fx) ─────────────────────────────────
     # 시전당 1개. 피격 숫자(hits)와 층을 나눈다 — 버프·디버프처럼 수치가 안 변하는
     # 행동도 이펙트를 내야 하고, 와이드 AoE는 대상이 셋이어도 한 장만 그려야 한다.
-    _FX_SELF_STYPES = ("buff", "heal", "shield")
+    _FX_SELF_STYPES = ("buff", "heal", "shield", "dice")
 
     def _note_fx_target(self, side: str, slot: int) -> None:
         """시전 대상을 행동 코드가 직접 알려준다 (표시 전용).
@@ -632,6 +632,11 @@ class StateMixin:
             # ── 플레이어 상태이상 ──
             "player_buffs":   p_status["buffs"],
             "player_debuffs": p_status["debuffs"],
+            # 도적 「패 고치기」 — 저장된 다음 주사위와 남은 재굴림 횟수 (표시 전용). 도적이 아니면 None
+            "player_dice": (
+                {"pending": self.player.pending_dice,
+                 "rerolls_left": max(0, SKILL_META.get("패 고치기", {}).get("max_uses", 0) - self.player.dice_fix_uses)}
+                if getattr(self.player, "job", "") == "도적" and "패 고치기" in self.player.learned_skills else None),
             # 마법사 원소 공명 단계 (표시 전용 — Elements.mage_resonance_*). 마법사가 아니면 None
             "player_resonance": (
                 {"element": self.player.resonance_element, "stack": self.player.resonance_stack,

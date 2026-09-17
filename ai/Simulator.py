@@ -121,8 +121,30 @@ class PlayerPowerIndex:
         elif spd <= 7:
             index -= 0.08   # 느린 직업 → 약간 유리하게
 
+        # ── 6. 스킬 축 보유 (Combat Content Brief 11장 — 2차 6번의 전제 조건) ──
+        # "최고 기대 기여값 하나"(2번)로는 새 자원 축(지속·반응·템포)의 다양성이 평가되지 않는다.
+        # 축은 신규 스킬의 메타 태그로만 판정하므로(흡혈 버프 / 원소 폭발 / ATB 감소·주사위)
+        # 기존 스킬만 가진 플레이어의 지수는 전과 같다.
+        index += PlayerPowerIndex.AXIS_BONUS * len(PlayerPowerIndex.skill_axes(player))
+
         # 범위 제한
         return max(0.4, min(2.0, index))
+
+    AXIS_BONUS = 0.04   # 축 하나당 목표 승률 산정 지수 가산 (세 축 다 있으면 +0.12)
+
+    @staticmethod
+    def skill_axes(player: EntitySnapshot) -> set:
+        """보유 스킬이 여는 자원 축 — sustain(흡혈) / reaction(원소 폭발) / tempo(ATB 감소·주사위 조작)."""
+        axes = set()
+        for skill in player.learned_skills:
+            meta = SKILL_META.get(skill) or {}
+            if meta.get("buff_stat") == "lifesteal":
+                axes.add("sustain")
+            if meta.get("element") == "react":
+                axes.add("reaction")
+            if meta.get("atb_drain") or meta.get("type") == "dice":
+                axes.add("tempo")
+        return axes
 
     @staticmethod
     def _skill_expected_dmg(player: EntitySnapshot) -> float:
@@ -181,8 +203,13 @@ class PlayerPowerIndex:
                 shield_val = player.maxhp * meta.get("shield_mult", 0.0)
                 dmg        = shield_val * 0.5  # 방어 기여 절반 환산
 
+            elif stype == "harvest":
+                # 피의 수확 — 대상 maxHP 비례라 플레이어 스탯으로는 정할 수 없다. 출혈 3스택(18%)을
+                # 일반 몬스터 HP ≈ 플레이어 STG×8 정도로 놓고 STG 기준 근사 (조건부라 절반)
+                dmg = player.stg * 1.5 * 0.5
+
             else:
-                dmg = 0.0
+                dmg = 0.0      # dice(준비 행동) 등
 
             if dmg > best:
                 best = dmg

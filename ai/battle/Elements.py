@@ -15,6 +15,9 @@ REACTIONS = {
     ("lightning", "fire"):      "overload",
 }
 
+# 원소 폭발(9·10장): 대상에 부착된 원소를 읽어 반응이 성립하는 상대 원소를 주입한다 — 전부 위 REACTIONS 조합
+REACT_PARTNER = {"ice": "fire", "fire": "lightning", "lightning": "fire"}
+
 REACTION_EFFECTS = {
     "melt":     {"bonus_mult": 1.5, "label": "💧 융해"},
     "shatter":  {"bonus_mult": 1.2, "label": "💎 파쇄"},

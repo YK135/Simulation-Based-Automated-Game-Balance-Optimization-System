@@ -85,6 +85,13 @@ const SKILL_FX = {
     '실드': { family: 'shield' },
     // explosion
     bomb: { family: 'explosion' }, web_bomb: { family: 'explosion' },
+    // ── 신규 스킬 6종 (2차 6번) — 기존 계열 재사용, 전용 시트가 오면 계열만 바꾼다 ──
+    '화염 폭풍': { family: 'explosion', tint: 'hue-rotate(-20deg) saturate(1.3)' },   // 와이드 화염
+    '원소 폭발': { family: 'react', scale: 1.5 },                                       // 반응을 강제로 터뜨린다
+    '방패치기':  { family: 'impact' },
+    '피의 격노': { family: 'buff', tint: 'hue-rotate(320deg) saturate(1.4)' },        // 붉은 자기 강화
+    '패 고치기': { family: 'buff', tint: 'hue-rotate(200deg)' },                        // 준비 행동 — 자기 대상
+    '피의 수확': { family: 'slash', flip: true, tint: 'hue-rotate(330deg) saturate(1.5)' },
 };
 
 // 반응 이펙트 틴트 — 색값은 BattleEffects.js의 _FLASH_BY_TONE과 같은 계열(융해 주황 / 과부하 보라 / 파쇄 청백)

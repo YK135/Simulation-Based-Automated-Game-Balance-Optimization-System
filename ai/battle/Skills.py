@@ -5,9 +5,12 @@ from random import randint, random, uniform
 
 from .Entity import EntitySnapshot, Debuff, Buff, StatusEffect
 from .Damage import DamageCalc
-from .Elements import apply_element_and_react, mage_resonance_on_cast, mage_resonance_mult
+from .Elements import (
+    apply_element_and_react, mage_resonance_on_cast, mage_resonance_mult,
+    REACT_PARTNER, ELEMENT_STATUS_TURNS, _current_element,
+)
 from .EliteKit import BAT_SCREAM_SPD_AMOUNT, BAT_SCREAM_TURNS
-from .BossKit import MIDBOSS_RIFT_MULT, MIDBOSS_RIFT_ARM_PEN, RIFT_STATUS
+from .BossKit import MIDBOSS_RIFT_MULT, MIDBOSS_RIFT_ARM_PEN, RIFT_STATUS, is_boss_or_elite
 from .MonsterKit import BAT_WING_SKILL, BAT_WING_ATB_DRAIN, BAT_WING_MP
 
 SKILL_META = {
@@ -210,6 +213,46 @@ SKILL_META = {
         "buff_stat": "spd", "buff_amount": 0.10, "buff_turns": 2
     },
     # ─────────────────────────────────────────────
+    # 신규 스킬 6종 (Combat Content Brief 9·10장 · 11-1 2차 6번) — 직업별 2개
+    #   공통 키: requires_element / requires_bleed(대상 조건 — 없으면 시전 불가, 메뉴 회색),
+    #            hp_cost_ratio(MP 대신 현재 HP 지불), atb_drain(+_boss/_max_uses), max_uses
+    # ─────────────────────────────────────────────
+    "화염 폭풍": {
+        # 마법사 최초 AoE (9장, Lv7): fire 0.95배 전체, 명중 대상에게 점화 확정.
+        #   점화는 maxHP 비례 DoT라 대상이 많을수록 총량이 커진다.
+        "mp": 16, "mult": 0.95, "type": "magical", "hits": 1, "aoe": True, "element": "fire",
+        "on_hit_status": {"effect_type": "ignite", "turns": ELEMENT_STATUS_TURNS["ignite"], "name": "fire"},
+    },
+    "원소 폭발": {
+        # 마법사 Lv9: 대상에 부착된 원소를 읽어 반응이 성립하는 상대 원소를 주입(REACT_PARTNER).
+        #   부착 원소가 없으면 사용 불가. 주입 원소가 공명 단계에도 그대로 반영된다.
+        "mp": 15, "mult": 1.2, "type": "magical", "hits": 1, "element": "react",
+        "requires_element": True,
+    },
+    "방패치기": {
+        # 전사 Lv8: 물리 0.70배 + 명중 시 대상 ATB −25 (추가 행동권 억제기 — 정규 큐 순서는 못 바꾼다).
+        #   보스·엘리트는 −12, 전투당 3회까지만 (4회째부터 피해만) — 6-1 상한 근거.
+        "mp": 9, "mult": 0.70, "type": "physical", "hits": 1,
+        "atb_drain": 25.0, "atb_drain_boss": 12.0, "atb_drain_max_uses": 3,
+    },
+    "피의 격노": {
+        # 전사 Lv11: MP 대신 현재 HP 15%를 지불(max(1, hp×0.85)) → 3턴간 흡혈 25% (10-4 상한 그대로).
+        "mp": 0, "hp_cost_ratio": 0.15, "type": "buff",
+        "buff_stat": "lifesteal", "buff_amount": 0.25, "buff_turns": 3,
+    },
+    "패 고치기": {
+        # 도적 Lv8: 다음 공격에 쓸 주사위를 미리 굴려 저장(pending_dice). 불만족이면 같은 스킬로 재굴림.
+        #   전투당 3회. 저장된 눈은 다음 공격(일반공격/공격형 스킬)이 소비한다 — 소급 수정 없음(6-3).
+        "mp": 6, "type": "dice", "max_uses": 3,
+    },
+    "피의 수확": {
+        # 도적 Lv19: 단일 대상의 출혈 스택을 전부 소비, 스택당 maxHP 6% 고정 피해(보스·엘리트 3%).
+        #   출혈이 없으면 사용 불가. 고정 피해 — 회피·크리·방어 무관, 실드는 적용.
+        "mp": 14, "type": "harvest", "per_stack": 0.06, "per_stack_boss": 0.03,
+        "requires_bleed": True,
+    },
+
+    # ─────────────────────────────────────────────
     # 사제(서포터형 몬스터) 전용 스킬 — 적이 사용
     # 플레이어 스킬 트리에는 등록되지 않음.
     # ─────────────────────────────────────────────
@@ -373,6 +416,71 @@ def skill_atb_drain(skill_name: str, attacker: EntitySnapshot) -> float:
     return float(meta.get("atb_drain", 0.0) or 0.0)
 
 
+def consume_atb_drain(skill_name: str, attacker: EntitySnapshot, defender: EntitySnapshot | None) -> float:
+    """명중한 ATB 감소기의 실제 감소량 — 보스·엘리트 대상은 atb_drain_boss로 줄고 전투당
+    atb_drain_max_uses회까지만(그 뒤 0). 한 번 부를 때마다 횟수를 센다(호출부는 명중 시 1회만 부른다).
+    상한이 없는 스킬(날갯소리)은 그대로 atb_drain."""
+    meta = _resolve_meta(skill_name, attacker) or {}
+    drain = float(meta.get("atb_drain", 0.0) or 0.0)
+    if drain <= 0:
+        return 0.0
+    if defender is not None and is_boss_or_elite(defender) and "atb_drain_boss" in meta:
+        max_uses = meta.get("atb_drain_max_uses")
+        if max_uses is not None:
+            if attacker.atb_drain_uses >= max_uses:
+                return 0.0
+            attacker.atb_drain_uses += 1
+        return float(meta["atb_drain_boss"])
+    return drain
+
+
+def skill_effective_element(meta: dict, defender: EntitySnapshot | None) -> str:
+    """스킬이 실제로 부딪히는 원소 — "react"(원소 폭발)는 대상 부착 원소의 상대 원소, 없으면 ""."""
+    elem = meta.get("element", "") or ""
+    if elem != "react":
+        return elem
+    if defender is None:
+        return ""
+    return REACT_PARTNER.get(_current_element(defender), "")
+
+
+def skill_requirement_error(skill_name: str, attacker: EntitySnapshot,
+                            defender: EntitySnapshot | None) -> str:
+    """지금 이 스킬을 쓸 수 없는 이유 — ""(가능) / "mp" / "no_element" / "no_bleed" / "max_uses".
+    세션의 get_skills(메뉴 회색 처리)·사전 검사, 측정용 AI, execute_skill 안전망이 같은 판정을 쓴다."""
+    meta = _resolve_meta(skill_name, attacker)
+    if not meta:
+        return ""
+    cost = max(0, int(round(meta.get("mp", 0) * attacker.mp_cost_multiplier())))
+    if attacker.mp < cost:
+        return "mp"
+    if meta.get("requires_element") and not skill_effective_element(meta, defender):
+        return "no_element"
+    if meta.get("requires_bleed") and not (defender is not None and any(
+            getattr(e, "effect_type", "") == "bleed" for e in getattr(defender, "status_effects", []))):
+        return "no_bleed"
+    if meta.get("type") == "dice" and attacker.dice_fix_uses >= meta.get("max_uses", 0):
+        return "max_uses"
+    return ""
+
+
+SKILL_REQUIREMENT_LABEL = {
+    "mp":         "MP 부족",
+    "no_element": "대상에 부착된 원소가 없음",
+    "no_bleed":   "대상이 출혈 중이 아님",
+    "max_uses":   "이번 전투 사용 횟수 소진",
+}
+
+
+def harvest_damage(meta: dict, defender: EntitySnapshot) -> tuple:
+    """피의 수확 — 대상의 출혈 스택 수와 고정 피해 (보스·엘리트는 per_stack_boss). 반환 (스택, 피해)."""
+    eff = next((e for e in getattr(defender, "status_effects", []) if e.effect_type == "bleed"), None)
+    if eff is None:
+        return 0, 0
+    per = meta["per_stack_boss"] if is_boss_or_elite(defender) else meta["per_stack"]
+    return eff.stacks, int(defender.maxhp * per * eff.stacks)
+
+
 # ────────────────────────────────────────────
 # 원소 시스템 — element_queue 기반
 # ────────────────────────────────────────────
@@ -509,13 +617,41 @@ def execute_skill(
     if attacker.mp < real_mp_cost:
         return 0, True, ""
 
+    # ── 대상 조건 안전망 (원소 폭발 / 피의 수확 / 패 고치기 횟수) — 호출부가 먼저 거르지만 MP는 지키지 않는다 ──
+    req = skill_requirement_error(skill_name, attacker, defender)
+    if req and req != "mp":
+        return 0, False, ""
+
     attacker.mp -= real_mp_cost
     stype = meta["type"]
+    element = skill_effective_element(meta, defender)     # "react"는 여기서 실제 원소로 확정
+
+    # ── HP 지불 스킬 (피의 격노): 현재 HP 기준, 절대 죽지 않는다 — max(1, hp × 0.85) ──
+    hp_cost = meta.get("hp_cost_ratio", 0.0)
+    if hp_cost:
+        before_hp = attacker.hp
+        attacker.hp = max(1.0, attacker.hp * (1.0 - hp_cost))
+        if getattr(attacker, "hit_ledger", None) is not None:
+            attacker._record_hit("damage", before_hp - attacker.hp, via="cost", element="", reaction="")
 
     # ── 마법사 원소 공명(6-2) — 시전 1회당 한 번, 원소 마법 스킬만 상태를 바꾼다 ──
     #    (실전 세션과 튜너 엔진이 모두 execute_skill을 거치므로 여기가 공용 훅 자리.
     #     AoE는 세션이 첫 대상만 execute_skill로 처리하므로 역시 1회.)
-    resonance_note = mage_resonance_on_cast(attacker, meta.get("element", ""), stype)
+    resonance_note = mage_resonance_on_cast(attacker, element, stype)
+
+    if stype == "dice":
+        # 패 고치기 — 다음 공격 주사위를 미리 굴려 저장. 호출부(세션/엔진)의 주사위 굴림이 소비한다.
+        attacker.pending_dice = randint(1, 6)
+        attacker.dice_fix_uses += 1
+        return 0, False, f"dice:{attacker.pending_dice}"
+
+    if stype == "harvest":
+        # 피의 수확 — 출혈 스택 전부 소비 → 스택당 maxHP 비율 고정 피해 (회피·크리·방어 무관)
+        stacks, dmg = harvest_damage(meta, defender)
+        defender.status_effects = [e for e in defender.status_effects if e.effect_type != "bleed"]
+        if hasattr(defender, "_stamp_last_hit"):
+            defender._stamp_last_hit("bleed", "")        # 숫자 색: 출혈 계열 (표시 전용)
+        return dmg, False, f"harvest:{stacks}"
 
     if stype == "debuff":
         amt = round(
@@ -608,7 +744,7 @@ def execute_skill(
     total = 0
     hits = meta.get("hits", 1)
     cond_mult, cond_tags = (physical_skill_mult(meta, defender) if stype == "physical" else (1.0, []))
-    res_mult = mage_resonance_mult(attacker, meta.get("element", "")) if stype == "magical" else 1.0
+    res_mult = mage_resonance_mult(attacker, element) if stype == "magical" else 1.0
 
     for _ in range(hits):
         if stype == "physical":
@@ -656,8 +792,7 @@ def execute_skill(
             name=skill_name,
         ))
 
-    # ── 원소 큐 + 반응 + 상태이상 ──
-    element = meta.get("element", "")
+    # ── 원소 큐 + 반응 + 상태이상 (element는 위에서 확정 — 원소 폭발은 주입 원소) ──
     extra_msgs: list = []
     if total > 0:
         extra_msgs.extend(_PHYSICAL_TAG_MSG[t] for t in cond_tags)      # 처형 / 출혈 급소

@@ -162,6 +162,11 @@ class EntitySnapshot:
     #   박쥐의 흡혈은 별도(MonsterKit.bat_lifesteal_amount) — 이 필드를 쓰지 않는다.
     lifesteal: float = 0.0
 
+    # ── 신규 스킬 6종의 전투당 상태 (Combat Content Brief 9·10장 · 11-1 2차 6번) ──
+    pending_dice: int = 0        # 도적 「패 고치기」가 저장한 다음 공격 주사위 (0 = 없음, 다음 공격이 소비)
+    dice_fix_uses: int = 0       # 「패 고치기」 사용 횟수 (전투당 최대 Skills 메타 max_uses)
+    atb_drain_uses: int = 0      # 「방패치기」가 보스·엘리트에게 ATB를 깎은 횟수 (전투당 상한 뒤엔 피해만)
+
     # ── 마법사 원소 공명 (ai/battle/Elements.py mage_resonance_*) — 플레이어(마법사) 전용 ──
     resonance_element: str = ""      # 마지막으로 시전한 원소 마법의 원소
     resonance_stack: int = 0         # 같은 원소 연속 시전 수 (1~3) — 2단계 +10% / 3단계 +20%

@@ -169,7 +169,7 @@ function refreshPlayerStatusList(bs) {
 
     const STAT_KOR = {
         stg:'공격', arm:'방어', sparm:'마방', spd:'속도',
-        mp_efficiency:'마나효율'
+        mp_efficiency:'마나효율', lifesteal:'흡혈'
     };
 
     const renderChip = (s, kind) => {
@@ -191,6 +191,13 @@ function refreshPlayerStatusList(bs) {
         const pct = Math.max(0, res.stack - 1) * 10;
         buffsEl.innerHTML += `<span class="status-chip buff resonance" title="원소 공명 — 같은 원소 연속 시전 ${res.stack}/${res.max}, 피해 +${pct}%. 다른 원소로 바꾸면 그 시전의 반응 보너스 +20%p">
                   🔮 ${elemKor} 공명<span class="turns">${res.stack}/${res.max}</span>
+                </span>`;
+    }
+    // 도적 「패 고치기」 — 저장된 다음 주사위(bs.player_dice — 서버 표시용 파생값)
+    const dice = bs.player_dice;
+    if (dice && dice.pending > 0) {
+        buffsEl.innerHTML += `<span class="status-chip buff dice" title="패 고치기로 정해 둔 다음 공격 주사위 — 재굴림 ${dice.rerolls_left}회 남음">
+                  🎲 다음 주사위 ${dice.pending}<span class="turns">${dice.rerolls_left}회</span>
                 </span>`;
     }
     debuffsEl.innerHTML = debuffs.map(d => renderChip(d, 'debuff')).join('');

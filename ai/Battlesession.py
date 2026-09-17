@@ -505,15 +505,21 @@ class BattleSession(
         return self._DOT_LABEL.get(getattr(ent, "last_hit_element", ""), "🔥")
 
     def get_skills(self) -> list:
-        """사용 가능한 스킬 목록 반환"""
+        """사용 가능한 스킬 목록 반환 — usable은 MP뿐 아니라 대상 조건(원소 폭발·피의 수확)과
+        전투당 횟수(패 고치기)까지 본다(Skills.skill_requirement_error). reason은 메뉴 툴팁용."""
+        from ai.battle import skill_requirement_error, SKILL_REQUIREMENT_LABEL
+        target = self._current_target()
         result = []
         for sk in self.player.learned_skills:
             meta = SKILL_META.get(sk, {})
+            why = skill_requirement_error(sk, self.player, target)
             result.append({
                 "name":   sk,
                 "mp":     meta.get("mp", 0),
                 "type":   meta.get("type", ""),
-                "usable": self.player.mp >= meta.get("mp", 0),
+                "usable": not why,
+                "reason": SKILL_REQUIREMENT_LABEL.get(why, "") if why else "",
+                "hp_cost": int(round(meta.get("hp_cost_ratio", 0.0) * 100)),   # 피의 격노: 현재 HP % 지불
             })
         return result
 

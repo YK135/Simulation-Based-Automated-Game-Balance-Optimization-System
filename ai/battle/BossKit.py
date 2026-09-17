@@ -60,6 +60,15 @@ def is_midboss(en) -> bool:
     return getattr(en, "enemy_type", "") == MIDBOSS_TYPE
 
 
+BOSS_TYPES = (MIDBOSS_TYPE, "최종 보스")
+
+
+def is_boss_or_elite(en) -> bool:
+    """보스(중간·최종) 또는 엘리트 리더 — 10-4의 비율 피해 반감(피의 수확 3%/스택)과
+    6-1의 방패치기 ATB 감소 반감(−12, 전투당 3회)이 적용되는 대상."""
+    return getattr(en, "enemy_type", "") in BOSS_TYPES or bool(getattr(en, "elite_leader", False))
+
+
 def midboss_phase_for(hp_ratio: float) -> int:
     if hp_ratio <= MIDBOSS_PHASE3_HP:
         return 3

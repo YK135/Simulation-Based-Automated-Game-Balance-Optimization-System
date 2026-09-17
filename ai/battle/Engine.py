@@ -8,7 +8,7 @@ from random import randint, random
 from .Entity import EntitySnapshot
 from .ATB import ATBSystem
 from .Damage import DamageCalc, _apply_damage_with_shield, LifestealCast, deal_damage_with_lifesteal
-from .Skills import SKILL_META, execute_skill, _resolve_meta, skill_atb_drain
+from .Skills import SKILL_META, execute_skill, _resolve_meta, skill_atb_drain, consume_atb_drain
 from .Items import use_item
 from .Elements import apply_element_and_react
 from .MonsterKit import BAT_TYPE, bat_lifesteal_amount
@@ -184,7 +184,8 @@ class BattleEngine:
             # ── 도적 주사위 (플레이어 공격, 게임 규칙과 동일) ──
             dice = None
             if actor == "player" and attacker.job == "도적":
-                dice = randint(1, 6)
+                dice = attacker.pending_dice or randint(1, 6)   # 「패 고치기」가 저장한 눈이 있으면 소비
+                attacker.pending_dice = 0
                 attacker._suppress_crit = True
             dmg, is_dodge, is_crit = DamageCalc.physical(
                 attacker.effective_stg(), attacker.luc,
@@ -246,7 +247,8 @@ class BattleEngine:
             _meta = SKILL_META.get(action.detail, {})
             if (actor == "player" and attacker.job == "도적"
                     and _meta.get("type", "") in self._ATTACK_SKILL_TYPES):
-                dice = randint(1, 6)
+                dice = attacker.pending_dice or randint(1, 6)   # 「패 고치기」 저장 눈 소비
+                attacker.pending_dice = 0
                 attacker._suppress_crit = True
             # ── 연속공격류(hits>1 physical/magical): 개별 타격 판정 (Digital Twin) ──
             #    각 타격마다 회피/크리/원소반응/실드흡수/HP적용을 독립 수행.
@@ -316,13 +318,16 @@ class BattleEngine:
 
             if not mp_lack:
                 _meta = SKILL_META.get(action.detail, {})
-                # ── 피해 없는 ATB 감소기 (박쥐 날갯소리) — 대상의 ATB에서 깎는다 ──
-                _drain = skill_atb_drain(action.detail, attacker)
-                if _drain > 0:
-                    if actor == "enemy":
-                        self.atb.player_pt = max(0.0, self.atb.player_pt - _drain)
-                    else:
-                        self.atb.enemy_pt = max(0.0, self.atb.enemy_pt - _drain)
+                # ── ATB 감소기: 피해 없는 스킬(날갯소리)은 시전 시, 피해 스킬(방패치기)은 명중 시.
+                #    보스·엘리트 반감/상한은 consume_atb_drain이 세션과 같은 규칙으로 센다 ──
+                _rmeta = _resolve_meta(action.detail, attacker) or {}     # 몬스터 전용기(날갯소리)는 MONSTER_SKILL_META
+                if skill_atb_drain(action.detail, attacker) > 0 and (_rmeta.get("type") == "atb_drain" or dmg > 0):
+                    _drain = consume_atb_drain(action.detail, attacker, defender)
+                    if _drain > 0:
+                        if actor == "enemy":
+                            self.atb.player_pt = max(0.0, self.atb.player_pt - _drain)
+                        else:
+                            self.atb.enemy_pt = max(0.0, self.atb.enemy_pt - _drain)
                 # ── 전사 광역 생존기 실드 (슬래시 계열) — 시뮬은 1v1이라 명중 1명 기준 ──
                 _sph = _meta.get("shield_per_hit", 0.0)
                 if _sph > 0 and attacker.job == "전사" and actor == "player" and dmg > 0:

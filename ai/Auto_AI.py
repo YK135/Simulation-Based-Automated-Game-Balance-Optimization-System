@@ -10,11 +10,13 @@ from ai.battle.Elements import (
     mage_resonance_mult, RESONANCE_STEP, RESONANCE_MAX_STACK, RESONANCE_ELEMENTS,
     MAGE_REACTION_BONUS, MAGE_SWITCH_REACTION_BONUS,
 )
-from ai.battle.Skills import physical_skill_mult
+from ai.battle.Skills import (
+    physical_skill_mult, skill_requirement_error, skill_effective_element, harvest_damage,
+)
 from ai.battle.EliteKit import elite_forced_action, GOLEM_PHASE_STRIKE
-from ai.battle.BossKit import is_midboss
+from ai.battle.BossKit import is_midboss, is_boss_or_elite
 
-ATTACK_TYPES = {"physical", "magical", "multi_hit", "tank_attack", "counter"}
+ATTACK_TYPES = {"physical", "magical", "multi_hit", "tank_attack", "counter", "harvest"}
 _PHYSICAL_TYPES = {"physical", "multi_hit", "tank_attack", "counter"}
 
 
@@ -22,11 +24,12 @@ _PHYSICAL_TYPES = {"physical", "multi_hit", "tank_attack", "counter"}
 #   StatTuner · BattleSimulator · core/Balance_Hook.py가 기본 모드로 모든 일반 몬스터를 튜닝하므로
 #   기본 모드의 점수는 여기서 절대 바뀌면 안 된다 (Combat Content Brief 11-1 3-3).
 
-def _skill_attack_element(meta: dict) -> str:
-    """이 스킬이 대상의 원소 큐와 부딪히는 원소 — 물리 계열은 'physical', 마법은 meta.element."""
+def _skill_attack_element(meta: dict, defender: EntitySnapshot | None = None) -> str:
+    """이 스킬이 대상의 원소 큐와 부딪히는 원소 — 물리 계열은 'physical', 마법은 meta.element
+    ("react"인 원소 폭발은 대상 부착 원소의 상대 원소)."""
     if meta.get("type") in _PHYSICAL_TYPES:
         return "physical"
-    return meta.get("element", "") or ""
+    return skill_effective_element(meta, defender)
 
 
 def _reaction_bonus(meta: dict, defender: EntitySnapshot | None,
@@ -39,7 +42,7 @@ def _reaction_bonus(meta: dict, defender: EntitySnapshot | None,
     cur = _current_element(defender)
     if not cur:
         return 1.0
-    elem = _skill_attack_element(meta)
+    elem = _skill_attack_element(meta, defender)
     if elem == "physical":
         return REACTION_EFFECTS["shatter"]["bonus_mult"] if cur == "ice" else 1.0
     name = REACTIONS.get((cur, elem))
@@ -52,9 +55,9 @@ def _reaction_bonus(meta: dict, defender: EntitySnapshot | None,
     return mult
 
 
-def _next_resonance_mult(meta: dict, attacker: EntitySnapshot) -> float:
+def _next_resonance_mult(meta: dict, attacker: EntitySnapshot, defender: EntitySnapshot | None = None) -> float:
     """이 스킬을 지금 시전하면 적용될 공명 단계 배율 — 같은 원소면 다음 단계, 아니면 1.0 (측정용 AI만 본다)."""
-    elem = meta.get("element", "")
+    elem = skill_effective_element(meta, defender) if defender is not None else meta.get("element", "")
     if getattr(attacker, "job", "") != "마법사" or elem not in RESONANCE_ELEMENTS:
         return 1.0
     if attacker.resonance_element != elem:
@@ -114,6 +117,21 @@ def _skill_efficiency(skill_name: str, attacker: EntitySnapshot, defender: Entit
         return -1.0
 
     stype = meta.get("type")
+
+    # 대상 조건이 있는 스킬(원소 폭발·피의 수확)·횟수 소진(패 고치기)은 지금 못 쓰면 배제
+    if (meta.get("requires_element") or meta.get("requires_bleed") or stype == "dice") \
+            and skill_requirement_error(skill_name, attacker, defender) not in ("", "mp"):
+        return -1.0
+
+    if stype == "harvest":
+        # 피의 수확 — 대상 maxHP 비례 고정 피해 (보스·엘리트 반감은 harvest_damage가 안다)
+        if defender is None:
+            return -1.0
+        _stacks, dmg = harvest_damage(meta, defender)
+        return dmg / real_mp_cost if dmg > 0 else -1.0
+
+    if stype == "dice":
+        return -1.0          # 공격이 아니라 준비 행동 — 측정용 AI의 decide()가 따로 판단한다
 
     if stype == "debuff":
         avg_amount = sum(meta["debuff_amount"]) / 2
@@ -185,7 +203,7 @@ def _best_attack_skill(attacker: EntitySnapshot, defender: EntitySnapshot,
             if meta.get("type") == "physical":
                 score *= physical_skill_mult(meta, defender)[0]
             elif meta.get("type") == "magical":
-                score *= _next_resonance_mult(meta, attacker)
+                score *= _next_resonance_mult(meta, attacker, defender)
         if score > best_score:
             best_score, best = score, skill
     return best if best_score > 0 else None
@@ -322,6 +340,43 @@ class PlayerAI:
                 return Action("skill", arm_buff)
         return None
 
+    # 신규 스킬 판단 기준 (측정용) — 수치는 6장·10장의 사용 의도를 규칙으로 옮긴 것
+    RAGE_HP_MIN = 0.40          # 피의 격노: 이 아래 HP면 HP 지불이 위험
+    RAGE_ENEMY_HP_MIN = 0.35    # 피의 격노: 적이 곧 죽으면 3턴 흡혈은 낭비
+    DICE_REROLL_BELOW = 3       # 패 고치기: 저장된 눈이 이 값 미만이면 재굴림
+    HARVEST_STACKS = 3          # 피의 수확: 스택이 다 찼거나 그 피해로 처치 가능할 때
+
+    def _reactive_new_skills(self, attacker: EntitySnapshot, defender: EntitySnapshot,
+                             hp_ratio: float, mp_ratio: float, enemy_count: int) -> Action | None:
+        skills = attacker.learned_skills
+        job = getattr(attacker, "job", "")
+
+        def ok(name):
+            return name in skills and skill_requirement_error(name, attacker, defender) == ""
+
+        if job == "도적":
+            # 피의 수확 — 스택이 찼거나 처치 가능
+            if ok("피의 수확"):
+                stacks, dmg = harvest_damage(SKILL_META["피의 수확"], defender)
+                if stacks >= self.HARVEST_STACKS or (stacks >= 1 and dmg >= defender.hp):
+                    return Action("skill", "피의 수확")
+            # 패 고치기 — 저장된 눈이 없거나 낮으면 (턴을 쓰는 형태 — 6-3의 검증 대상)
+            if ok("패 고치기") and (attacker.pending_dice == 0 or attacker.pending_dice < self.DICE_REROLL_BELOW):
+                return Action("skill", "패 고치기")
+        elif job == "전사":
+            # 피의 격노 — 흡혈 버프가 없고, HP 지불이 안전하고, 적이 아직 오래 남았을 때
+            if ok("피의 격노") and not _self_has_buff(attacker, "lifesteal") \
+                    and hp_ratio >= self.RAGE_HP_MIN \
+                    and (defender.hp / defender.maxhp if defender.maxhp > 0 else 0) >= self.RAGE_ENEMY_HP_MIN:
+                return Action("skill", "피의 격노")
+            # 방패치기 — 상대가 나보다 빨라 추가 행동권을 자주 얻을 때(템포 억제), 상한이 남았을 때만
+            if ok("방패치기") and defender.effective_spd() >= attacker.effective_spd() * 1.2 \
+                    and mp_ratio >= self.SKILL_MP_RESERVE:
+                meta = SKILL_META["방패치기"]
+                if not (is_boss_or_elite(defender) and attacker.atb_drain_uses >= meta.get("atb_drain_max_uses", 0)):
+                    return Action("skill", "방패치기")
+        return None
+
     def decide(self, attacker: EntitySnapshot, defender: EntitySnapshot,
                enemy_count: int = 1) -> Action:
         hp_ratio = attacker.hp / attacker.maxhp if attacker.maxhp > 0 else 1.0
@@ -347,6 +402,12 @@ class PlayerAI:
             guard = self._reactive_guard(attacker, hp_ratio)
             if guard is not None:
                 return guard
+
+        # ── 측정용 모드: 신규 스킬 6종의 사용 판단 (2차 6번) — 기본 모드는 이 블록도 타지 않는다 ──
+        if reactive:
+            new_skill = self._reactive_new_skills(attacker, defender, hp_ratio, mp_ratio, enemy_count)
+            if new_skill is not None:
+                return new_skill
 
         # 실드: 초반엔 HP 35% 이하 위기일 때만 (기존 50% → 35%)
         shield_threshold = 0.35 if early_game else 0.50

@@ -9,6 +9,7 @@ from ai.battle import (
     DamageCalc, execute_skill, SKILL_META, TurnLog,
     execute_single_hit, consume_skill_mp, mage_resonance_mult,
     LifestealCast, lifesteal_heal, StatusEffect, BLEED_RATE_PER_STACK,
+    consume_atb_drain, skill_requirement_error, SKILL_REQUIREMENT_LABEL,
 )
 
 
@@ -30,7 +31,12 @@ class PlayerActionsMixin:
         """
         if getattr(self.player, "job", "") != "도적":
             return None
-        dice = randint(1, 6)
+        fixed = getattr(self.player, "pending_dice", 0)
+        if fixed:
+            dice = fixed                       # 「패 고치기」가 미리 굴려 둔 눈 — 이 공격이 소비한다
+            self.player.pending_dice = 0
+        else:
+            dice = randint(1, 6)
         self.player._suppress_crit = True
         info = {
             "dice":       dice,
@@ -38,7 +44,7 @@ class PlayerActionsMixin:
             "force_crit": dice == 6,
             "bleed":      dice in (3, 6),
         }
-        msgs.append(f"🎲 주사위: {dice}!")
+        msgs.append(f"🎲 주사위: {dice}!" + (" (패 고치기로 정한 눈)" if fixed else ""))
         return info
 
     def _apply_rogue_dice(self, dmg: int, dice_info, target, msgs: list) -> int:
@@ -412,6 +418,18 @@ class PlayerActionsMixin:
             meta = SKILL_META.get(skill_name, {})
             is_aoe = bool(meta.get("aoe", False))
 
+            # ── 대상 조건·횟수 사전 검사 (원소 폭발 / 피의 수확 / 패 고치기) — MP 부족은 아래 기존 경로 ──
+            #    메뉴가 회색으로 막지만, 무효 요청도 차례는 소비한다(보스 카운터 계약과 같은 이유).
+            _why = skill_requirement_error(skill_name, self.player, target)
+            if _why and _why != "mp":
+                msgs.append(f"{skill_name}을(를) 쓸 수 없다 — {SKILL_REQUIREMENT_LABEL.get(_why, _why)}")
+                self.logs.append(TurnLog(
+                    turn=self.turn, actor="player", action="skill_failed",
+                    action_detail=f"{skill_name}({_why})", damage_dealt=0,
+                    hp_after=target.hp, mp_after=self.player.mp,
+                ))
+                return "ok"
+
             # ── AoE 스킬: 살아있는 모든 적에게 적용 ────────────
             # 슬래시1/2, 난사1/2가 해당. SKILL_META의 "aoe": True 플래그.
             # MP는 한 번만 차감, 두 번째 대상부터는 DamageCalc 직접 호출.
@@ -493,6 +511,10 @@ class PlayerActionsMixin:
                         # AoE 원소 반응
                         elem = meta.get("element", "")
                         raw = apply_element_and_react(self.player, tgt, elem, raw, msgs)
+                        # 명중 시 부여 상태이상(화염 폭풍 점화) — 첫 대상은 execute_skill이 같은 규칙으로 처리
+                        _ohs = meta.get("on_hit_status")
+                        if _ohs and raw > 0:
+                            tgt.apply_status_effect(StatusEffect(**_ohs))
                         # 주사위 배율/출혈 (ATB/크리 메시지는 첫 대상에서 1회만 출력됨)
                         if dice_info:
                             raw = int(round(raw * dice_info["mult"]))
@@ -584,9 +606,23 @@ class PlayerActionsMixin:
                         mp_after=self.player.mp,
                         debuff_applied=debuff_name or meta.get("debuff_stat", ""),
                     ))
+                elif stype == "dice":
+                    # 패 고치기 — execute_skill이 굴려 pending_dice에 저장했다
+                    _left = meta.get("max_uses", 0) - self.player.dice_fix_uses
+                    msgs.append(f"🎲 {skill_name} 사용 → 다음 공격 주사위: {self.player.pending_dice}! "
+                                f"(재굴림 가능 {_left}회 남음)")
+                    self.logs.append(TurnLog(
+                        turn=self.turn, actor="player", action="skill", action_detail=skill_name,
+                        damage_dealt=0, hp_after=target.hp, mp_after=self.player.mp,
+                    ))
                 elif stype in ("buff", "heal", "shield"):
                     if stype == "buff":
-                        msgs.append(f"{skill_name} 사용 → 능력치 강화!")
+                        if meta.get("hp_cost_ratio"):
+                            msgs.append(f"{skill_name} 사용 → HP {int(self.player.hp)} 남김 "
+                                        f"(현재 HP {int(meta['hp_cost_ratio'] * 100)}% 지불), "
+                                        f"{meta.get('buff_turns', 0)}턴간 흡혈 {int(meta.get('buff_amount', 0) * 100)}%")
+                        else:
+                            msgs.append(f"{skill_name} 사용 → 능력치 강화!")
                     elif stype == "heal":
                         msgs.append(f"{skill_name} 사용 → HP {int(self.player.hp)}/{int(self.player.maxhp)}")
                     elif stype == "shield":
@@ -611,12 +647,24 @@ class PlayerActionsMixin:
                         dmg = int(dmg * self._next_skill_bonus)
                         msgs.append(f"✨ 집중 효과! 데미지 {int((self._next_skill_bonus-1)*100)}% 증가")
                         self._next_skill_bonus = 1.0
-                    # ── 주사위 배율/크리/출혈 (최종 피해 기준) ──
-                    if dice_info:
+                    # ── 주사위 배율/크리/출혈 (최종 피해 기준) — 피의 수확(고정 피해)은 주사위 무관 ──
+                    if dice_info and stype != "harvest":
                         dmg = self._apply_rogue_dice(dmg, dice_info, target, msgs)
+                    if stype == "harvest" and debuff_name.startswith("harvest:"):
+                        msgs.append(f"🩸 {skill_name}! 출혈 {debuff_name.split(':', 1)[1]}스택을 거둬 고정 피해")
                     dmg = self._player_hit(target, dmg, msgs)
                     msgs.append(f"{skill_name} 사용 → {dmg} 데미지")
                     msgs.append(f"{target.name} HP: {max(0, int(target.hp))}")
+                    # ── 명중 시 ATB 감소 (방패치기): 보스·엘리트는 반감 + 전투당 상한 ──
+                    if dmg > 0 and meta.get("atb_drain"):
+                        _drain = consume_atb_drain(skill_name, self.player, target)
+                        _slot = self._enemy_slot_of(target)
+                        if _drain > 0 and 0 <= _slot < len(self.enemy_atbs):
+                            _before = self.enemy_atbs[_slot]
+                            self.enemy_atbs[_slot] = max(0.0, _before - _drain)
+                            msgs.append(f"🛡 {skill_name} — {target.name}의 ATB −{int(_before - self.enemy_atbs[_slot])}")
+                        elif _drain <= 0:
+                            msgs.append(f"🛡 {skill_name} — 이번 전투 ATB 감소 횟수 소진 (피해만)")
                     self.logs.append(TurnLog(
                         turn=self.turn,
                         actor="player",

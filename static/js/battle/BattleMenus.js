@@ -8,9 +8,15 @@ function renderBattleSkillMenu(bs) {
         bs.skills.forEach(sk => {
             const cell = document.createElement('div');
             cell.className = 'submenu-item';
-            cell.innerHTML = `${sk.name}<span class="cost">MP${sk.mp}</span>`;
-            const canUse = bs.player_mp >= sk.mp;
-            if (!canUse) cell.style.opacity = 0.4;
+            // MP 0 + HP 지불(피의 격노)은 비용 표기를 HP로
+            const costLabel = (sk.mp > 0 || !sk.hp_cost) ? `MP${sk.mp}` : `HP${sk.hp_cost}%`;
+            cell.innerHTML = `${sk.name}<span class="cost">${costLabel}</span>`;
+            // usable은 서버가 MP + 대상 조건(원소 폭발·피의 수확) + 전투당 횟수(패 고치기)까지 본 값
+            const canUse = bs.player_mp >= sk.mp && sk.usable !== false;
+            if (!canUse) {
+                cell.style.opacity = 0.4;
+                if (sk.reason) cell.title = sk.reason;
+            }
             cell.onclick = canUse ? () => useSkill(sk.name) : null;
             sl.appendChild(cell);
         });
