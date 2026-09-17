@@ -314,6 +314,11 @@ function playHitFeedback(hits, filterTarget) {
         perHostY[key] += tagLabel ? _POPUP_STEP_Y_TAG : _POPUP_STEP_Y;
 
         if (isDamage) flashHitOn(h.target, h.slot, h.crit, tone);
+
+        // 반응 이펙트는 대상별 1회(12-2 상한 — hits가 이미 대상×종류 단위라 그대로 1회),
+        // DoT 틱 이펙트는 틱마다 1회. 둘 다 에셋이 없으면 SkillFx가 no-op (플래시만 남는다).
+        if (isDamage && h.reaction && typeof playReactionFx === 'function') playReactionFx(h);
+        if (h.via === 'dot' && typeof playDotFx === 'function') playDotFx(h);
     }
 }
 

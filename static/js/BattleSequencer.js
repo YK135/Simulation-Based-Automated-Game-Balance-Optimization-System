@@ -254,7 +254,11 @@ async function playBattleSequence(action, bs) {
     let motionRemainder = 0;
 
     // ── 2. 플레이어 행동 + 모션 ──
-    if (groups.player.length > 0 || isItem || isEscape) {
+    //   ★ AoE(슬래시·난사)의 선언 문구 "슬래시1 (전체 공격!) → …에게 N 데미지"는 분류기가
+    //     피해 줄로 보내 groups.player가 비므로, 메시지만 보면 이 단계가 통째로 건너뛰어진다
+    //     (모션도 시전 이펙트도 없음). 행동했는지는 구조화 필드 bs.action_fx로 판정한다.
+    const playerActed = !!(bs.action_fx && bs.action_fx.actor === 'player');
+    if (groups.player.length > 0 || isItem || isEscape || playerActed) {
         const job = (window.state && window.state.player) ? window.state.player.job : '';
 
         // 모션 트리거 (이미지 변화) — 대기 시간도 실제 시트 재생 길이로 계산
@@ -284,11 +288,18 @@ async function playBattleSequence(action, bs) {
         // 임팩트 지점까지만 대기 — 나머지 모션 시간은 피격 단계로 넘긴다.
         //   아이템/도주는 캐릭터 모션이 없으니 그대로 전체 대기.
         if (isItem || isEscape) {
-            await _seqSleep(actionTime);
+            // 시전 이펙트 1회 (RULE 1) — 아이템은 모션이 없으니 사용 시점을 임팩트로 본다
+            const fxEnd = (typeof playSkillFx === 'function' && bs.action_fx && bs.action_fx.actor === 'player')
+                ? playSkillFx(bs.action_fx, { impactAt: Math.round(actionTime * 0.5) }) : 0;
+            await _seqSleep(Math.max(actionTime, fxEnd));
         } else {
             const impactWait = _impactWait('player_battle', job,
                 isSkill ? 'skill' : 'attack', actionTime, IMPACT_RATIO);
-            motionRemainder = actionTime - impactWait;
+            // 시전 이펙트 1회 (RULE 1) — bs.action_fx는 시전당 1개. impact_frame이 임팩트에 오도록
+            // SkillFx가 시작 시점을 앞당기고, 이펙트 꼬리는 피격 단계 대기에 합산한다.
+            const fxEnd = (typeof playSkillFx === 'function' && bs.action_fx && bs.action_fx.actor === 'player')
+                ? playSkillFx(bs.action_fx, { impactAt: impactWait }) : 0;
+            motionRemainder = Math.max(actionTime - impactWait, fxEnd - impactWait);
             await _seqSleep(impactWait);
         }
     }
@@ -339,6 +350,9 @@ async function playBattleSequence(action, bs) {
 
         // 피격 모션과, 위에서 넘겨받은 공격 모션 잔여 시간 중 긴 쪽만큼 대기
         await _seqSleep(Math.max(hurtWait, motionRemainder));
+    } else if (motionRemainder > 0) {
+        // 피해가 없는 시전(버프·실드·힐)은 이펙트 꼬리만큼만 기다린다 — 안 하면 다음 단계가 이펙트를 덮는다
+        await _seqSleep(motionRemainder);
     }
 
     // ── 4. 적 사망 처리 ──
@@ -356,6 +370,8 @@ async function playBattleSequence(action, bs) {
                 }
             });
         }
+        // 사망 대기 = max(사망 시트, 아직 재생 중인 이펙트) — 안 하면 마지막 킬의 이펙트가 잘린다 (12-5 5단계)
+        if (typeof skillFxRemainingMs === 'function') deadWait = Math.max(deadWait, skillFxRemainingMs());
 
         for (const m of groups.enemy_dead) {
             logLine(m, _msgCls(m));
@@ -398,7 +414,11 @@ async function playBattleSequence(action, bs) {
             //   남은 모션 시간은 아래 피격 단계가 이어서 소화한다.
             const enemyImpactWait = _impactWait('enemy_battle', enemyName, motionState,
                 motionTime, IMPACT_RATIO);
-            const enemyMotionRemainder = motionTime - enemyImpactWait;
+            // 적의 시전 이펙트 1회 — action_fx.actor_slot이 이 적일 때만 (한 step에 적은 하나만 행동한다)
+            const enemyFxEnd = (typeof playSkillFx === 'function' && bs.action_fx
+                                && bs.action_fx.actor === 'enemy' && bs.action_fx.actor_slot === slotIdx)
+                ? playSkillFx(bs.action_fx, { impactAt: enemyImpactWait }) : 0;
+            const enemyMotionRemainder = Math.max(motionTime - enemyImpactWait, enemyFxEnd - enemyImpactWait);
             await _seqSleep(enemyImpactWait);
 
             // ── 6. 플레이어 피격 (적 행동 결과) ──
@@ -453,6 +473,7 @@ async function playBattleSequence(action, bs) {
                 endingWait = Math.max(endingWait, _deathAnimDuration('player_battle', job));
             }
         }
+        if (typeof skillFxRemainingMs === 'function') endingWait = Math.max(endingWait, skillFxRemainingMs());
 
         for (const m of groups.ending) {
             logLine(m, _msgCls(m));

@@ -486,3 +486,34 @@ img.combatant-art {
 @media (prefers-reduced-motion: reduce) {
     .pattern-badge.state-armed { animation: none; }
 }
+
+
+/* ═══════════════════════════════════════════════════════════
+   시전 이펙트 시트 (static/js/SkillFx.js) — Combat Content Brief 12-4
+   z-index: 스프라이트 1 < 마스크 4 < 이펙트 5 < 숫자 6. 숫자는 항상 이펙트 위.
+   크기·위치(width/height/left/top)는 JS가 시트 규격과 대상 슬롯으로 인라인 지정한다.
+   발광계(fire·ice·lightning·holy·heal·buff·react·dot)는 screen, 물리계(slash·impact·debuff)는 normal.
+   ═══════════════════════════════════════════════════════════ */
+.skill-fx {
+    position: absolute;
+    left: 50%;
+    pointer-events: none;
+    z-index: 5;
+    background-repeat: no-repeat;
+    background-position: 0 0;
+    /* --fx-flip: 급소찌르기처럼 참격 각도를 뒤집는 항목만 -1 */
+    transform: translate(-50%, 0) scaleX(var(--fx-flip, 1));
+}
+.skill-fx.blend-screen { mix-blend-mode: screen; }
+.skill-fx.anchor-center { top: 50%;  transform: translate(-50%, -50%) scaleX(var(--fx-flip, 1)); }
+.skill-fx.anchor-chest  { top: 32%;  transform: translate(-50%, -50%) scaleX(var(--fx-flip, 1)); }
+.skill-fx.anchor-top    { top: 0; }
+.skill-fx.anchor-bottom { bottom: 12%; }
+.skill-fx.anchor-feet   { bottom: 6%; }
+.skill-fx.anchor-whole  { top: 0; bottom: 0; height: auto !important; }
+/* 와이드(적 영역 전체) — .battle-stage 기준 절대 좌표, JS가 left/top/width를 준다 */
+.battle-stage > .skill-fx.wide { left: 0; transform: none; }
+
+@media (prefers-reduced-motion: reduce) {
+    .skill-fx { display: none; }   /* 이펙트 없이도 숫자·플래시·로그로 정보는 그대로 전달된다 */
+}
