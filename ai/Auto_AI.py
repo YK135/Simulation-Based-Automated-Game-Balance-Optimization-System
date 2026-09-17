@@ -360,8 +360,9 @@ class PlayerAI:
                 stacks, dmg = harvest_damage(SKILL_META["피의 수확"], defender)
                 if stacks >= self.HARVEST_STACKS or (stacks >= 1 and dmg >= defender.hp):
                     return Action("skill", "피의 수확")
-            # 패 고치기 — 저장된 눈이 없거나 낮으면 (턴을 쓰는 형태 — 6-3의 검증 대상)
-            if ok("패 고치기") and (attacker.pending_dice == 0 or attacker.pending_dice < self.DICE_REROLL_BELOW):
+            # 패 고치기 — 미리 보인 다음 눈이 낮으면 재굴림 (자유 행동: 턴을 쓰지 않으므로 세션/엔진이
+            # 곧바로 다시 decide()를 부른다 — 6-3 측정 후 확정된 형태)
+            if ok("패 고치기") and attacker.pending_dice < self.DICE_REROLL_BELOW:
                 return Action("skill", "패 고치기")
         elif job == "전사":
             # 피의 격노 — 흡혈 버프가 없고, HP 지불이 안전하고, 적이 아직 오래 남았을 때

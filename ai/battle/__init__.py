@@ -26,7 +26,7 @@ from .Skills import (
     SKILL_META, MONSTER_SKILL_META, execute_skill, execute_single_hit,
     consume_skill_mp, roll_multi_hit_count, physical_skill_mult, skill_atb_drain,
     consume_atb_drain, skill_effective_element, skill_requirement_error, SKILL_REQUIREMENT_LABEL,
-    harvest_damage,
+    harvest_damage, is_free_action, preview_next_dice,
 )
 from .Items import ITEM_META, use_item
 from .Engine import TurnLog, BattleResult, BattleEngine, _escape_chance
@@ -44,7 +44,7 @@ __all__ = [
     "SKILL_META", "MONSTER_SKILL_META", "execute_skill", "execute_single_hit", "consume_skill_mp",
     "roll_multi_hit_count", "physical_skill_mult", "skill_atb_drain",
     "consume_atb_drain", "skill_effective_element", "skill_requirement_error", "SKILL_REQUIREMENT_LABEL",
-    "harvest_damage",
+    "harvest_damage", "is_free_action", "preview_next_dice",
     "ITEM_META", "use_item",
     "TurnLog", "BattleResult", "BattleEngine", "_escape_chance",
     "MONSTER_KITS", "get_monster_kit",

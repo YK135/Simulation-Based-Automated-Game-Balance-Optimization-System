@@ -20,7 +20,8 @@ from __future__ import annotations
 import copy
 
 from ai.battle import (
-    EntitySnapshot, SKILL_META,
+    EntitySnapshot, SKILL_META, TurnLog, execute_skill,
+    is_free_action, preview_next_dice, skill_requirement_error, SKILL_REQUIREMENT_LABEL,
 )
 from ai.Auto_AI import EnemyAI
 
@@ -176,6 +177,9 @@ class BattleSession(
         # 고블린 무리 전술 — 시작 시점의 살아있는 고블린 수로 pack_bonus를 맞춘다
         # (메시지는 첫 고블린 행동에서 — Enemy_Actions._sync_goblin_pack)
         self._sync_goblin_pack()
+
+        # 도적 「패 고치기」를 배웠으면 다음 공격 주사위를 미리 보여준다 (Skills.preview_next_dice)
+        preview_next_dice(self.player)
  
         # ── 처치된 적 원본 리스트 (★ 신규) ──
         # 적이 죽을 때 self._origins[i] 를 여기에 추가.
@@ -266,6 +270,10 @@ class BattleSession(
                 # 잘못 호출 — 플레이어 차례인데 auto 옴 (적 차례 자동 호출 실수)
                 return self._state(messages=["플레이어 차례입니다."],
                                    next_actor="player", acting_enemy_idx=-1)
+
+            # ── 자유 행동 (패 고치기 — 턴을 소비하지 않는 재굴림): 차례·큐·ATB·행동 카운터를 건드리지 않는다 ──
+            if action.startswith("skill:") and is_free_action(action.split(":")[1], self.player):
+                return self._free_action(action.split(":")[1], msgs)
 
             self.turn += 1
 
@@ -492,6 +500,25 @@ class BattleSession(
 
         # 폴백 (도달 X)
         return self._state(messages=msgs, next_actor="player")
+
+    def _free_action(self, skill_name: str, msgs: list) -> dict:
+        """턴을 소비하지 않는 스킬(패 고치기) — MP와 전투당 횟수만 쓰고 플레이어 차례를 그대로 돌려준다.
+        실패(MP·횟수)해도 차례는 남는다(무효 요청이 차례를 소비하는 정규 스킬과 다른 점 — 자유 행동이므로)."""
+        target = self._current_target()
+        why = skill_requirement_error(skill_name, self.player, target)
+        if why:
+            msgs.append(f"{skill_name}을(를) 쓸 수 없다 — {SKILL_REQUIREMENT_LABEL.get(why, why)}")
+            return self._state(messages=msgs, next_actor="player", acting_enemy_idx=-1)
+        meta = SKILL_META.get(skill_name, {})
+        execute_skill(skill_name, self.player, target)      # dice: MP 소모 + pending_dice 재굴림 + 횟수 +1
+        left = meta.get("max_uses", 0) - self.player.dice_fix_uses
+        msgs.append(f"🎲 {skill_name} — 다음 공격 주사위를 다시 굴렸다: {self.player.pending_dice}! "
+                    f"(재굴림 {left}회 남음, 차례는 그대로)")
+        self.logs.append(TurnLog(
+            turn=self.turn, actor="player", action="skill", action_detail=skill_name,
+            damage_dealt=0, hp_after=(target.hp if target is not None else 0), mp_after=self.player.mp,
+        ))
+        return self._state(messages=msgs, next_actor="player", acting_enemy_idx=-1)
 
     # 지속 피해 사망 메시지용 — 어느 상태이상이 마지막 피해를 줬는지는 표시 태그
     # (last_hit_element, tick_status_effects가 찍는다)로만 안다. 표시 문구에만 쓴다.

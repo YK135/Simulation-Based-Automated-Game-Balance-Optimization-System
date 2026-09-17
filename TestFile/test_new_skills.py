@@ -10,7 +10,8 @@ test_new_skills.py — 신규 스킬 6종 회귀 테스트 (Combat Content Brief
   · 방패치기 — 0.70배 + 명중 시 대상 ATB −25, 보스·엘리트는 −12 · 전투당 3회(4회째 피해만), 회피 시 감소 없음,
     BattleEngine도 같은 규칙
   · 피의 격노 — MP 0 · 현재 HP 15% 지불(1 미만으로 안 내려감) · 3턴 흡혈 25% (10-4 상한은 test_bleed_lifesteal)
-  · 패 고치기 — 다음 주사위 저장(재굴림 = 재시전), 전투당 3회, 다음 공격이 소비, 상태 JSON player_dice, 엔진 동일
+  · 패 고치기 — 배우면 다음 주사위가 미리 보이고(전투 시작·소비 직후 굴림), 시전은 MP만 쓰는 재굴림(턴 소비 없음),
+    전투당 3회, 다음 공격이 소비, 상태 JSON player_dice, 엔진 동일 (턴을 쓰는 첫 형태는 dice_fix_measure.py에서 손해로 측정)
   · 피의 수확 — 출혈 스택 전부 소비 → 스택당 maxHP 6% 고정 피해(보스·엘리트 3%), 출혈 없으면 사용 불가
   · get_skills usable/reason, AI: balanced는 신규 스킬(화염 폭풍 제외)을 고르지 않고 reactive만 규칙대로 사용,
     PlayerPowerIndex 축 가산(기존 스킬만이면 0)
@@ -208,23 +209,49 @@ check("4회째는 max_uses로 불가", skill_requirement_error("패 고치기", 
 mp_before = rg.mp
 d, lack, info = execute_skill("패 고치기", rg, dummy())
 check("안전망: 4회째 execute_skill은 MP 안 쓰고 무효", not lack and info == "" and rg.mp == mp_before and rg.pending_dice == 2)
-# 세션: 저장 → 다음 공격이 소비
-s = BattleSession(ent(job="도적", skills=["패 고치기"]), enemies=[dummy()])
+# 세션: 배우면 시작부터 다음 눈이 보이고, 시전은 턴을 쓰지 않는 재굴림
+with skills_dice(2):
+    s = BattleSession(ent(job="도적", skills=["패 고치기"]), enemies=[dummy()])
+check("전투 시작: 다음 주사위 미리 보기(2)", s.player.pending_dice == 2 and s._state()["player_dice"] == {"pending": 2, "rerolls_left": 3})
+check("스킬이 없는 도적은 미리 보기 없음(0)", BattleSession(ent(job="도적", skills=["급소찌르기1"]), enemies=[dummy()]).player.pending_dice == 0)
+turn0, q0 = s.turn, list(s.action_queue)
 with skills_dice(6):
     r = s.step("skill:패 고치기")
-check("세션: 메시지 + player_dice {pending 6, rerolls_left 2}", any("다음 공격 주사위: 6" in x for x in r["messages"])
-      and r["player_dice"] == {"pending": 6, "rerolls_left": 2}, (r["messages"], r.get("player_dice")))
-s.action_queue = [("player", -1)]
+check("재굴림: 메시지 + player_dice {pending 6, rerolls_left 2}, MP −6", any("다시 굴렸다: 6" in x for x in r["messages"])
+      and r["player_dice"] == {"pending": 6, "rerolls_left": 2} and s.player.mp == 494, (r["messages"], r.get("player_dice")))
+check("자유 행동: 턴·큐·행동 카운터 그대로, 다음 행동자는 여전히 플레이어",
+      s.turn == turn0 and s.action_queue == q0 and s._player_action_count == 0 and r["next_actor"] == "player")
 with deterministic():
     r = s.step("attack")
-check("다음 공격이 저장된 6을 소비 → 치명타 확정 + 슬롯 비움", any("주사위: 6" in x and "패 고치기" in x for x in r["messages"])
-      and s.player.pending_dice == 0 and s.logs[-1].is_crit, (r["messages"], s.player.pending_dice))
-eng = BattleEngine(ent(job="도적", skills=["패 고치기"]), dummy())
+check("다음 공격이 미리 본 6을 소비 → 치명타 확정, 새 눈이 바로 다시 보인다(6: 결정적 상한)",
+      any("주사위: 6" in x and "미리 본 눈" in x for x in r["messages"]) and s.logs[-1].is_crit
+      and s.player.pending_dice == 6 and s.turn == turn0 + 1, (r["messages"], s.player.pending_dice))
+s.action_queue = [("player", -1)]        # 공격으로 차례가 넘어갔으므로 다시 플레이어 차례로
+with skills_dice(1):
+    s.step("skill:패 고치기"); s.step("skill:패 고치기")
+r = s.step("skill:패 고치기")
+check("4회째 재굴림은 거부되지만 차례는 남는다", s.player.dice_fix_uses == 3 and r["next_actor"] == "player"
+      and any("사용 횟수 소진" in x for x in r["messages"]), r["messages"])
 with skills_dice(6):
-    eng._execute_action(Action("skill", "패 고치기"), eng.player, eng.enemy, "player")
+    eng = BattleEngine(ent(job="도적", skills=["패 고치기"]), dummy())
+check("BattleEngine: 시작 미리 보기 6", eng.player.pending_dice == 6)
 with deterministic():
     eng._execute_action(Action("attack", "attack"), eng.player, eng.enemy, "player")
-check("BattleEngine: 저장 6 → 다음 공격 크리 + 소비", eng.logs[-1].is_crit and eng.player.pending_dice == 0)
+check("BattleEngine: 미리 본 6 → 크리, 소비 후 새 눈", eng.logs[-1].is_crit and eng.player.pending_dice == 6)
+# 엔진 run(): 자유 행동은 차례를 넘기지 않는다 — 재굴림 뒤 같은 틱에 공격까지
+calls = []
+def stub_ai(p, e, **kw):
+    calls.append(p.pending_dice)
+    return Action("skill", "패 고치기") if p.pending_dice < 3 and p.dice_fix_uses < 3 else Action("attack", "attack")
+with skills_dice(1):
+    eng2 = BattleEngine(ent(job="도적", skills=["패 고치기"], spd=100.0), dummy(hp=100000))
+    eng2.atb.player_pt = 100.0
+    eng2.tick_count = 0
+eng2.MAX_TICKS = 1
+with skills_dice(1):                                # 재굴림도 계속 1 → 상한(3회)까지 굴린 뒤 공격
+    eng2.run(stub_ai, lambda a, d, **kw: Action("attack", "attack"))
+check("엔진 run(): 눈 1 → 재굴림 3회(상한) 뒤 공격 1회 — 한 틱 안에서", eng2.player.dice_fix_uses == 3
+      and any(l.action == "attack" for l in eng2.logs) and len(calls) >= 4, (calls, eng2.player.dice_fix_uses))
 check("전사에게는 player_dice None", BattleSession(ent(skills=["강타1"]), enemies=[dummy()])._state()["player_dice"] is None)
 
 # ═══════════════════════════════════════════════════════════
@@ -268,9 +295,10 @@ boss = dummy(spd=80.0, et="중간 보스")
 check("reactive 전사: 보스 상한 소진이면 방패치기 안 씀", rr.decide(w, boss).detail != "방패치기")
 rg = ent(job="도적", skills=["급소찌르기1", "패 고치기", "피의 수확"], mp=500)
 t = dummy()
-check("reactive 도적: 저장 눈 없으면 패 고치기 먼저", rr.decide(rg, t).detail == "패 고치기")
+rg.pending_dice = 2
+check("reactive 도적: 미리 본 눈이 3 미만이면 재굴림(자유 행동)", rr.decide(rg, t).detail == "패 고치기")
 rg.pending_dice = 5
-check("reactive 도적: 눈 5 저장 중이면 공격", rr.decide(rg, t).detail == "급소찌르기1")
+check("reactive 도적: 눈 5면 공격", rr.decide(rg, t).detail == "급소찌르기1")
 t.apply_status_effect(StatusEffect(effect_type="bleed", turns=3, name="출혈", stacks=3))
 check("reactive 도적: 출혈 3스택이면 피의 수확", rr.decide(rg, t).detail == "피의 수확")
 rg2 = ent(job="도적", skills=["급소찌르기1", "패 고치기", "피의 수확"], mp=500)

@@ -9,7 +9,7 @@ from ai.battle import (
     DamageCalc, execute_skill, SKILL_META, TurnLog,
     execute_single_hit, consume_skill_mp, mage_resonance_mult,
     LifestealCast, lifesteal_heal, StatusEffect, BLEED_RATE_PER_STACK,
-    consume_atb_drain, skill_requirement_error, SKILL_REQUIREMENT_LABEL,
+    consume_atb_drain, skill_requirement_error, SKILL_REQUIREMENT_LABEL, preview_next_dice,
 )
 
 
@@ -33,8 +33,8 @@ class PlayerActionsMixin:
             return None
         fixed = getattr(self.player, "pending_dice", 0)
         if fixed:
-            dice = fixed                       # 「패 고치기」가 미리 굴려 둔 눈 — 이 공격이 소비한다
-            self.player.pending_dice = 0
+            dice = fixed                       # 미리 보인 다음 주사위(패 고치기) — 이 공격이 소비한다
+            preview_next_dice(self.player)     # 다음 공격의 눈을 바로 다시 보여준다
         else:
             dice = randint(1, 6)
         self.player._suppress_crit = True
@@ -44,7 +44,7 @@ class PlayerActionsMixin:
             "force_crit": dice == 6,
             "bleed":      dice in (3, 6),
         }
-        msgs.append(f"🎲 주사위: {dice}!" + (" (패 고치기로 정한 눈)" if fixed else ""))
+        msgs.append(f"🎲 주사위: {dice}!" + (" (미리 본 눈)" if fixed else ""))
         return info
 
     def _apply_rogue_dice(self, dmg: int, dice_info, target, msgs: list) -> int:
@@ -607,7 +607,7 @@ class PlayerActionsMixin:
                         debuff_applied=debuff_name or meta.get("debuff_stat", ""),
                     ))
                 elif stype == "dice":
-                    # 패 고치기 — execute_skill이 굴려 pending_dice에 저장했다
+                    # 패 고치기는 자유 행동(Battlesession._free_action)으로 먼저 처리된다 — 여기는 안전망
                     _left = meta.get("max_uses", 0) - self.player.dice_fix_uses
                     msgs.append(f"🎲 {skill_name} 사용 → 다음 공격 주사위: {self.player.pending_dice}! "
                                 f"(재굴림 가능 {_left}회 남음)")

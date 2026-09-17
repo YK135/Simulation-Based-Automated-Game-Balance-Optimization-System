@@ -6,9 +6,13 @@ from dataclasses import dataclass, field
 from random import randint, random
 
 from .Entity import EntitySnapshot
+from .Actions import Action
 from .ATB import ATBSystem
 from .Damage import DamageCalc, _apply_damage_with_shield, LifestealCast, deal_damage_with_lifesteal
-from .Skills import SKILL_META, execute_skill, _resolve_meta, skill_atb_drain, consume_atb_drain
+from .Skills import (
+    SKILL_META, execute_skill, _resolve_meta, skill_atb_drain, consume_atb_drain,
+    is_free_action, preview_next_dice, skill_requirement_error,
+)
 from .Items import use_item
 from .Elements import apply_element_and_react
 from .MonsterKit import BAT_TYPE, bat_lifesteal_amount
@@ -87,6 +91,7 @@ class BattleEngine:
         self.chapter = chapter
         # 직업 패시브용 카운터
         self._player_action_count = 0   # 전사 패시브 (2번마다 회복)
+        preview_next_dice(self.player)  # 도적 패 고치기: 다음 주사위 미리 보기 (실전 세션과 동일)
 
     _ATTACK_SKILL_TYPES = ("physical", "magical", "tank_attack", "counter", "multi_hit")
     _ROGUE_DICE_MULT = {1: 0.75, 2: 0.90, 3: 1.00, 4: 1.15, 5: 1.25, 6: 1.00}
@@ -131,6 +136,15 @@ class BattleEngine:
 
                 if actor == "player":
                     action = player_ai(self.player, self.enemy)
+                    # 자유 행동(패 고치기 재굴림)은 차례를 넘기지 않는다 — 최대 3회(전투당 상한)까지 다시 결정
+                    for _ in range(3):
+                        if action.action_type != "skill" or not is_free_action(action.detail, self.player):
+                            break
+                        if skill_requirement_error(action.detail, self.player, self.enemy):
+                            action = Action("attack", "attack")
+                            break
+                        execute_skill(action.detail, self.player, self.enemy)
+                        action = player_ai(self.player, self.enemy)
 
                     # ── 전사 패시브: '적 공격'(일반공격/공격형 스킬) 3회마다 maxhp 10% 회복 ──
                     #    아이템/버프/힐/디버프/도망은 카운트하지 않음 (게임 규칙과 동일 — Digital Twin)
@@ -184,8 +198,9 @@ class BattleEngine:
             # ── 도적 주사위 (플레이어 공격, 게임 규칙과 동일) ──
             dice = None
             if actor == "player" and attacker.job == "도적":
-                dice = attacker.pending_dice or randint(1, 6)   # 「패 고치기」가 저장한 눈이 있으면 소비
-                attacker.pending_dice = 0
+                dice = attacker.pending_dice or randint(1, 6)   # 미리 보인 눈이 있으면 소비
+                if attacker.pending_dice:
+                    preview_next_dice(attacker)                  # 다음 눈을 바로 다시 보여준다
                 attacker._suppress_crit = True
             dmg, is_dodge, is_crit = DamageCalc.physical(
                 attacker.effective_stg(), attacker.luc,
@@ -247,8 +262,9 @@ class BattleEngine:
             _meta = SKILL_META.get(action.detail, {})
             if (actor == "player" and attacker.job == "도적"
                     and _meta.get("type", "") in self._ATTACK_SKILL_TYPES):
-                dice = attacker.pending_dice or randint(1, 6)   # 「패 고치기」 저장 눈 소비
-                attacker.pending_dice = 0
+                dice = attacker.pending_dice or randint(1, 6)   # 미리 보인 눈 소비
+                if attacker.pending_dice:
+                    preview_next_dice(attacker)
                 attacker._suppress_crit = True
             # ── 연속공격류(hits>1 physical/magical): 개별 타격 판정 (Digital Twin) ──
             #    각 타격마다 회피/크리/원소반응/실드흡수/HP적용을 독립 수행.

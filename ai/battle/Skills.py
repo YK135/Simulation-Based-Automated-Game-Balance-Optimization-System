@@ -241,9 +241,12 @@ SKILL_META = {
         "buff_stat": "lifesteal", "buff_amount": 0.25, "buff_turns": 3,
     },
     "패 고치기": {
-        # 도적 Lv8: 다음 공격에 쓸 주사위를 미리 굴려 저장(pending_dice). 불만족이면 같은 스킬로 재굴림.
-        #   전투당 3회. 저장된 눈은 다음 공격(일반공격/공격형 스킬)이 소비한다 — 소급 수정 없음(6-3).
-        "mp": 6, "type": "dice", "max_uses": 3,
+        # 도적 Lv8: 이 스킬을 배우면 다음 공격의 주사위가 미리 보인다(pending_dice — 전투 시작·소비 직후 굴림).
+        #   시전하면 그 눈을 MP만 쓰고 다시 굴린다 — 턴을 소비하지 않는다(free_action). 전투당 3회.
+        #   저장된 눈은 다음 공격(일반공격/공격형 스킬)이 소비한다 — 소급 수정 없음(6-3).
+        #   턴을 쓰는 첫 형태는 TestFile/dice_fix_measure.py에서 손해로 측정돼(전체 −1.5p, Lv8 보스 −28p)
+        #   6-3의 규칙대로 이 형태로 바꿨다.
+        "mp": 6, "type": "dice", "max_uses": 3, "free_action": True,
     },
     "피의 수확": {
         # 도적 Lv19: 단일 대상의 출혈 스택을 전부 소비, 스택당 maxHP 6% 고정 피해(보스·엘리트 3%).
@@ -470,6 +473,22 @@ SKILL_REQUIREMENT_LABEL = {
     "no_bleed":   "대상이 출혈 중이 아님",
     "max_uses":   "이번 전투 사용 횟수 소진",
 }
+
+
+def is_free_action(skill_name: str, attacker: EntitySnapshot) -> bool:
+    """턴을 소비하지 않는 스킬(패 고치기) — 세션·엔진이 정규 행동 앞에서 따로 처리한다."""
+    meta = _resolve_meta(skill_name, attacker) or {}
+    return bool(meta.get("free_action"))
+
+
+def preview_next_dice(attacker: EntitySnapshot) -> int:
+    """패 고치기를 배운 도적의 '다음 주사위 미리 보기' — 전투 시작과 눈을 소비한 직후에 굴려 둔다.
+    (스킬이 없으면 0 = 미리 보기 없음, 공격 시점에 굴린다.)"""
+    if getattr(attacker, "job", "") == "도적" and "패 고치기" in getattr(attacker, "learned_skills", []):
+        attacker.pending_dice = randint(1, 6)
+    else:
+        attacker.pending_dice = 0
+    return attacker.pending_dice
 
 
 def harvest_damage(meta: dict, defender: EntitySnapshot) -> tuple:

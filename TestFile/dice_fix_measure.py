@@ -6,7 +6,9 @@ dice_fix_measure.py — 「패 고치기」의 턴 소비 가치 측정 (Combat 
 공격과 동시에 굴리는 형태(재굴림은 MP만 소비·턴 소비 없음)로 바꿔야 합니다."
 
 같은 도적(레벨·스탯·아이템 동일)을 측정용 AI(reactive)로 두 번 재서 비교한다:
-  A) 패 고치기 보유 — reactive 규칙대로 저장 눈이 없거나 3 미만이면 재굴림(턴 소비)
+  A) 패 고치기 보유 — reactive 규칙대로 미리 보인 눈이 3 미만이면 재굴림
+     (1차 측정: 턴을 쓰는 형태 → 전체 −1.5p, Lv8 보스 −28p로 손해 → 6-3 규칙대로
+      "다음 주사위 미리 보기 + MP만 쓰는 재굴림(턴 소비 없음)"으로 바꾼 뒤 재측정)
   B) 패 고치기 없음 — 나머지 스킬 동일
 상대: 챕터1 고블린·박쥐·슬라임(중), 챕터2 암살자·골렘(중) — 등급 팩토리 직접 호출(자동 튜닝 없음,
 같은 조건의 A/B 비교가 목적) + 중간 보스. 지표: 승률 · 평균 턴 · 남은 HP 비율 · 패 고치기 사용 횟수 ·
@@ -26,7 +28,8 @@ os.environ["DATABASE_URL"] = "sqlite:///" + _db
 
 from ai.Battlesession import BattleSession
 from ai.Auto_AI import PlayerAI
-from ai.battle import EntitySnapshot
+from ai.battle import EntitySnapshot, SKILL_META
+from ai.Auto_AI import ATTACK_TYPES
 from game.Player_Class import create_player_by_job
 from game.Lv import LV_, Allocate_Stat_Points
 from game import Enemy_Class as EC
@@ -100,8 +103,9 @@ def run_one(p, with_fix, make_enemy, chapter, seed):
             bs.player.items = list(bs.items)
             if action == "skill:패 고치기":
                 fixes += 1
-            elif pending_before and bs.player.pending_dice == 0:
-                fixed_dice[pending_before] += 1
+            elif pending_before and (action == "attack" or (
+                    action.startswith("skill:") and SKILL_META.get(action[6:], {}).get("type") in ATTACK_TYPES)):
+                fixed_dice[pending_before] += 1        # 미리 본 눈을 소비한 공격 — 소비 직후 새 눈이 보인다
         else:
             bs.step("auto")
     if not bs.done:
@@ -122,7 +126,7 @@ def main():
     say = out.append
     say(f"# 패 고치기 턴 소비 측정 — 커밋 {git_rev()} · 시드 {SEED} · N={N}/셀 · 측정용 AI reactive")
     say("입력: 도적 Lv1→목표까지 Lv_up, 선택 포인트 STG, 아이템 HP_M×2+MP_M. 상대는 등급 팩토리(중) 직접 생성(자동 튜닝 없음).")
-    say("A = 패 고치기 보유(저장 눈 없음/3 미만이면 재굴림, 턴 소비) · B = 패 고치기 없음. 나머지 동일.")
+    say("A = 패 고치기 보유(미리 보인 눈이 3 미만이면 재굴림 — 현재 형태는 자유 행동) · B = 패 고치기 없음. 나머지 동일.")
     say("")
     say(f"{'Lv':>3} {'상대':<8} {'A 승률':>7} {'B 승률':>7} {'격차':>7} {'A 턴':>6} {'B 턴':>6} {'A HP잔':>7} {'B HP잔':>7} {'고치기/전투':>10} {'저장눈 소비 분포(1~6)':<28}")
     totals = {"A": [], "B": []}
