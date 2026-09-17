@@ -92,6 +92,22 @@ const SKILL_FX = {
     '피의 격노': { family: 'buff', tint: 'hue-rotate(320deg) saturate(1.4)' },        // 붉은 자기 강화
     '패 고치기': { family: 'buff', tint: 'hue-rotate(200deg)' },                        // 준비 행동 — 자기 대상
     '피의 수확': { family: 'slash', flip: true, tint: 'hue-rotate(330deg) saturate(1.5)' },
+    // ── 남은 신규 스킬 11종 (2차 8번) — 광역은 area 계열이어야 적 영역 전체에 1장이 깔린다 ──
+    '광풍 베기': { family: 'slash_wide', scale: 1.1 },
+    '칼날 폭풍': { family: 'slash_wide', tint: 'hue-rotate(330deg) saturate(1.3)' },    // 2타 광역 — 시전당 1장
+    '연쇄 번개': { family: 'explosion', tint: 'hue-rotate(200deg) saturate(1.4)' },    // 와이드 번개
+    '혈흔 추적': { family: 'slash', flip: true, tint: 'hue-rotate(330deg) saturate(1.3)' },
+    '약점 표식': { family: 'debuff', tint: 'hue-rotate(330deg)' },
+    '불굴':      { family: 'shield', tint: 'hue-rotate(20deg) saturate(1.3)' },        // 자기 실드
+    '철벽 의지': { family: 'buff', tint: 'hue-rotate(170deg)', scale: 1.2 },          // 받는 피해 감소 — 방어 버프 색
+    '피의 맹세': { family: 'buff', tint: 'hue-rotate(320deg) saturate(1.4)', scale: 1.2 },
+    '마나 장막': { family: 'shield', tint: 'hue-rotate(240deg)' },                     // MP로 받는 막 — 마나 색
+    '서리 결계': { family: 'ice', tint: 'saturate(0.7) brightness(1.1)' },             // 자기 주변 서리
+    '연막':      { family: 'debuff', tint: 'grayscale(1) brightness(1.2)' },           // 자기 대상 회피 — 회색 연기
+    // ── 몬스터 · 최종 보스 신규 행동 (2차 3·8번) ──
+    '날갯소리':     { family: 'debuff', tint: 'hue-rotate(80deg)' },                   // ATB 감소 — 속도 색
+    '심연의 손아귀': { family: 'impact', tint: 'hue-rotate(260deg) brightness(0.8)', scale: 1.5 },
+    '종언':         { family: 'impact', tint: 'hue-rotate(260deg) brightness(0.6)', scale: 1.8 },
 };
 
 // 반응 이펙트 틴트 — 색값은 BattleEffects.js의 _FLASH_BY_TONE과 같은 계열(융해 주황 / 과부하 보라 / 파쇄 청백)
