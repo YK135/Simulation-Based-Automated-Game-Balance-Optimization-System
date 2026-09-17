@@ -5,10 +5,56 @@ Auto_AI.py
 """
 from __future__ import annotations
 from ai.battle import Action, EntitySnapshot, SKILL_META, MONSTER_SKILL_META, get_monster_kit
-from ai.battle.Elements import is_element_immune
-from ai.battle.EliteKit import elite_forced_action
+from ai.battle.Elements import is_element_immune, REACTIONS, REACTION_EFFECTS, _current_element
+from ai.battle.EliteKit import elite_forced_action, GOLEM_PHASE_STRIKE
+from ai.battle.BossKit import is_midboss
 
 ATTACK_TYPES = {"physical", "magical", "multi_hit", "tank_attack", "counter"}
+_PHYSICAL_TYPES = {"physical", "multi_hit", "tank_attack", "counter"}
+
+
+# ── 측정용 AI 모드("reactive")가 읽는 두 가지 — 기본 모드("balanced")는 이 함수들을 부르지 않는다 ──
+#   StatTuner · BattleSimulator · core/Balance_Hook.py가 기본 모드로 모든 일반 몬스터를 튜닝하므로
+#   기본 모드의 점수는 여기서 절대 바뀌면 안 된다 (Combat Content Brief 11-1 3-3).
+
+def _skill_attack_element(meta: dict) -> str:
+    """이 스킬이 대상의 원소 큐와 부딪히는 원소 — 물리 계열은 'physical', 마법은 meta.element."""
+    if meta.get("type") in _PHYSICAL_TYPES:
+        return "physical"
+    return meta.get("element", "") or ""
+
+
+def _reaction_bonus(meta: dict, defender: EntitySnapshot | None) -> float:
+    """대상에게 지금 붙어 있는 원소와 이 스킬이 만드는 반응의 배율 (Elements 표 그대로).
+    반응이 없으면 1.0. 파쇄(ice + 물리)도 포함 — 전사·도적이 서리 갑주를 노릴 수 있게."""
+    if defender is None:
+        return 1.0
+    cur = _current_element(defender)
+    if not cur:
+        return 1.0
+    elem = _skill_attack_element(meta)
+    if elem == "physical":
+        return REACTION_EFFECTS["shatter"]["bonus_mult"] if cur == "ice" else 1.0
+    name = REACTIONS.get((cur, elem))
+    return REACTION_EFFECTS[name]["bonus_mult"] if name else 1.0
+
+
+def _enemy_telegraphing(defender: EntitySnapshot | None) -> bool:
+    """적이 다음 행동에 강공격을 예고했는가 — 중간 보스의 예약된 「대지 균열」,
+    엘리트 박쥐·암살자의 예고(elite_phase != 0), 엘리트 골렘의 강타 대기."""
+    if defender is None:
+        return False
+    if is_midboss(defender):
+        return getattr(defender, "boss_telegraph_at", -1) >= 0
+    if not getattr(defender, "elite_leader", False):
+        return False
+    et = getattr(defender, "enemy_type", "")
+    phase = getattr(defender, "elite_phase", 0)
+    if et in ("박쥐", "암살자"):
+        return phase != 0
+    if et == "골렘":
+        return phase == GOLEM_PHASE_STRIKE
+    return False
 
 
 def _enemy_has_debuff(defender: EntitySnapshot, stat: str) -> bool:
@@ -100,13 +146,16 @@ def _skill_efficiency(skill_name: str, attacker: EntitySnapshot, defender: Entit
 
 
 def _best_attack_skill(attacker: EntitySnapshot, defender: EntitySnapshot,
-                       enemy_count: int = 1) -> str | None:
+                       enemy_count: int = 1, reaction_aware: bool = False) -> str | None:
     best, best_score = None, -1.0
     for skill in attacker.learned_skills:
         meta = SKILL_META.get(skill)
         if not meta or meta.get("type") not in ATTACK_TYPES:
             continue
         score = _skill_efficiency(skill, attacker, defender, enemy_count=enemy_count)
+        # 측정용 모드만: 지금 반응이 나는 스킬에 반응 배율만큼 가점 (면역 -1은 그대로 배제)
+        if reaction_aware and score > 0:
+            score *= _reaction_bonus(meta, defender)
         if score > best_score:
             best_score, best = score, skill
     return best if best_score > 0 else None
@@ -200,14 +249,48 @@ def _pick_special_item(attacker: EntitySnapshot, defender: EntitySnapshot,
     return None
 
 class PlayerAI:
+    """규칙 기반 플레이어 AI.
+
+    aggression 모드:
+      balanced   — 기본. StatTuner/BattleSimulator/Balance_Hook이 모든 일반 몬스터를 이 모드로
+                   튜닝하므로 이 모드의 판단은 바꾸지 않는다 (바꾸면 전 구간 밸런스가 같이 움직인다).
+      aggressive / defensive — 기존 변형 (MP 기준·포션 기준만 다름).
+      reactive   — 측정용 (Combat Content Brief 3-3). balanced 위에 두 가지만 얹는다:
+                   ① 적이 예고 중이면(_enemy_telegraphing) 실드 → 회복 → 포션 → 방어 버프를 선행,
+                   ② 적의 현재 원소를 보고 반응이 나는 공격 스킬에 반응 배율만큼 가점.
+                   BattleSimulator(player_ai_mode="reactive") / MultiBattleSimulator(...)로 바로 쓴다.
+    """
     HP_DANGER_RATIO = 0.30
     HP_CAUTION_RATIO = 0.50
     MP_LOW_RATIO = 0.20
     SKILL_MP_RESERVE = 0.30
     DEBUFF_MP_RESERVE = 0.40
+    # reactive 모드의 예고 대응 기준
+    REACTIVE_HEAL_RATIO = 0.85      # 예고 중 HP가 이 아래면 회복 스킬
+    REACTIVE_POTION_RATIO = 0.60    # 예고 중 HP가 이 아래면 (회복 스킬이 없을 때) HP 포션
 
     def __init__(self, aggression: str = "balanced"):
         self.aggression = aggression
+
+    def _reactive_guard(self, attacker: EntitySnapshot, hp_ratio: float) -> Action | None:
+        """예고 턴의 선행 대응 — 실드(없을 때) → 회복 → 포션 → 방어 버프(없을 때). 할 게 없으면 None."""
+        if attacker.shield <= 0:
+            shield_skill = _best_shield_skill(attacker)
+            if shield_skill:
+                return Action("skill", shield_skill)
+        if hp_ratio < self.REACTIVE_HEAL_RATIO:
+            heal_skill = _best_heal_skill(attacker)
+            if heal_skill:
+                return Action("skill", heal_skill)
+        if hp_ratio < self.REACTIVE_POTION_RATIO:
+            potion = _best_hp_potion(attacker)
+            if potion:
+                return Action("item", potion)
+        if not _self_has_buff(attacker, "arm"):
+            arm_buff = _best_buff_skill(attacker, stat="arm")
+            if arm_buff:
+                return Action("skill", arm_buff)
+        return None
 
     def decide(self, attacker: EntitySnapshot, defender: EntitySnapshot,
                enemy_count: int = 1) -> Action:
@@ -227,6 +310,13 @@ class PlayerAI:
             potion = _best_hp_potion(attacker)
             if potion:
                 return Action("item", potion)
+
+        # ── 측정용 모드: 적이 예고 중이면 방어·회복을 먼저 (기본 모드는 이 블록을 타지 않는다) ──
+        reactive = (self.aggression == "reactive")
+        if reactive and _enemy_telegraphing(defender):
+            guard = self._reactive_guard(attacker, hp_ratio)
+            if guard is not None:
+                return guard
 
         # 실드: 초반엔 HP 35% 이하 위기일 때만 (기존 50% → 35%)
         shield_threshold = 0.35 if early_game else 0.50
@@ -273,6 +363,7 @@ class PlayerAI:
         mp_threshold = {
             "aggressive": 0.0,
             "balanced": self.SKILL_MP_RESERVE,
+            "reactive": self.SKILL_MP_RESERVE,     # 기본과 같은 MP 기준 — 차이는 예고 대응·반응 가점뿐
             "defensive": 0.5,
         }.get(self.aggression, self.SKILL_MP_RESERVE)
 
@@ -302,7 +393,8 @@ class PlayerAI:
                 if best_counter and counter_dmg >= tank_dmg * 0.9:
                     return Action("skill", best_counter)
 
-            skill = _best_attack_skill(attacker, defender, enemy_count=enemy_count)
+            skill = _best_attack_skill(attacker, defender, enemy_count=enemy_count,
+                                       reaction_aware=reactive)
             if skill:
                 return Action("skill", skill)
 
