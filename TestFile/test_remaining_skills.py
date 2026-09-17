@@ -363,7 +363,8 @@ d = _player_dict(w, gs["inventory"])
 opt = d["pending_skill_choices"]
 check("_player_dict: Lv11 선택지 2개 + 설명·MP", len(opt) == 1 and opt[0]["lv"] == 11
       and [o["name"] for o in opt[0]["options"]] == ["피의 격노", "방패치기"]
-      and all(o["desc"] for o in opt[0]["options"]) and opt[0]["options"][1]["mp"] == 9, opt)
+      and all(o["desc"] for o in opt[0]["options"]) and opt[0]["options"][1]["mp"] == 9
+      and opt[0]["options"][0]["hp_cost"] == 15 and opt[0]["options"][1]["hp_cost"] == 0, opt)
 client, uid, store = inject_test_session(gs)
 r = client.post("/api/skill/choose", json={"lv": 11, "skill": "강타2"})
 check("API: 짝 아닌 스킬 400", r.status_code == 400)

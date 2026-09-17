@@ -572,6 +572,7 @@ def _skill_choice_payload(player) -> list:
         out.append({"lv": lv, "options": [{
             "name": sk,
             "mp": SKILL_META.get(sk, {}).get("mp", 0),
+            "hp_cost": int(round(SKILL_META.get(sk, {}).get("hp_cost_ratio", 0.0) * 100)),   # 피의 격노: 현재 HP %
             "type": SKILL_META.get(sk, {}).get("type", ""),
             "desc": SKILL_BRIEF.get(sk, ""),
         } for sk in pair]})

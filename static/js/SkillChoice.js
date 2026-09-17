@@ -35,7 +35,7 @@ function _scRender(choice) {
         name.textContent = opt.name;
         const cost = document.createElement('div');
         cost.className = 'sc-cost';
-        cost.textContent = opt.mp > 0 ? `MP ${opt.mp}` : '';
+        cost.textContent = opt.mp > 0 ? `MP ${opt.mp}` : (opt.hp_cost > 0 ? `현재 HP ${opt.hp_cost}%` : '');
         const desc = document.createElement('div');
         desc.className = 'sc-desc';
         desc.textContent = opt.desc || '';
