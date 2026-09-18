@@ -392,16 +392,28 @@
     font-weight: 700;
 }
 
-/* 상점 모달 — 크기 고정, 목록만 스크롤 */
+/* 상점 모달 — 오버레이 안에 반드시 들어가고, 나가기 버튼은 항상 보인다.
+   ★ 두 가지가 겹쳐서 "유물이 추가된 뒤 상점을 닫을 수 없다"가 됐다(사용자 제보):
+     ① 위 공통 규칙의 max-width:360px가 아래 width:min(560px,…)를 이겨서 폭이
+        360px로 묶였다 → 상품이 세로로만 길어졌다.
+     ② max-height가 78vh(화면 기준)인데 이 패널이 든 #map-content-overlay는
+        전장 영역(≈440~600px)만 하다 → 패널이 오버레이보다 커지면 위아래로
+        넘쳐 「나가기」 버튼이 화면 밖으로 나갔다.
+   폭을 넓혀 상품을 가로로 배치하고(아래 shop-items-grid), 높이 기준을
+   오버레이(100%)로 바꾼다. 스크롤은 목록이 정말 길 때만 쓰는 안전장치. */
 .shop-panel {
     display: flex;
     flex-direction: column;
-    width: min(560px, 92%);
-    max-height: 78vh;              /* 모달 크기 고정 — 목록이 길어도 안 커짐 */
+    width: min(760px, 96%);
+    max-width: none;               /* 공통 규칙의 360px 상한 해제 */
+    max-height: 100%;              /* 오버레이(전장 영역) 안에 들어가게 */
+    box-sizing: border-box;
 }
+.shop-header, .shop-leave-btn { flex-shrink: 0; }
 
 .shop-scroll-area {
     flex: 1 1 auto;
+    min-height: 0;                 /* flex 자식의 스크롤을 실제로 동작시키는 표준 관용구 */
     overflow-y: auto;              /* 상품 목록 영역만 스크롤 */
     padding-right: 4px;
     margin: 6px 0;
@@ -416,14 +428,16 @@
     font-size: 10px;
     letter-spacing: 1px;
     color: rgba(221, 184, 111, 0.75);
-    margin: 8px 0 4px;
+    margin: 6px 0 3px;                 /* 세 섹션(포션·특수·유물)이 스크롤 없이 들어가게 */
     border-bottom: 1px dashed rgba(221, 184, 111, 0.25);
     padding-bottom: 2px;
 }
 
 .shop-items-grid {
     display: grid;
-    grid-template-columns: 1fr 1fr;    /* n행 2열 */
+    /* 넓으면 4열, 좁으면 2~3열 — 폭이 늘어난 만큼 세로가 짧아져 스크롤 없이 담긴다
+       (유물 4종까지 진열된 최대 구성 13칸이 전장 높이 안에 들어가는 기준) */
+    grid-template-columns: repeat(auto-fill, minmax(168px, 1fr));
     gap: 6px;
 }
 
@@ -432,7 +446,7 @@
     background: rgba(212,175,106,0.04);
     border: 1px solid rgba(0,255,208,0.2);
     border-radius: 4px;
-    padding: 8px;
+    padding: 6px 8px;                  /* 유물까지 11칸이 한 화면에 들어가는 높이 */
     cursor: pointer;
     transition: all 0.15s;
     display: grid;
@@ -612,6 +626,8 @@
     display: none;
     position: absolute;
     inset: 0;
+    padding: 12px;                 /* 패널이 전장 가장자리에 붙지 않게 — max-height:100%의 기준 상자 */
+    box-sizing: border-box;
     background: rgba(10, 18, 24, 0.93);
     z-index: 20;
     align-items: center;
