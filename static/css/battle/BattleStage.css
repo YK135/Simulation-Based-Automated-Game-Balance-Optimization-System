@@ -114,7 +114,14 @@
 
 .battle-stage {
     display: grid;
-    grid-template-columns: 1fr 1fr 1fr 1fr 1fr;
+    /* ★ minmax(0, 1fr) — 그냥 1fr은 최소 크기가 auto(=콘텐츠 최소 폭)라
+       칸이 콘텐츠보다 작아질 수 없다. 적 3명 전투는 칸 5개가 각각
+       .combatant-bars의 130px를 최소로 요구해 약 549px가 필요한데, 화면 폭
+       1024px에서 전장은 434px뿐이어서 마지막 적 슬롯이 전장 오른쪽 밖으로
+       110px 삐져나갔다(실측). minmax(0, …)로 최소값을 풀고, 칸 안의 폭
+       고정값들은 BattleCombatant.css에서 max-width:100%로 따라 줄어들게 했다
+       — 넓은 화면에서는 1fr이 130px보다 크므로 보이는 크기는 그대로다. */
+    grid-template-columns: repeat(5, minmax(0, 1fr));
     gap: 4px;
     align-items: end;
     height: 100%;
@@ -204,7 +211,9 @@
    버그였다(측정으로 확인) — 보스전은 항상 솔로라 이 두 슬롯은 늘 비어
    있으므로 그리드에서 아예 제거한다. */
 .battle-stage.is-boss {
-    grid-template-columns: 1fr 1fr 3fr;
+    /* 위 5컬럼과 같은 이유로 최소값을 푼다 — 보스 아트는 200px라 좁은 화면에서
+       이 칸이 콘텐츠 최소 폭에 걸리면 같은 방식으로 밖으로 나간다. */
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) minmax(0, 3fr);
 }
 .battle-stage.is-boss > .battle-slot:nth-child(4),
 .battle-stage.is-boss > .battle-slot:nth-child(5) {

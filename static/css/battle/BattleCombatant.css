@@ -7,6 +7,10 @@
     display: flex; flex-direction: column; align-items: center;
     gap: 6px;
     position: relative;
+    /* ★ 아래 폭 고정값(아트 100px · 바 130px)은 넓은 화면 기준이다. 좁은 화면에서
+       칸(.battle-slot)이 그보다 작아지면(BattleStage.css의 minmax(0,1fr) 참고)
+       이 카드가 칸 밖으로 넘치지 않고 같이 줄어들어야 한다 — 그 기준선. */
+    max-width: 100%;
 }
 
 /* ═══════════════════════════════════════════════════════════════
@@ -17,6 +21,7 @@
    ═══════════════════════════════════════════════════════════════ */
 .combatant-art {
     width: 100px;
+    max-width: 100%;            /* 좁은 칸에서는 칸 폭까지 줄인다 — object-fit:contain이라 비율 유지 */
     height: 130px;
     background: transparent;     /* 직사각형 — 동그라미/배경 제거 */
     border: none;
@@ -68,6 +73,7 @@ img.combatant-art {
     display: flex; flex-direction: column;
     gap: 4px;
     width: 130px;
+    max-width: 100%;            /* 적 3명 전투가 좁은 화면에서 전장을 넘기던 실제 원인 — 130px 고정이 칸의 최소 폭이었다 */
     margin-top: 6px;
 }
 .cb-row {
@@ -439,7 +445,7 @@ img.combatant-art {
     justify-content: center;
     gap: 3px;
     margin-top: 3px;
-    max-width: 130px;   /* .combatant-bars와 같은 폭 — 슬롯 밖으로 안 나가게 */
+    max-width: min(130px, 100%);   /* .combatant-bars와 같은 폭 — 슬롯 밖으로 안 나가게 (좁은 칸에서는 칸 폭) */
 }
 
 .pattern-badge {
@@ -523,4 +529,17 @@ img.combatant-art {
 
 @media (prefers-reduced-motion: reduce) {
     .skill-fx { display: none; }   /* 이펙트 없이도 숫자·플래시·로그로 정보는 그대로 전달된다 */
+}
+
+/* ── 좁은 화면(적 3명 전투) 대응 ──
+   .battle-slot이 좁아지면(BattleStage.css의 minmax(0,1fr)) 카드 자체는 칸 폭까지
+   줄어들지만, HP/MP 줄의 고정폭(라벨 24px + 수치 56px + 간격 10px ≈ 90px)이
+   그 아래로는 안 줄어들어 카드 안에서 글자가 넘쳤다(1024px에서 칸은 80px).
+   라벨·수치만 좁혀 하한을 약 72px로 내린다 — 1200px 이상에서는 칸이 130px보다
+   넓으므로 이 규칙이 적용되지 않는다. */
+@media (max-width: 1200px) {
+    .cb-label { width: 18px; font-size: 8px; }
+    .cb-text  { width: 44px; font-size: 8px; }
+    .combatant-name { font-size: 11px; }
+    .combatant-meta { font-size: 8px; }
 }
