@@ -39,8 +39,7 @@ function refreshPlayer() {
     `;
 
     // ── 골드 ──
-    const goldEl = document.getElementById('player-gold');
-    if (goldEl) goldEl.textContent = `${state.gold || 0} G`;
+    refreshGoldDisplay();
 
     // ── 유물 (state.player.relics — 서버가 이름·아이콘·설명까지 내려준다) ──
     if (typeof renderPlayerRelics === 'function') renderPlayerRelics(p);
@@ -52,6 +51,14 @@ function refreshPlayer() {
     if (typeof refreshMasterPanel === 'function') refreshMasterPanel();
 
     // ── 버프/디버프는 UI_Battle.js의 refreshPlayerStatusList가 전투 중 처리 ──
+}
+
+/** 좌측 패널의 보유 골드 표시만 갱신.
+ *  refreshPlayer()뿐 아니라 Api.js의 api()가 "응답에 gold가 실려 올 때마다"
+ *  직접 호출한다 — 골드는 서버가 유일한 기준이고, 화면은 그걸 그대로 비춘다. */
+function refreshGoldDisplay() {
+    const goldEl = document.getElementById('player-gold');
+    if (goldEl) goldEl.textContent = `${(state && state.gold) || 0} G`;
 }
 
 /** 좌측 패널 "ITEMS" 버튼 표시 여부 + (팝업이 열려 있으면) 내용 갱신.
@@ -281,10 +288,9 @@ async function _confirmInvSwap() {
         const r = await api('/inventory/swap', { ticket_id: _iiOverflow.ticketId, drops });
         if (!r.ok) { toast(r.error || '교체 실패', 'error'); return; }
         state.player = r.player;
-        // ★ 상점 구매가 가득 찬 인벤토리 때문에 미뤄졌던 경우, 결제는 이
-        //   스왑 확정 시점에 서버에서 이뤄진다(app/Inventory.py 참고) — 응답에
-        //   gold가 실려오면 화면 골드도 같이 갱신해야 실제 차감이 반영된다.
-        if (r.gold !== undefined) state.gold = r.gold;
+        // ★ 상점 구매가 가득 찬 인벤토리 때문에 미뤄졌던 경우, 결제는 이 스왑
+        //   확정 시점에 서버에서 이뤄진다(app/Inventory.py 참고). 그 차감된 골드는
+        //   응답의 gold로 오고, api()가 이미 state.gold에 반영해 둔다(Api.js).
         if (typeof refreshPlayer === 'function') refreshPlayer();
         toast(r.message || '교체 완료', 'ok');
         _closeInvSwap();

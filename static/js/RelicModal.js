@@ -56,8 +56,7 @@ async function _relicSubmit(ticketId, relicId) {
             return;     // 티켓은 서버에 남아 있으므로 다시 고를 수 있다
         }
         if (r.player) state.player = r.player;
-        if (r.gold !== undefined) state.gold = r.gold;
-        if (typeof refreshPlayer === 'function') refreshPlayer();
+        if (typeof refreshPlayer === 'function') refreshPlayer();   // 골드는 api()가 반영
         if (r.message) {
             logLine(r.message, 'heal');
             if (typeof logAdventure === 'function') logAdventure(r.message, 'loot');

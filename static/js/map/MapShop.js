@@ -96,8 +96,7 @@ async function buyShopItem(itemId, price) {
             return;
         }
         if (r.player) state.player = r.player;
-        if (r.gold !== undefined) state.gold = r.gold;
-        if (typeof refreshPlayer === "function") refreshPlayer();
+        if (typeof refreshPlayer === "function") refreshPlayer();   // 골드는 api()가 반영
         logLine(`🛒 ${r.message || itemId + " 구매!"}`, "skill");
         toast(r.message || `${itemId} 구매!`, "ok");
 

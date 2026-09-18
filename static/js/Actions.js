@@ -13,8 +13,7 @@ async function loadStatus() {
 
     state.player = r.player;
     state.exploreTurn = r.turn || 0;
-    if (r.gold !== undefined) state.gold = r.gold;
-    refreshPlayer();
+    refreshPlayer();   // 골드는 api()가 이미 반영함(Api.js)
 
     // ★ 사망 상태로 새로고침한 경우 — 맵 대신 바로 게임 오버 화면
     if (r.player && r.player.hp <= 0) {
@@ -61,7 +60,6 @@ async function newGame(name, job) {
         const r = await api('/new_game', { name, job });
         if (r.ok) {
             state.player = r.player;
-            if (r.gold !== undefined) state.gold = r.gold;
             refreshPlayer();
             document.getElementById('modal-newgame')?.classList.remove('active');
             clearLog();
