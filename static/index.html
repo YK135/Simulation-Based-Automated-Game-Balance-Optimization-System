@@ -332,12 +332,22 @@
 
             <div class="turn-indicator" id="turn-indicator">▶ YOUR TURN</div>
 
+            <!-- 스킬/아이템 목록 — 배틀 로그 위에 뜨는 팝업(레이아웃을 밀지 않는다).
+                 예전엔 이 목록이 액션바 위에 그대로 쌓여서, 스킬을 많이 배운 뒤
+                 목록을 열면 ATTACK/SKILLS/ITEMS/ESCAPE 버튼이 패널 밖으로 밀려
+                 눌리지 않았다. 지금은 절대 위치 팝업이라 버튼은 항상 제자리. -->
             <div class="submenu" id="skill-menu">
-                <div class="submenu-title">SELECT SKILL</div>
+                <div class="submenu-title">
+                    <span>SELECT SKILL</span>
+                    <button type="button" class="submenu-close" id="skill-menu-close" aria-label="스킬 목록 닫기">✕</button>
+                </div>
                 <div class="submenu-list" id="skill-list"></div>
             </div>
             <div class="submenu" id="item-menu">
-                <div class="submenu-title">SELECT ITEM</div>
+                <div class="submenu-title">
+                    <span>SELECT ITEM</span>
+                    <button type="button" class="submenu-close" id="item-menu-close" aria-label="아이템 목록 닫기">✕</button>
+                </div>
                 <div class="submenu-list" id="item-list"></div>
             </div>
 

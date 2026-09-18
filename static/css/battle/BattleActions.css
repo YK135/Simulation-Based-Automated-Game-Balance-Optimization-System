@@ -43,23 +43,64 @@
     opacity: 0.55;
 }
 
-/* ── 서브 메뉴 (스킬/아이템 선택) ── */
+/* ── 서브 메뉴 (스킬/아이템 선택) — 배틀 로그 위에 뜨는 팝업 ──
+   ★ 예전엔 이 목록이 액션바 바로 위에 흐름대로 쌓였다. 스킬을 많이 배운
+     Lv20+에서 목록을 열면 그만큼 아래가 밀려 ATTACK/SKILLS/ITEMS/ESCAPE
+     버튼이 패널(overflow:hidden) 밖으로 나가 눌리지 않았다(사용자 제보).
+     이제 #actions-panel 기준 절대 위치로 액션바 위(=배틀 로그 자리)에 띄운다
+     — 버튼은 항상 제자리에 있고, 목록이 길면 팝업 안에서만 스크롤한다.
+     뒷배경은 흐리지 않는다(전투 상황을 계속 봐야 하므로). */
 .submenu {
     background: var(--bg-darkest);
     border: 1px solid var(--accent-gold);
     border-radius: 3px;
     padding: 8px;
-    margin-bottom: 8px;
     display: none;
 }
-.submenu.active { display: block; }
+.submenu.active {
+    display: block;
+    /* 기준 상자는 BATTLE LOG 패널(아래 .center-col > .panel:last-child의 position:relative).
+       패널 타이틀 아래부터 액션바 바로 위까지를 채운다 — 화면이 낮아 로그 영역이
+       47px밖에 안 되는 1280×760 같은 해상도에서도 팝업이 패널 밖으로 잘리지 않고,
+       액션바(37px)는 어떤 경우에도 가려지지 않는다. */
+    position: absolute;
+    left: 12px;
+    right: 12px;
+    top: 34px;                      /* 패널 타이틀(BATTLE LOG) 아래 */
+    bottom: 62px;                   /* 액션바(37px) + 패널 아래 여백(21px) — 버튼은 항상 보인다 */
+    overflow-y: auto;
+    z-index: 6;
+    box-shadow: 0 6px 18px rgba(0, 0, 0, 0.55);
+}
+.submenu::-webkit-scrollbar { width: 6px; }
+.submenu::-webkit-scrollbar-track { background: var(--bg-darkest); }
+.submenu::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
 .submenu-title {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
     font-size: 9px;
     color: var(--accent-gold);
     margin-bottom: 6px;
     letter-spacing: 0.1em;
     font-weight: 700;
+    position: sticky;               /* 목록이 길어도 닫기 버튼은 항상 보인다 */
+    top: -8px;                      /* .submenu의 padding만큼 끌어올려 붙인다 */
+    background: var(--bg-darkest);
+    padding: 4px 0;
 }
+.submenu-close {
+    background: transparent;
+    border: 1px solid rgba(239, 68, 68, 0.5);
+    color: #fca5a5;
+    border-radius: 2px;
+    font-size: 10px;
+    line-height: 1;
+    padding: 2px 6px;
+    cursor: pointer;
+}
+.submenu-close:hover { background: rgba(239, 68, 68, 0.18); border-color: var(--hp-red); color: #fff; }
 .submenu-list {
     display: grid;
     grid-template-columns: repeat(3, 1fr);
@@ -159,3 +200,7 @@
 #actions-panel {
     transition: opacity 0.2s, filter 0.2s;
 }
+/* 스킬/아이템 팝업의 기준 상자 — 팝업은 이 패널(BATTLE LOG) 안쪽을 덮는다.
+   #actions-panel을 기준으로 잡으면 로그 영역이 짧은 해상도에서 팝업이 패널
+   위로 삐져나가 overflow:hidden에 잘렸다(실측: 1280×760에서 45px 잘림). */
+.center-col > .panel:last-child { position: relative; }

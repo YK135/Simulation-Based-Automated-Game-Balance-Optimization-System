@@ -91,6 +91,9 @@ safeBind('btn-item', () => {
     document.getElementById('item-menu')?.classList.toggle('active');
     document.getElementById('skill-menu')?.classList.remove('active');
 });
+// 팝업 닫기(✕) — 목록이 배틀 로그 위에 뜨므로 닫는 수단이 필요하다
+safeBind('skill-menu-close', () => document.getElementById('skill-menu')?.classList.remove('active'));
+safeBind('item-menu-close',  () => document.getElementById('item-menu')?.classList.remove('active'));
 
 // ── 도망 모달 ──
 safeBind('btn-escape', () => {
