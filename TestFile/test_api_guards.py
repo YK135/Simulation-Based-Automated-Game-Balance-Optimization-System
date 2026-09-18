@@ -111,7 +111,7 @@ def test_guards():
     store.pop(uid, None)
 
     # 2. 특수 아이템(bomb 등) → battle_only
-    specials = ["bomb", "web_bomb", "fire_vial", "ice_vial", "lightning_crystal"]
+    specials = ["bomb", "web_bomb", "focus_drug", "haste_drug"]
     client, uid, store = _make_client_with_session(specials, hp=500)
     for it in specials:
         r = _post_use(client, it)

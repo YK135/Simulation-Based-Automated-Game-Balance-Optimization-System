@@ -133,18 +133,10 @@ def test_aoe_skill():
 
 
 # ─────────────────────────────────────────────
-# 4. target_index 단일 공격 (use_item element 단일 타깃)
+# 4. (삭제) target_index 단일 공격 — 단일 타깃 아이템이던 원소 부착 3종을
+#    없앴다(game/Rewards.py). 남은 특수 아이템은 전체 대상(폭탄류) 아니면
+#    자신 대상(물약류)이라 검증할 단일 타깃 경로가 없다.
 # ─────────────────────────────────────────────
-
-def test_target_index():
-    print("\n[4] target_index 단일 공격")
-    p = make_player(items=["fire_vial"])
-    e1 = make_enemy(hp=200)
-    e2 = make_enemy(hp=200)
-    # 원소병은 첫 alive에게만 (단일 타깃)
-    use_item("fire_vial", p, enemies=[e1, e2])
-    check("단일 타깃만 원소 부착", e1.element_queue == ["fire"] and e2.element_queue == [],
-          f"e1={e1.element_queue}, e2={e2.element_queue}")
 
 
 # ─────────────────────────────────────────────
@@ -191,19 +183,9 @@ def test_bombs():
 
 
 # ─────────────────────────────────────────────
-# 7. 원소병 (fire/ice/lightning vial)
+# 7. (삭제) 원소병 — 아이템 3종을 없앴다. 스킬을 통한 원소 부착·반응은
+#    아래 [10] test_element_attach / [11] test_reactions가 그대로 검증한다.
 # ─────────────────────────────────────────────
-
-def test_element_vials():
-    print("\n[7] 원소병 (fire/ice/lightning)")
-    for vial, elem in [("fire_vial", "fire"), ("ice_vial", "ice"),
-                       ("lightning_crystal", "lightning")]:
-        p = make_player(items=[vial])
-        e = make_enemy(hp=300)
-        use_item(vial, p, enemies=[e])
-        check(f"{vial} → {elem} 부착", e.element_queue == [elem],
-              f"queue={e.element_queue}")
-        check(f"{vial} 직접 피해", e.hp < 300, f"hp={e.hp}")
 
 
 # ─────────────────────────────────────────────
@@ -335,11 +317,12 @@ def test_auto_ai_special():
 
     ai = PlayerAI()
 
-    # ice 적 + 화염병 → fire_vial 선택 (융해 노림)
-    p = make_player(skills=["파이어볼1"], items=["fire_vial", "HP_M_potion"])
-    e = make_enemy(hp=300, element_queue=["ice"])
+    # 적 HP가 높고 공격 스킬 보유 → 집중 물약으로 다음 스킬 강화
+    # (옛 검증은 "ice 적 + 화염병 → fire_vial"이었으나 원소 부착 아이템을 삭제함)
+    p = make_player(skills=["파이어볼1"], items=["focus_drug", "HP_M_potion"])
+    e = make_enemy(hp=300)
     act = ai.decide(p, e)
-    check("ice 적 + 화염병 → fire_vial", act.detail == "fire_vial",
+    check("적 HP 높음 + 공격 스킬 → focus_drug", act.detail == "focus_drug",
           f"선택={act.action_type}:{act.detail}")
 
     # 아이템 없음 → 스킬 또는 공격
@@ -384,10 +367,8 @@ def main():
     test_basic_attack()
     test_physical_magical_skill()
     test_aoe_skill()
-    test_target_index()
     test_potions()
     test_bombs()
-    test_element_vials()
     test_focus_drug()
     test_haste_drug()
     test_element_attach()

@@ -765,25 +765,6 @@ class PlayerActionsMixin:
                     if meta.get("debuff_stat"):
                         msgs.append(f"  적 전체 속도 {int(meta['debuff_amount']*100)}% 감소 ({meta['debuff_turns']}T)")
 
-                # ── 원소 부착 (화염병/냉기병/전격수정) ──
-                elif category == "element":
-                    alive = self._alive_enemies()
-                    if not alive:
-                        msgs.append("대상이 없습니다.")
-                    else:
-                        idx = target_idx if target_idx < len(alive) else 0
-                        tgt = alive[idx]
-                        elem = meta.get("element", "")
-                        ratio = meta.get("damage_ratio", 0.1)
-                        dmg = max(1, int(tgt.maxhp * ratio))
-                        msgs.append(f"🧪 {item_name} → {tgt.name}")
-                        # 직접 피해 + 원소 반응/부착
-                        dmg = apply_element_and_react(self.player, tgt, elem, dmg, msgs)
-                        hp_before = tgt.hp
-                        tgt.hp = max(0, tgt.hp - dmg)
-                        tgt._record_hit("damage", hp_before - tgt.hp)
-                        msgs.append(f"  └ {tgt.name}에게 {dmg} 피해")
-
                 # ── 버프 (집중물약/신속물약) ──
                 elif category == "buff":
                     btype = meta.get("buff_type", "")

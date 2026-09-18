@@ -222,6 +222,11 @@ def _gs_from_snapshot(uid: str, snap: dict) -> Optional[dict]:
     player = Player.from_dict(snap["player"])
     inv = Inventory.from_dict(snap.get("inventory") or {})
     inv.potion_penalty = relic_potion_slot_penalty(getattr(player, "relics", []))   # 유물 → 포션 슬롯
+    # ★ 게임에서 없앤 아이템(원소 부착 3종)이 옛 세이브에 남아 있으면 여기서 정리한다 —
+    #   안 그러면 쓸 수 없는 아이템이 특수 칸을 영구히 차지한다(game/Inventory.drop_unknown).
+    _dropped = inv.drop_unknown()
+    if _dropped:
+        print(f"[session] 삭제된 아이템 정리: {', '.join(_dropped)} (uid={uid})")
     items = inv.to_flat_list()
     # ★ auto_prewarm=False — 이건 새 게임이 아니라 기존 세션 복구(워커
     #   재시작/유휴 세션 방출/Redis 히트마다 여기로 옴)라, 매번 고블린/박쥐

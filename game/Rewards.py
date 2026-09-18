@@ -102,12 +102,13 @@ _POTION_POOL = {
     "MP_L_potion": 10,
 }
 
+# ※ 원소 부착 아이템(화염 병·냉기 병·전격 수정) 3종을 삭제 — 실플레이에서
+#   "쓸 곳이 애매한 아이템이 특수 칸을 차지한다"는 제보. 획득 경로는 이 풀
+#   하나뿐이었다(상점 진열 X, 이벤트 풀 X). 가중치는 남은 4종의 상대 비율이
+#   그대로다 — _pick_weighted()가 매번 정규화하므로 합계 100을 맞출 필요는 없다.
 _SPECIAL_POOL = {
     "bomb":              25,
     "web_bomb":          15,
-    "fire_vial":         14,
-    "ice_vial":          14,
-    "lightning_crystal": 14,
     "focus_drug":        10,
     "haste_drug":        8,
 }

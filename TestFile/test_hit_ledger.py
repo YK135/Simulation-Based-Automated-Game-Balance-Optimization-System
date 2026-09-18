@@ -280,7 +280,7 @@ MAKERS = [EC.Make_Goblin, EC.Make_Bat, EC.Make_Slime, EC.Make_Golem, EC.Make_Gho
           EC.Make_Assassin, EC.Make_Priest, EC.Make_FireSlime, EC.Make_IceSlime,
           EC.Make_LightningSlime]
 ITEMS = ["HP_S_potion", "HP_M_potion", "MP_S_potion", "bomb", "web_bomb",
-         "fire_vial", "ice_vial", "lightning_crystal", "focus_drug", "haste_drug"]
+         "focus_drug", "haste_drug"]
 ELITE_TYPES = {"고블린", "박쥐", "슬라임", "골렘", "암살자", "사제", "화염 슬라임", "빙결 슬라임", "번개 슬라임"}
 
 random.seed(20260917)

@@ -271,20 +271,11 @@ def _has_item(entity: EntitySnapshot, name: str) -> bool:
 
 def _pick_special_item(attacker: EntitySnapshot, defender: EntitySnapshot,
                        enemy_count: int = 1) -> str | None:
-    def_queue = getattr(defender, "element_queue", [])
-    cur_elem = def_queue[-1] if def_queue else ""
-
-    # ice 적이면 화염병으로 융해 노림
-    if cur_elem == "ice" and _has_item(attacker, "fire_vial"):
-        return "fire_vial"
-
-    # fire/lightning 적이면 과부하 노림
-    if cur_elem == "fire" and _has_item(attacker, "lightning_crystal"):
-        return "lightning_crystal"
-
-    if cur_elem == "lightning" and _has_item(attacker, "fire_vial"):
-        return "fire_vial"
-
+    # ※ 원소 부착 아이템(화염 병·냉기 병·전격 수정) 3종이 삭제돼(game/Rewards.py)
+    #   융해·과부하를 노리던 분기와 "원소 큐가 비면 병을 먼저 쓴다" 분기를 같이
+    #   지웠다. 존재할 수 없는 아이템을 _has_item()으로 묻는 것뿐이라 balanced
+    #   모드의 판단 자체는 달라지지 않는다(옛 세션이 병을 들고 있는 경우에만
+    #   차이가 나는데, 그 병은 이제 쓸 수 없으므로 고르지 않는 게 맞다).
     # 다수 적이면 폭탄 우선
     if enemy_count >= 2:
         for bomb in ["web_bomb", "bomb"]:
@@ -296,12 +287,6 @@ def _pick_special_item(attacker: EntitySnapshot, defender: EntitySnapshot,
     if def_hp_ratio >= 0.6 and _has_item(attacker, "focus_drug"):
         if any(SKILL_META.get(s, {}).get("type") in ATTACK_TYPES for s in attacker.learned_skills):
             return "focus_drug"
-
-    # 원소 큐가 비어 있으면 원소병으로 상태이상/반응 준비
-    if not cur_elem:
-        for vial in ["fire_vial", "ice_vial", "lightning_crystal"]:
-            if _has_item(attacker, vial):
-                return vial
 
     return None
 

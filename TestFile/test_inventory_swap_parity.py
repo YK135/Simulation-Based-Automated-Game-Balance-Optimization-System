@@ -58,7 +58,7 @@ def test_potion_full_returns_candidates():
 def test_special_full_still_returns_candidates():
     print("\n[특수 가득 → candidates 반환 (회귀 확인 — 기존 동작 유지)]")
     inv = _full_special_inventory()
-    result = inv.add("fire_vial")
+    result = inv.add("haste_drug")
     check("ok=False", result["ok"] is False)
     check("reason=special_full", result.get("reason") == "special_full", f"got={result}")
     check("candidates에 기존 특수템 3개 전부 포함",
@@ -80,11 +80,11 @@ def test_swap_item_potion():
 def test_swap_item_special():
     print("\n[swap_item() — 특수템 교체 (회귀 확인)]")
     inv = _full_special_inventory()
-    result = inv.swap_item("bomb", "fire_vial")
+    result = inv.swap_item("bomb", "haste_drug")
     check("ok=True", result.get("ok") is True, f"got={result}")
     check("slot=special", result.get("slot") == "special")
     check("실제로 특수 목록이 교체됨",
-          "bomb" not in inv.special and "fire_vial" in inv.special, f"special={inv.special}")
+          "bomb" not in inv.special and "haste_drug" in inv.special, f"special={inv.special}")
 
 
 def test_swap_item_rejects_cross_slot():
@@ -104,6 +104,33 @@ def test_swap_item_drop_not_found():
     check("reason=drop_not_found", result.get("reason") == "drop_not_found", f"got={result}")
 
 
+def test_drop_unknown_purges_removed_items():
+    print("\n[drop_unknown() — 게임에서 삭제된 아이템을 옛 세이브에서 정리]")
+    from game.Inventory import Inventory
+    from ai.battle import ITEM_META
+
+    check("원소 부착 3종은 더 이상 존재하지 않는다",
+          not any(k in ITEM_META for k in ("fire_vial", "ice_vial", "lightning_crystal")),
+          f"ITEM_META에 남아 있음: {[k for k in ('fire_vial','ice_vial','lightning_crystal') if k in ITEM_META]}")
+
+    inv = Inventory.new()
+    inv.potions = ["HP_S_potion", "ice_vial"]        # 옛 세이브에 남은 이름
+    inv.special = ["bomb", "fire_vial", "lightning_crystal"]
+
+    removed = inv.drop_unknown()
+    check("삭제된 이름만 걸러진다",
+          sorted(removed) == ["fire_vial", "ice_vial", "lightning_crystal"], f"removed={removed}")
+    check("남은 포션은 그대로", inv.potions == ["HP_S_potion"], f"potions={inv.potions}")
+    check("남은 특수템은 그대로", inv.special == ["bomb"], f"special={inv.special}")
+    check("특수 칸이 실제로 비워졌다 (새 아이템을 받을 수 있다)",
+          inv.add("web_bomb")["ok"] is True, f"special={inv.special}")
+
+    # 정상 인벤토리는 건드리지 않는다
+    clean = _full_special_inventory()
+    check("정상 인벤토리는 아무것도 제거하지 않는다", clean.drop_unknown() == [],
+          f"special={clean.special}")
+
+
 def main():
     print("=" * 50)
     print(" 포션/특수 인벤토리 교체 동등성 회귀 테스트")
@@ -115,6 +142,7 @@ def main():
         test_swap_item_special()
         test_swap_item_rejects_cross_slot()
         test_swap_item_drop_not_found()
+        test_drop_unknown_purges_removed_items()
     except Exception as ex:
         import traceback
         traceback.print_exc()

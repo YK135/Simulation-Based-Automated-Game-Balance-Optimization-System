@@ -56,10 +56,10 @@ const SKILL_FX = {
     // slash_wide
     '슬래시1': { family: 'slash_wide' }, '슬래시2': { family: 'slash_wide' },
     '난사1': { family: 'slash_wide' }, '난사2': { family: 'slash_wide' },
-    // fire / ice / lightning (스킬 + 원소병)
-    '파이어볼1': { family: 'fire' }, '파이어볼2': { family: 'fire', scale: 1.35 }, fire_vial: { family: 'fire' },
-    '아이스볼릿1': { family: 'ice' }, '아이스볼릿2': { family: 'ice', scale: 1.35 }, ice_vial: { family: 'ice' },
-    '라이트닝1': { family: 'lightning' }, '라이트닝2': { family: 'lightning', scale: 1.35 }, lightning_crystal: { family: 'lightning' },
+    // fire / ice / lightning (원소 부착 아이템 3종은 삭제돼 행도 같이 뺐다)
+    '파이어볼1': { family: 'fire' }, '파이어볼2': { family: 'fire', scale: 1.35 },
+    '아이스볼릿1': { family: 'ice' }, '아이스볼릿2': { family: 'ice', scale: 1.35 },
+    '라이트닝1': { family: 'lightning' }, '라이트닝2': { family: 'lightning', scale: 1.35 },
     // impact — 둔기·충격. 중간 보스 「대지 균열」도 여기(4장) — 전용 시트가 오면 계열만 바꾼다
     '몸통박치기1': { family: 'impact' }, '몸통박치기2': { family: 'impact' }, '몸통박치기_강화': { family: 'impact', scale: 1.2 },
     '되갚기1': { family: 'impact' }, '되갚기2': { family: 'impact' },

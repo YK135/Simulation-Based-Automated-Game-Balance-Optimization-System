@@ -129,6 +129,27 @@ class Inventory:
         return list(self.potions) + list(self.special)
 
     # ─────────────────────────────────────────
+    # 삭제된 아이템 정리
+    # ─────────────────────────────────────────
+
+    def drop_unknown(self) -> List[str]:
+        """ITEM_META에 없는 아이템을 걸러내고, 걸러낸 이름을 돌려준다.
+
+        게임에서 아이템 종류를 없앨 때(예: 원소 부착 3종) 이미 저장된
+        세션에는 그 아이템이 남는다. get_slot()의 폴백이 모르는 이름을
+        "special"로 분류하므로 특수 칸을 계속 차지하는데, 전투에서 쓰면
+        ITEM_META 조회가 비어 아무 효과 없이 턴만 소모된다. 세션 복구
+        시점에 한 번 정리한다(app/Shared._gs_from_snapshot).
+        """
+        from ai.battle import ITEM_META
+
+        removed = [n for n in self.potions + self.special if n not in ITEM_META]
+        if removed:
+            self.potions = [n for n in self.potions if n in ITEM_META]
+            self.special = [n for n in self.special if n in ITEM_META]
+        return removed
+
+    # ─────────────────────────────────────────
     # 추가
     # ─────────────────────────────────────────
 
