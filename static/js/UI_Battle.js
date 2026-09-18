@@ -37,8 +37,12 @@ function refreshBattle(bs, opts) {
 
     renderBattleStage(bs, opts);
 
-    // 캐릭터 스프라이트 상태
-    if (bs.messages) {
+    // 캐릭터 스프라이트 상태 — 시퀀서가 이어서 돌 때(opts.deferDeathAnim)는 건너뛴다.
+    //   Actions.js는 이 refreshBattle 직후 playBattleSequence를 부르는데, 둘 다
+    //   같은 슬롯에 같은 상태를 걸어 애니메이션이 두 번 시작되고 있었다(실측:
+    //   한 번의 공격에 enemy_battle:0:hurt가 2회). 시퀀서가 없는 경로(세션 복구,
+    //   맵 복귀 폴백)에서만 여기서 상태를 건다.
+    if (!opts.deferDeathAnim) {
         _triggerSpriteStates(bs);
     }
 

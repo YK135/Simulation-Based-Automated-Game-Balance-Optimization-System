@@ -110,8 +110,18 @@ function renderEnemySlots(bs, opts) {
 
         slotEl.style.display = '';
         // 달아난 적(en.fled — 고블린 겁쟁이)은 죽은 게 아니라 자리를 비운 것: 시체 포즈 없이 흐리게만
-        slotEl.style.opacity = en.alive ? '1' : (en.fled ? '0.15' : '0.3');
-        slotEl.style.filter  = en.alive ? '' : 'grayscale(100%)';
+        // ★ "방금 죽은" 슬롯은 아직 흐리게 하지 않는다 — 사망 시트를 선명하게 다
+        //   보여준 뒤 BattleSequencer가 markEnemySlotDead()로 시체 표현을 입힌다.
+        //   (예전엔 응답이 오자마자 흐려져서 죽는 동작이 반투명하게 지나갔다.)
+        const justDied = !en.alive && !en.fled && opts.deferDeathAnim
+                         && typeof isCharDead === 'function' && !isCharDead(`enemy_battle:${i}`);
+        if (justDied) {
+            slotEl.style.opacity = '1';
+            slotEl.style.filter  = '';
+        } else {
+            slotEl.style.opacity = en.alive ? '1' : (en.fled ? '0.15' : '0.3');
+            slotEl.style.filter  = en.alive ? '' : 'grayscale(100%)';
+        }
 
         const artEl = document.getElementById(`enemy-art${enemyIdSuffix(i)}`);
         if (artEl) artEl.textContent = ENEMY_ICONS[en.name] || '👹';
@@ -174,4 +184,14 @@ function renderEnemySlots(bs, opts) {
             atbTextEl.textContent = en.alive ? Math.round(enemyAtb) : '--';
         }
     }
+}
+
+// ── 사망 연출이 끝난 뒤 시체 표현 입히기 (BattleSequencer의 사망 단계가 호출) ──
+//    renderEnemySlots가 "방금 죽은" 슬롯의 흐림을 미뤄 두므로, 사망 시트가
+//    다 돌아간 시점에 여기서 한 번 입힌다. 이미 흐려진 슬롯에 다시 불러도 같은 값이라 무해.
+function markEnemySlotDead(i) {
+    const slotEl = document.getElementById(`enemy-slot${i === 0 ? '-1' : '-' + (i + 1)}`);
+    if (!slotEl) return;
+    slotEl.style.opacity = '0.3';
+    slotEl.style.filter  = 'grayscale(100%)';
 }

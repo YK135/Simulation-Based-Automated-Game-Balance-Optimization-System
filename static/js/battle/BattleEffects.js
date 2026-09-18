@@ -2,130 +2,60 @@
    battle/BattleEffects.js — 메시지 기반 캐릭터 스프라이트 상태 전환
    ═══════════════════════════════════════════════════════════ */
 
+/* 스프라이트 상태 전환 — 서버의 구조화 필드(bs.hits / bs.action_fx)만 본다.
+   ★ 예전엔 로그 문장에서 적 이름을 찾아 슬롯을 정했는데(이름 → 슬롯 맵),
+     같은 종류가 여럿인 전투에서는 이름이 겹쳐 엉뚱한 슬롯이 움직였다
+     (박쥐 3마리 중 하나만 맞아도 다른 박쥐가 피격 모션, 죽은 박쥐가 공격 모션).
+     hits는 「대상 × 종류」별 1건이고 slot을, action_fx는 행동한 쪽과 슬롯을
+     직접 들고 있다(ai/battle_session/State.py) — 메시지는 이제 로그 출력에만 쓴다.
+   보통 경로(Actions.js)는 messages를 비운 채 refreshBattle을 부르므로 이 함수는
+   시퀀서가 없는 경로(세션 복구·맵 복귀 폴백)에서만 실제로 동작한다. */
 function _triggerSpriteStates(bs) {
     if (!bs || !bs.enemies) return;
-    const messages = bs.messages || [];
+    const enemies = bs.enemies || [];
+    const hits = bs.hits || [];
+    const fx = bs.action_fx || null;
+    const isCast = (kind) => kind === 'skill' || kind === 'item';
 
-    // 적 이름 목록 (슬롯 인덱스 매핑용)
-    const enemyNameToSlot = {};
-    bs.enemies.forEach((en, i) => {
-        if (en && en.name) enemyNameToSlot[en.name] = i;
-    });
-
-    // 플레이어 이름
-    const playerName = state.player ? state.player.name : '';
-
-    // 메시지 분석
-    let playerActed = false;
-    let playerSkillUsed = false;
-    let enemyActed = false;
-    const damagedEnemies = new Set();   // 데미지 입은 적 슬롯 인덱스 집합
-    const deadEnemies = new Set();      // 사망한 적 슬롯 인덱스
-    let playerHurt = false;
-    let playerDead = false;
-
-    for (const m of messages) {
-        // 플레이어 사망
-        if (m.includes('쓰러졌다')) {
-            playerDead = true;
-            continue;
-        }
-
-        // 적 사망 ("XXX을(를) 처치했다" / "모든 적을 처치했다")
-        if (m.includes('처치했다')) {
-            // 어떤 적이 죽었는지 명확하지 않으면 (모든 적 처치 시) hp<=0인 모든 적
-            bs.enemies.forEach((en, i) => {
-                if (en && !en.alive) deadEnemies.add(i);
-            });
-            continue;
-        }
-
-        // 적 행동: "XXX → " 패턴 (XXX는 적 이름)
-        let foundEnemyAction = false;
-        for (const [name, slotIdx] of Object.entries(enemyNameToSlot)) {
-            if (m.includes(name + ' →') || m.includes(name + ' → ')) {
-                enemyActed = true;
-                // 적이 공격하면 플레이어가 hurt (단, 회피/실드 흡수 메시지는 제외)
-                if (!m.includes('회피') && /\d+ 데미지/.test(m)) {
-                    playerHurt = true;
-                }
-                // 적 슬롯 자체는 attack 상태로
-                _scheduleSetState(`enemy_battle:${slotIdx}`, 'attack', 600);
-                foundEnemyAction = true;
-                break;
-            }
-        }
-        if (foundEnemyAction) continue;
-
-        // 플레이어 스킬 사용: "XXX 사용 →" 또는 "사용!"
-        if (/[가-힣\w]+ 사용/.test(m) && !m.includes('아이템')) {
-            playerSkillUsed = true;
-            playerActed = true;
-            continue;
-        }
-
-        // 적 데미지: "└ XXX에게 ... 데미지" (AoE 후속 적) 또는 "XXX HP: NNN"
-        for (const [name, slotIdx] of Object.entries(enemyNameToSlot)) {
-            if (m.includes(name + '에게') && /\d+ 데미지/.test(m)) {
-                damagedEnemies.add(slotIdx);
-            }
-            if (m.includes(name + ' HP:') && /HP: 0/.test(m)) {
-                deadEnemies.add(slotIdx);
-            }
-        }
-
-        // 일반 플레이어 공격 메시지 ("→ NN 데미지")
-        if (/^→ \d+ 데미지/.test(m) || /^\s*→ \d+/.test(m)) {
-            playerActed = true;
-            // 현재 타깃이 데미지 받음
-            if (bs.target_idx !== undefined) {
-                damagedEnemies.add(bs.target_idx);
-            }
+    // 1) 행동한 쪽의 모션 — 살아 있는 슬롯에만
+    if (fx && fx.actor === 'player') {
+        setCharState('player_battle', isCast(fx.kind) ? 'skill' : 'attack');
+    } else if (fx && fx.actor === 'enemy' && fx.actor_slot >= 0) {
+        const actor = enemies[fx.actor_slot];
+        if (actor && actor.alive) {
+            _scheduleSetState(`enemy_battle:${fx.actor_slot}`, isCast(fx.kind) ? 'skill' : 'attack', 600);
         }
     }
 
-    // ── 상태 적용 ──
-
-    // 1) 플레이어 행동 (0ms)
-    if (playerActed && !playerDead) {
-        if (playerSkillUsed) {
-            setCharState('player_battle', 'skill');
-        } else {
-            setCharState('player_battle', 'attack');
-        }
-    }
-
-    // 2) 적 데미지 효과 (200ms 후 — 플레이어 공격 모션 보여준 뒤)
+    // 2) 적 피격 (200ms 후 — 공격 모션을 보여준 뒤)
+    const damaged = new Set(hits
+        .filter(h => h && h.target === 'enemy' && h.kind === 'damage' && h.slot >= 0)
+        .map(h => h.slot));
     setTimeout(() => {
-        damagedEnemies.forEach(slotIdx => {
-            if (!deadEnemies.has(slotIdx)) {
-                setCharState(`enemy_battle:${slotIdx}`, 'hurt');
-            }
+        damaged.forEach(slotIdx => {
+            const en = enemies[slotIdx];
+            if (en && en.alive) setCharState(`enemy_battle:${slotIdx}`, 'hurt');
         });
     }, 200);
 
-    // 3) 적 사망 (300ms 후 — hurt 보여준 뒤)
+    // 3) 적 사망 (300ms 후) — 달아난 개체는 시체 포즈 대상이 아니다
     setTimeout(() => {
-        deadEnemies.forEach(slotIdx => {
-            setDeadState(`enemy_battle:${slotIdx}`);
+        enemies.forEach((en, i) => {
+            if (en && !en.alive && !en.fled) setDeadState(`enemy_battle:${i}`);
         });
     }, 300);
 
-    // 4) 플레이어 피격 (700ms 후 — 적 공격 모션 보여준 뒤)
-    if (playerHurt) {
+    // 4) 플레이어 피격 / 사망
+    const playerHurt = hits.some(h => h && h.target === 'player' && h.kind === 'damage');
+    const playerDead = bs.player_hp <= 0;
+    if (playerHurt && !playerDead) {
         setTimeout(() => {
-            if (!playerDead) {
-                setCharState('player_battle', 'hurt');
-                setCharState('player_panel', 'hurt', { duration: 600 });
-            }
+            setCharState('player_battle', 'hurt');
+            setCharState('player_panel', 'hurt', { duration: 600 });
         }, 700);
     }
-
-    // 5) 플레이어 사망 (900ms 후)
     if (playerDead) {
-        setTimeout(() => {
-            setDeadState('player_battle');
-        }, 900);
+        setTimeout(() => setDeadState('player_battle'), 900);
     }
 }
 

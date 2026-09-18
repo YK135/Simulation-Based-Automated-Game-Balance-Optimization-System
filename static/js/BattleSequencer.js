@@ -306,17 +306,16 @@ async function playBattleSequence(action, bs) {
 
     // ── 3. 데미지 적용 + 적 hurt ──
     if (groups.damage.length > 0) {
-        // 어떤 적이 데미지 받았는지 매핑
-        const enemyNames = (bs.enemies || []).map(e => e.name);
-        const damagedSlots = new Set();
-        for (const m of groups.damage) {
-            for (let i = 0; i < enemyNames.length; i++) {
-                if (m.includes(enemyNames[i])) {
-                    damagedSlots.add(i);
-                }
-            }
-        }
-        // 타깃이 명시 안 되면 (단일 공격 "→ N 데미지") 현재 타깃 인덱스 사용
+        // ★ 맞은 적은 서버의 구조화 필드(bs.hits)로만 고른다.
+        //   예전엔 로그 문장에 적 이름이 들어있는지로 슬롯을 찾았는데, 같은 종류가
+        //   여럿인 전투(박쥐 3마리)에서는 한 마리만 맞아도 세 슬롯이 전부 매칭돼
+        //   피격 모션이 셋 다 재생됐다. hits는 「대상 × 종류」별 1건이고 slot을
+        //   직접 들고 있다(ai/battle_session/State.py) — 이름 비교가 필요 없다.
+        const damagedSlots = new Set(
+            (bs.hits || [])
+                .filter(h => h && h.target === 'enemy' && h.kind === 'damage' && h.slot >= 0)
+                .map(h => h.slot));
+        // hits가 없는 응답(구버전 호환)일 때만 현재 타깃으로 보정
         if (damagedSlots.size === 0 && bs.target_idx !== undefined) {
             damagedSlots.add(bs.target_idx);
         }
@@ -378,6 +377,14 @@ async function playBattleSequence(action, bs) {
         }
 
         await _seqSleep(deadWait);
+        // ★ 시체 표현(흐림 + 흑백)은 사망 시트가 다 돌아간 뒤에 입힌다 —
+        //   렌더가 응답 즉시 흐리게 만들면 죽는 동작이 이미 반투명한 채로
+        //   재생돼 "죽는 장면"이 안 보인다(BattleRender.renderEnemySlots).
+        if (typeof markEnemySlotDead === 'function') {
+            (bs.enemies || []).forEach((en, i) => {
+                if (en && !en.alive && !en.fled) markEnemySlotDead(i);
+            });
+        }
     }
 
     // ── 5. 적 행동 처리 (다대일은 적별로 순차) ──
@@ -385,8 +392,18 @@ async function playBattleSequence(action, bs) {
         // 적 행동 메시지를 적별로 분리
         const enemyMessages = _splitEnemyMessages(groups.enemy, bs);
 
+        // ★ 이번 step에 행동한 적 슬롯은 서버가 action_fx.actor_slot으로 알려준다
+        //   (한 step에 행동하는 적은 하나). 이름 매칭은 같은 종류가 여럿일 때
+        //   첫 슬롯으로만 몰려서, 죽은 1번 박쥐가 2번 박쥐 대신 공격 모션을
+        //   취하는 문제가 있었다 — 구조화 필드가 있으면 그걸 쓴다.
+        const actingSlot = (bs.action_fx && bs.action_fx.actor === 'enemy'
+                            && typeof bs.action_fx.actor_slot === 'number'
+                            && bs.action_fx.actor_slot >= 0)
+            ? bs.action_fx.actor_slot : null;
+
         for (const enemyGroup of enemyMessages) {
-            const { slotIdx, messages: emsgs } = enemyGroup;
+            const slotIdx = actingSlot !== null ? actingSlot : enemyGroup.slotIdx;
+            const emsgs = enemyGroup.messages;
             const en = bs.enemies && bs.enemies[slotIdx];
             const enemyName = en ? en.name : '';
 
@@ -401,7 +418,8 @@ async function playBattleSequence(action, bs) {
             );
             const motionState = isEnemySkill ? 'skill' : 'attack';
             const motionTime = _animDuration('enemy_battle', enemyName, motionState, SEQ_TIMING.ENEMY_ACTION);
-            if (typeof setCharState === 'function' && slotIdx !== null) {
+            // 죽은 슬롯에는 공격·시전 모션을 걸지 않는다 — 걸면 시체가 대기 모션으로 되살아난다
+            if (typeof setCharState === 'function' && slotIdx !== null && en && en.alive) {
                 setCharState(`enemy_battle:${slotIdx}`, motionState, { duration: motionTime });
             }
 
@@ -499,11 +517,13 @@ function _splitEnemyMessages(enemyMessages, bs) {
     const result = [];
     let currentGroup = null;
 
+    const alive = (bs.enemies || []).map(e => !!(e && e.alive));
     for (const m of enemyMessages) {
-        // 어떤 적의 메시지인지 찾기
+        // 어떤 적의 메시지인지 찾기 — action_fx.actor_slot이 없을 때만 쓰는 폴백이라
+        // 살아 있는 슬롯만 후보로 본다(죽은 동명이인이 먼저 잡히던 문제).
         let foundSlot = null;
         for (let i = 0; i < enemyNames.length; i++) {
-            if (m.includes(enemyNames[i])) {
+            if (alive[i] && m.includes(enemyNames[i])) {
                 foundSlot = i;
                 break;
             }
