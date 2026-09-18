@@ -65,6 +65,11 @@ def master_level_up():
     player = gs["player"]
     for _ in range(levels):
         LV_.Lv_up(player)
+    # ★ Lv_up()은 "경험치가 이미 찼다"는 전제로 exp -= maxexp를 하므로, 경험치 없이
+    #   강제로 올리는 이 경로에서는 exp가 음수로 남는다(레벨 14회면 −2400 — 패널의
+    #   EXP 바가 음수로 표시되고, 이후 실제 전투 경험치가 그 빚을 먼저 갚아야 한다).
+    #   실전 경로(Get_exp)는 찬 만큼만 빼므로 음수가 되지 않는다 — 여기서만 0으로 맞춘다.
+    player.exp = max(0, getattr(player, "exp", 0))
     gs["hook"].check_level_up()
     return jsonify({"ok": True, "player": _player_dict(player, gs["inventory"])})
 
