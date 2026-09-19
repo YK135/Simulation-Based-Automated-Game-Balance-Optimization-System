@@ -47,7 +47,30 @@ async function loadStatus() {
         }
         // 맵이 없으면 newGame 모달에서 처리됨
     }
+
+    // ★ 고르지 않은 보상 선택은 여기서 바로 띄우지 않고 예약만 한다 —
+    //   부팅 경로(Main.js)에서는 이 함수가 끝난 뒤에야 시작 모달(modal-entry)이
+    //   닫히기 때문에, 여기서 열면 시작 화면 뒤에 깔려 클릭할 수 없다(실측).
+    //   시작 모달이 이미 없는 경우(전투 중 세션 복구 등)에는 곧바로 이어서 띄운다.
+    state.pendingRelicOffer = r.relic_offer || null;
+    if (!document.querySelector('#modal-entry.active, #modal-email.active, #modal-newgame.active')) {
+        await resumePendingChoices();
+    }
     return true;
+}
+
+/** 고르지 않고 남아 있는 보상 선택을 다시 띄운다 (유물 → 스킬, 전투 종료 때와 같은 순서).
+ *  · 유물: 전투 종료 응답의 relic_offer로만 열렸어서, 고르기 전에 새로고침하면
+ *    서버에는 티켓이 남아 있는데 화면에서 사라져 영영 못 골랐다(다음 제시가 덮어씀).
+ *    이제 /api/status가 대기 티켓을 같이 내려주고, 여기서 다시 연다.
+ *  · 스킬 2택 1: 데이터(state.player.pending_skill_choices)는 원래도 남아 있었지만
+ *    여는 곳이 레벨업 흐름(StatAllocate.js)뿐이라 다음 레벨업까지 미뤄졌다.
+ *  한 번 띄운 제안은 state에서 지우므로 여러 번 불러도 안전하다. */
+async function resumePendingChoices() {
+    const offer = state.pendingRelicOffer;
+    state.pendingRelicOffer = null;
+    if (offer && typeof openRelicChoice === 'function') await openRelicChoice(offer);
+    if (typeof checkPendingSkillChoices === 'function') await checkPendingSkillChoices();
 }
 
 async function newGame(name, job) {

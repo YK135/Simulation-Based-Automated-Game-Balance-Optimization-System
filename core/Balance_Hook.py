@@ -638,8 +638,16 @@ class BalanceHook:
         ★ 실제 게임 흐름(app/Battle.py의 _finish_battle)에서 패배 시 이 메서드를
           호출하고, 반환된 FeedbackReport를 API 응답에 실어 게임오버 화면에
           보여준다. sim_result(self._last_sim_result)는 get_enemy() 안의
-          _cache_sim_log()가 매번 갱신해두므로, 방금 그 전투와 같은 몬스터를
-          상대로 한 "AI 최적 플레이" 시뮬레이션과 비교된다.
+          _cache_sim_log()가 갱신해두는 "AI 최적 플레이" 시뮬레이션인데,
+          ★ 그건 튜닝을 거치는 일반 몬스터에 대해서만 갱신된다 — 보스는
+          Make_MidBoss/Make_FinalBoss로 따로 만들어져 get_enemy()를 타지 않으므로
+          보스전 뒤에도 "직전에 만난 일반 몬스터"의 시뮬이 그대로 남아 있었다.
+          그대로 넘기면 보스전 플레이를 엉뚱한 상대의 AI 기록과 비교해
+          "AI는 N턴에 끝냈다"며 감점했다. 그래서 ★ 적 이름이 일치할 때만
+          비교에 넘기고, 아니면 AI 비교 항목 자체를 생략한다(FeedBack.py의
+          `if sim_result:` 분기가 통째로 빠진다).
+          남은 한계: 다대일 전투의 enemy_name은 대표 1마리라, 같은 이름이면
+          1v1 시뮬과 비교된다(CLAUDE.md에 기록된 기존 한계와 같은 건).
         """
         # ★ 로컬 파일(JSON+TXT) 저장은 self.verbose(로컬/CLI 사용)일 때만 —
         #   실제 서비스(verbose=False)에서는 이미 app/Shared.py의
@@ -660,9 +668,13 @@ class BalanceHook:
         if result.winner != "enemy":
             return None
 
+        sim = self._last_sim_result
+        if sim is not None and getattr(sim, "enemy_name", "") != getattr(result, "enemy_name", ""):
+            sim = None      # 다른 적의 시뮬 — 비교하면 근거 없는 감점이 된다
+
         return self._fb.run(
             player_result=result,
-            sim_result=self._last_sim_result,
+            sim_result=sim,
             print_report=self.verbose,
         )
 

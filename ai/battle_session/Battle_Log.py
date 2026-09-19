@@ -48,6 +48,10 @@ class BattleLogMixin:
                                    "turns": _turns(d)})
         for s in getattr(unit, "status_effects", []) or []:
             out["status"].append({"name": getattr(s, "name", ""),
+                                  "type": getattr(s, "effect_type", ""),
+                                  # 출혈만 쓰는 값 — 스택 수가 곧 틱 피해라
+                                  # 이름만으로는 상태를 복원할 수 없었다
+                                  "stacks": getattr(s, "stacks", 1),
                                   "turns": _turns(s)})
         return out
 
@@ -61,6 +65,20 @@ class BattleLogMixin:
             "shield": round(getattr(p, "shield", 0.0), 1),
             "stats": {"stg": p.stg, "arm": p.arm, "sparm": p.sparm,
                       "sp": p.sp, "luc": p.luc, "spd": p.effective_spd()},
+            # ★ 2차에서 들어온 자원 축 — 이게 없으면 "왜 그 행동을 골랐는지"를
+            #   로그만 보고 복원할 수 없다(주사위를 미리 봤는지, 공명 몇 단계인지,
+            #   전투당 1회짜리를 이미 썼는지가 전부 선택의 근거다).
+            "pending_dice":   getattr(p, "pending_dice", 0),      # 패 고치기가 미리 본 눈 (0 = 없음)
+            "dice_fix_uses":  getattr(p, "dice_fix_uses", 0),     # 이번 전투 재굴림 사용 횟수
+            "free_rerolls":   getattr(p, "free_rerolls", 0),      # 연막이 준 무료 재굴림
+            "resonance": {                                        # 마법사 원소 공명
+                "element":  getattr(p, "resonance_element", ""),
+                "stack":    getattr(p, "resonance_stack", 0),
+                "switched": bool(getattr(p, "resonance_switched", False)),
+            },
+            "relics":            list(getattr(p, "relics", []) or []),
+            "relic_revive_used": bool(getattr(p, "relic_revive_used", False)),
+            "once_used":         list(getattr(p, "once_used", []) or []),   # 불굴 등 전투당 1회 스킬
         }
         d.update(self._rl_pack_effects(p))
         return d
@@ -79,28 +97,62 @@ class BattleLogMixin:
                 "stats": {"stg": e.stg, "arm": e.arm, "sparm": e.sparm,
                           "sp": e.sp, "luc": e.luc, "spd": e.effective_spd()},
             }
+            # ★ 예고·페이즈 — 화면에는 배지로 보여주면서(State.py의 _pattern_badges)
+            #   학습 로그에는 없었다. "다음 행동이 예고된 상태였는가"는 플레이어
+            #   선택의 가장 큰 근거인데 그게 빠져 있으면 행동을 설명할 수 없다.
+            if getattr(e, "boss_phase", 0) or getattr(e, "boss_telegraph_at", -1) >= 0:
+                d["boss"] = {
+                    "phase":         getattr(e, "boss_phase", 0),
+                    "cycle":         getattr(e, "boss_cycle", 0),
+                    # 예고 예약 시점(플레이어 행동 횟수). armed=True면 다음 보스
+                    # 행동에 강공격이 터진다 — 예고 보장 규칙(4장) 그대로의 판정.
+                    "telegraph_at":  getattr(e, "boss_telegraph_at", -1),
+                    "armed":         (getattr(e, "boss_telegraph_at", -1) >= 0
+                                      and getattr(self, "_player_action_count", 0)
+                                          > getattr(e, "boss_telegraph_at", -1)),
+                    "doom_at":       getattr(e, "boss_doom_at", -1),
+                    "doom_count":    getattr(e, "boss_doom_count", 0),
+                }
+            if getattr(e, "elite_leader", False):
+                d["elite"] = {
+                    "phase":        getattr(e, "elite_phase", 0),
+                    "pattern_turn": getattr(e, "elite_pattern_turn", 0),
+                    "pattern_used": bool(getattr(e, "elite_pattern_used", False)),
+                }
             d.update(self._rl_pack_effects(e))
             out.append(d)
         return out
 
     def _rl_available_actions(self) -> list:
         """이 시점 플레이어가 선택 가능했던 행동 목록.
+        ★ 판정은 skill_requirement_error() 하나로 통일한다 — 전투 메뉴의 회색
+          처리(get_skills)·측정용 AI·execute_skill 안전망이 쓰는 그 함수다.
+          예전엔 여기서만 MP만 보고 판단해서, 출혈이 없는 대상에게 쓸 수 없는
+          「피의 수확」이나 HP 35% 초과에서 못 쓰는 「불굴」, 횟수를 소진한
+          「패 고치기」가 "선택 가능"으로 기록됐다 — 학습 데이터가 실제로는
+          고를 수 없던 행동을 후보로 들고 있었다는 뜻이다.
         ※ 여기 나열된 행동이 전부 실제로 성공한다는 뜻은 아니다 — 마비 상태면
           이 목록과 무관하게 어떤 행동이든 확률적으로 강제 실패할 수 있다
           (_step_core의 is_paralyzed() 판정 참고). action_t의
-          forced_fail_risk 플래그가 그 가능성을 나타낸다."""
-        from ai.battle import SKILL_META
+          forced_fail_risk 플래그가 그 가능성을 나타낸다.
+        ※ skill_requirement_error()는 순수 판정이라 난수를 쓰지 않는다 —
+          로그를 남기는 것만으로 전투 결과가 달라지지 않는다."""
+        from ai.battle import skill_requirement_error
         acts = ["attack", "escape"]
         p = self.player
+        target = getattr(self, "enemy", None)
+        blocked = {}
         for sk in getattr(p, "learned_skills", []) or []:
-            meta = SKILL_META.get(sk, {})
-            cost = meta.get("mp", 0) * p.mp_cost_multiplier()
-            if p.mp >= cost:
+            why = skill_requirement_error(sk, p, target)
+            if why:
+                blocked[sk] = why
+            else:
                 acts.append(f"skill:{sk}")
         # 아이템은 "현재 전투 인벤토리"(BattleSession.items) 기준 —
         # use_item이 self.items에서 차감하므로 사용 후 목록이 즉시 갱신된다.
         for it in getattr(self, "items", []) or []:
             acts.append(f"item:{it}")
+        self._rl_blocked_skills = blocked      # _rl_pre가 같은 step에 함께 싣는다
         return acts
 
     @staticmethod
@@ -161,6 +213,10 @@ class BattleLogMixin:
             "detail": detail,
             "target_idx": tgt,
             "available": self._rl_available_actions() if is_player else [],
+            # 고를 수 없던 스킬과 그 이유 — {스킬: "mp"|"no_bleed"|"hp_high"|"used"|
+            # "max_uses"|"no_element"}. available의 여집합이라 "무엇이 왜 빠졌는지"가
+            # 남는다(_rl_available_actions가 같은 판정에서 채운다).
+            "blocked": dict(getattr(self, "_rl_blocked_skills", {})) if is_player else {},
             # available 목록은 "선택 가능"했다는 뜻일 뿐 — 마비 상태면 이 중
             # 무엇을 골라도 확률적으로 강제 실패할 수 있다(실제 확률은 여기서
             # 굴리지 않음, _rl_has_paralyze 참고).

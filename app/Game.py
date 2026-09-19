@@ -19,6 +19,7 @@ from game.Player_Class import create_player_by_job
 from game.Inventory    import Inventory
 from game.Lv           import Allocate_Stat_Points
 from ai.battle  import SKILL_META
+from game.Relics import relic_list_public, RELIC_GOLD_CONVERT
 from core.Balance_Hook import BalanceHook
 
 from .Shared import GAME_SESSIONS, _get_session, _player_dict, _get_json_body, _get_str_field
@@ -157,6 +158,20 @@ def status():
     # 전투 중이면 battle state도 함께 포함 (프론트 복구용)
     if in_battle:
         resp["battle"] = gs["battle"]._state()
+
+    # ★ 대기 중인 유물 선택 티켓 — 새로고침 복구용.
+    #   유물 선택창은 전투 종료 응답의 relic_offer로만 열렸기 때문에, 고르기 전에
+    #   새로고침하면 티켓은 세션에 남아 있는데 화면에서는 사라져 영영 못 골랐다
+    #   (다음 제시가 오면 _register_relic_offer가 덮어써서 그대로 유실).
+    #   스킬 2택 1은 pending_skill_choices가 _player_dict에 이미 실려 있어 데이터는
+    #   남았지만, 다시 띄우는 건 프론트(Actions.js의 loadStatus)가 맡는다.
+    offer = gs.get("pending_relic_offer")
+    if offer and offer.get("choices"):
+        resp["relic_offer"] = {
+            "ticket_id": offer["ticket_id"],
+            "choices":   relic_list_public(offer["choices"]),
+            "gold_alt":  RELIC_GOLD_CONVERT,
+        }
     return jsonify(resp)
 
 

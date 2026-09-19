@@ -134,6 +134,9 @@ document.addEventListener('keydown', (e) => {
             });
             term('session restored', 'ok');
             toast(`다시 오신 걸 환영합니다, ${state.player.name}`);
+            // ★ 시작 모달을 닫은 뒤에 — 고르지 않고 남은 유물/스킬 선택을 다시 띄운다.
+            //   loadStatus() 안에서 띄우면 아직 열려 있는 modal-entry 뒤에 깔린다.
+            if (typeof resumePendingChoices === 'function') await resumePendingChoices();
         } else {
             term('no session, awaiting input');
         }

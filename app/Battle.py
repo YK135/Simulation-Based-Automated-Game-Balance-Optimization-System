@@ -200,7 +200,6 @@ def _get_current_node_type(gs: dict):
     #   방식으로 통일.
     node = (map_data.get("nodes") or {}).get(node_id)
     return node.get("node_type") if node else None
-    return None
 
 
 def _calc_victory_exp(player, battle) -> int:
