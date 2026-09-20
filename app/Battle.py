@@ -30,6 +30,7 @@ from .Shared import (
     _get_json_body,
     _get_str_field,
     _register_relic_offer, _sync_inventory_relics,
+    _pending_node_type,
 )
 
 battle_bp = Blueprint("battle", __name__)
@@ -187,19 +188,10 @@ def _get_current_node_type(gs: dict):
     nt = gs.get("battle_node_type")
     if nt:
         return nt
-    node_id = gs.get("pending_node_id")
-    map_data = gs.get("map")
-    if not node_id or not map_data:
-        return None
-    # ★ gs["map"]["nodes"]는 리스트가 아니라 {node_id: node_dict} 형태의 dict
-    #   (game/Map.py의 FloorMap.to_dict() 참고) — 예전엔 이걸 리스트처럼
-    #   `for nd in ...`로 순회해서 각 nd가 실제로는 키 문자열이 되어
-    #   nd.get(...)에서 AttributeError가 나는 코드였다(현재 호출부가 전부
-    #   1순위 battle_node_type으로 먼저 반환돼 도달하지 않아 드러나지
-    #   않았을 뿐). app/Rest.py의 _current_pending_node_type()과 동일한
-    #   방식으로 통일.
-    node = (map_data.get("nodes") or {}).get(node_id)
-    return node.get("node_type") if node else None
+    # 2순위 폴백은 app/Shared.py의 _pending_node_type() 하나를 쓴다 —
+    # 예전엔 이 함수가 gs["map"]["nodes"](dict)를 리스트처럼 순회해서
+    # AttributeError가 나는 코드였고, 같은 판정이 Rest.py에도 따로 있었다.
+    return _pending_node_type(gs)
 
 
 def _calc_victory_exp(player, battle) -> int:

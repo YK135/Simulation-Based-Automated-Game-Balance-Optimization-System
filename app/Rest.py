@@ -12,24 +12,16 @@ from flask import Blueprint, jsonify
 
 from game.Lv import LV_
 
-from .Shared import _get_session, _player_dict, _get_json_body
+from .Shared import _get_session, _player_dict, _get_json_body, _pending_node_type
 
 rest_bp = Blueprint("rest", __name__)
 
 
-def _current_pending_node_type(gs: dict) -> str | None:
-    """gs["pending_node_id"]가 가리키는 노드의 node_type. 없으면 None.
-
-    ★ /api/rest는 예전엔 이걸 전혀 확인하지 않아서, 휴식 노드에 있지 않은
-      상태에서도(맵 시작 직후, 전투/상점 노드 등) 브라우저 콘솔이나 별도
-      HTTP 요청으로 {"choice":"train"}을 계속 보내면 경험치를 무한정 얻을
-      수 있었다."""
-    node_id = gs.get("pending_node_id")
-    map_data = gs.get("map")
-    if not node_id or not map_data:
-        return None
-    node = (map_data.get("nodes") or {}).get(node_id)
-    return node.get("node_type") if node else None
+# 노드 타입 판정은 app/Shared.py의 _pending_node_type() 하나로 모았다.
+# ★ /api/rest는 예전엔 이걸 전혀 확인하지 않아서, 휴식 노드에 있지 않은
+#   상태에서도(맵 시작 직후, 전투/상점 노드 등) 브라우저 콘솔이나 별도
+#   HTTP 요청으로 {"choice":"train"}을 계속 보내면 경험치를 무한정 얻을
+#   수 있었다.
 
 
 @rest_bp.route("/api/rest", methods=["POST"])
@@ -41,7 +33,7 @@ def rest():
     if not gs:
         return jsonify({"ok": False, "error": "게임 세션이 없습니다."}), 404
 
-    if _current_pending_node_type(gs) != "rest":
+    if _pending_node_type(gs) != "rest":
         return jsonify({"ok": False, "error": "휴식 노드에서만 사용할 수 있습니다.",
                         "reason": "not_rest_node"}), 400
 

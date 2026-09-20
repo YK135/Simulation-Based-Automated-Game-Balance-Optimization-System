@@ -53,6 +53,7 @@ async function loadStatus() {
     //   닫히기 때문에, 여기서 열면 시작 화면 뒤에 깔려 클릭할 수 없다(실측).
     //   시작 모달이 이미 없는 경우(전투 중 세션 복구 등)에는 곧바로 이어서 띄운다.
     state.pendingRelicOffer = r.relic_offer || null;
+    state.pendingOverflow    = r.inventory_overflow || [];
     if (!document.querySelector('#modal-entry.active, #modal-email.active, #modal-newgame.active')) {
         await resumePendingChoices();
     }
@@ -68,8 +69,17 @@ async function loadStatus() {
  *  한 번 띄운 제안은 state에서 지우므로 여러 번 불러도 안전하다. */
 async function resumePendingChoices() {
     const offer = state.pendingRelicOffer;
+    const overflow = state.pendingOverflow || [];
     state.pendingRelicOffer = null;
+    state.pendingOverflow   = [];
     if (offer && typeof openRelicChoice === 'function') await openRelicChoice(offer);
+    // 교체 티켓도 같은 이유로 복구한다 — 전투 종료 때의 순서(보상 → 교체 → 유물 →
+    // 스킬)와 달리 여기선 유물 다음인데, 둘 다 모달이라 순서만 지키면 된다.
+    if (typeof openInvSwap === 'function') {
+        for (const ov of overflow) {
+            await openInvSwap(ov.item, ov.candidates || [], ov.ticket_id);
+        }
+    }
     if (typeof checkPendingSkillChoices === 'function') await checkPendingSkillChoices();
 }
 

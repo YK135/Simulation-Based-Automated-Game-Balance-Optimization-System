@@ -31,6 +31,7 @@ from game.Enemy_Class import (
 
 from app.Shared  import (
     _get_session, _player_dict, _register_pending_swap, _get_json_body, _get_str_field, _grant_relic,
+    _pending_node_type,
 )
 from app.Battle  import _start_battle, _start_battle_multi
 from core.ErrorLog import log_error
@@ -374,6 +375,14 @@ def _finish_run(gs: dict, result: str) -> None:
         player = gs["player"]
         with db_session() as db:
             run = db.query(Run).filter(Run.id == run_id).first()
+            # ★ 이미 결과가 박힌 런은 덮어쓰지 않는다 — gs["run_finished"]는
+            #   세션 스냅샷에 실리지만(app/Shared.py) Redis까지 사라진 뒤
+            #   DB로만 복구되면 없을 수 있다. DB에 남아 있는 결과가 최종
+            #   판단 근거다: clear/dead로 끝난 런이 나중에 abandon으로
+            #   바뀌면 런 통계가 거짓이 된다.
+            if run and run.result and result == "abandon":
+                gs["run_finished"] = True
+                return
             if run:
                 run.result        = result
                 run.player_lv_end = player.lv
@@ -642,6 +651,22 @@ def map_node_complete():
     node_id = gs.get("pending_node_id", "")
     if not node_id:
         return jsonify({"ok": False, "error": "완료할 노드가 없습니다."}), 400
+
+    # ★ 이 API는 "휴식 선택 완료 · 상점 나가기"처럼 서버가 결과를 따로 검증할
+    #   수 없는 노드만 닫는다. 전투 계열 노드는 app/Battle.py의 _finish_battle()이
+    #   승리를 확인하고 닫는다 — 예전엔 그 구분이 없어서, 보스전이 진행 중인
+    #   상태에서 이 API를 직접 호출하면 전투는 그대로 둔 채 보스 노드를
+    #   완료 처리하고 fmap.completed → _finish_run(gs, "clear")까지 갔다
+    #   (보스를 잡지 않고 챕터 클리어). CLAUDE.md의 "서버가 아는 것을 클라이언트
+    #   입력으로 대신하지 않는다"에 해당하는 구멍이다.
+    if gs.get("battle") is not None:
+        return jsonify({"ok": False, "error": "전투 중에는 노드를 완료할 수 없습니다.",
+                        "reason": "battle_in_progress"}), 400
+    node_type = _pending_node_type(gs)
+    if node_type in ("battle", "elite", "boss"):
+        return jsonify({"ok": False,
+                        "error": "전투 노드는 전투를 끝내야 완료됩니다.",
+                        "reason": "battle_node"}), 400
 
     fmap = FloorMap.from_dict(gs["map"])
     if not fmap.mark_visited(node_id):

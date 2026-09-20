@@ -10,12 +10,22 @@ from __future__ import annotations
 from flask import Blueprint, jsonify
 
 from ai.battle.Battle_Engine  import ITEM_META
-from game.Inventory import get_slot
+from game.Inventory import get_slot, Inventory, SLOT_LIMITS
 
 from .Shared import (
     _get_session, _player_dict, _pop_pending_swap, _restore_pending_swap,
     _get_json_body,
 )
+
+def _slots_needed(inv, slot: str) -> int:
+    """그 슬롯에 하나를 더 넣으려면 몇 개를 더 버려야 하는지 (최소 1).
+    포션 용량은 유물(탐욕의 인장)로 줄어들 수 있어 inv.potion_capacity()를 본다."""
+    if slot == "potion":
+        cap, used = inv.potion_capacity(), len(inv.potions)
+    else:
+        cap, used = SLOT_LIMITS.get("special", 3), len(inv.special)
+    return max(1, used - cap + 1)
+
 
 inventory_bp = Blueprint("inventory", __name__)
 
@@ -160,6 +170,9 @@ def inventory_swap():
         gs["gold"] = gold - price
 
     inv = gs["inventory"]
+    # 되돌릴 때 쓸 원본 — discard_multi()는 검증을 먼저 하므로 부분 삭제는 없지만,
+    # add()가 실패하는 경우엔 "버린 것"까지 되돌려야 한다(아래).
+    inv_before = inv.to_dict()
     discard_res = inv.discard_multi(clean_drops)
     if not discard_res["ok"]:
         # 버리기 자체가 실패(보유량 부족 등)했으면 결제/티켓을 원상복구.
@@ -168,7 +181,33 @@ def inventory_swap():
         _restore_pending_swap(gs, ticket)
         return jsonify({"ok": False, "error": discard_res.get("message", "교체 실패")}), 400
 
-    inv.add(new_item)
+    # ★ add()의 결과를 반드시 본다 — 하나 버려도 여전히 가득 찬 경우가 있다.
+    #   재현: 포션 6개를 들고 있는데 「탐욕의 인장」으로 용량이 5로 줄면,
+    #   하나를 버려도 5/5라 add가 실패한다. 예전엔 결과를 보지 않아서
+    #   버린 포션은 사라지고, 상점 티켓이면 골드까지 빠진 채
+    #   {"ok": true, "message": "...획득!"}을 돌려줬다.
+    add_res = inv.add(new_item)
+    if not add_res.get("ok"):
+        # 인벤토리·결제·티켓을 전부 원래대로 — 티켓은 같은 id로 되돌아가므로
+        # 클라이언트는 들고 있던 ticket_id로 더 버리고 다시 시도할 수 있다.
+        gs["inventory"] = Inventory.from_dict(inv_before)
+        gs["inventory"].potion_penalty = inv.potion_penalty
+        gs["items"] = gs["inventory"].to_flat_list()
+        if ticket.get("source") == "shop" and price:
+            gs["gold"] = gs.get("gold", 0) + price
+        _restore_pending_swap(gs, ticket)
+        need = _slots_needed(gs["inventory"], target_slot)
+        return jsonify({
+            "ok": False,
+            "error": f"{new_item}을(를) 넣으려면 {need}개를 더 버려야 합니다.",
+            "reason": add_res.get("reason", "full"),
+            "slot": target_slot,
+            "need_more": need,
+            "ticket_id": ticket_id,          # 같은 티켓으로 재시도
+            "candidates": add_res.get("candidates", []),
+            "player": _player_dict(gs["player"], gs["inventory"]),
+        }), 400
+
     gs["items"] = inv.to_flat_list()
 
     dropped_desc = ", ".join(f"{name}×{count}" for name, count in clean_drops.items())

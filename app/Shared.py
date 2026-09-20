@@ -193,6 +193,10 @@ def _snapshot_dict(gs: dict) -> dict:
         "mid_boss_cleared": bool(gs.get("mid_boss_cleared", False)),
         "gold":      gs.get("gold", 100),
         "run_id":    gs.get("run_id"),
+        # ★ 런이 이미 clear/dead로 끝났는지 — 이게 빠져 있어서 세션이 복구되면
+        #   표시가 사라졌고, 그 뒤 "새 게임"을 누르면 이미 끝난 런을 abandon으로
+        #   덮어썼다. DB 쪽에도 안전장치를 뒀다(app/Map.py의 _finish_run).
+        "run_finished": bool(gs.get("run_finished", False)),
         "pending_node_id":  gs.get("pending_node_id"),
         "battle_node_type": gs.get("battle_node_type"),
         "battle_map_layer": gs.get("battle_map_layer"),
@@ -254,6 +258,7 @@ def _gs_from_snapshot(uid: str, snap: dict) -> Optional[dict]:
         "map_turn":         snap.get("map_turn", 0),
         "pending_node_id":  snap.get("pending_node_id"),
         "run_id":           snap.get("run_id"),
+        "run_finished":     bool(snap.get("run_finished", False)),
         "gold":             snap.get("gold", 100),
         "battle_node_type": snap.get("battle_node_type"),
         "battle_map_layer": snap.get("battle_map_layer"),
@@ -495,6 +500,21 @@ def _get_db_user_id() -> Optional[int]:
 # ─────────────────────────────────────────────
 # 직렬화 헬퍼
 # ─────────────────────────────────────────────
+
+def _pending_node_type(gs: dict):
+    """gs["pending_node_id"]가 가리키는 노드의 node_type. 없으면 None.
+
+    ★ 세 블루프린트가 같은 판정을 쓴다 — app/Rest.py(휴식 노드에서만 수련),
+      app/Map.py(전투 노드는 노드 완료 API로 끝낼 수 없다),
+      app/Battle.py(gs["battle_node_type"]이 없을 때의 폴백).
+      각자 복사해 두면 한 곳만 고쳐지는 종류의 판정이라 여기로 모은다."""
+    node_id  = gs.get("pending_node_id")
+    map_data = gs.get("map")
+    if not node_id or not map_data:
+        return None
+    node = (map_data.get("nodes") or {}).get(node_id)
+    return node.get("node_type") if node else None
+
 
 def _player_to_snap(player, inv) -> EntitySnapshot:
     """

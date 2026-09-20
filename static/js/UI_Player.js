@@ -207,15 +207,31 @@ function _iiOverflowTotalSelected() {
     return total;
 }
 
+/** 이 슬롯에 하나를 더 넣으려면 몇 개를 버려야 하는가 (최소 1).
+ *  ★ 보통은 1이지만, 용량이 줄어든 상태(유물 「탐욕의 인장」 — 포션 칸 −1)로
+ *    이미 용량을 넘겨 들고 있으면 2개 이상이다. 예전엔 무조건 1개만 고르면
+ *    확인이 눌려서, 서버에 보내도 새 아이템이 안 들어가는 막다른 길이 됐다
+ *    (서버 쪽은 app/Inventory.py가 이제 되돌리고 몇 개가 더 필요한지 알려준다). */
+function _iiRequiredDrops() {
+    const inv = (state.player && state.player.inventory) || null;
+    if (!inv || !_iiOverflow) return 1;
+    const isPotion = /_potion$/.test(_iiOverflow.incomingItem || '');
+    const cap  = isPotion ? inv.potion_capacity : inv.special_capacity;
+    const used = isPotion ? inv.potion_used     : inv.special_used;
+    if (typeof cap !== 'number' || typeof used !== 'number') return 1;
+    return Math.max(1, used - cap + 1);
+}
+
 function _updateOverflowConfirmState() {
+    const need = _iiRequiredDrops();
+    const n = _iiOverflowTotalSelected();
     const btn = document.getElementById('ii-confirm');
-    if (btn) btn.disabled = _iiOverflowTotalSelected() < 1;
+    if (btn) btn.disabled = n < need;
     const desc = document.getElementById('ii-desc');
     if (desc && _iiOverflow) {
-        const n = _iiOverflowTotalSelected();
         desc.innerHTML = `새 아이템 <span class="iv-incoming">${(typeof itemLabel === 'function') ? itemLabel(_iiOverflow.incomingItem) : _iiOverflow.incomingItem}</span>` +
-            `을(를) 얻으려면 버릴 아이템을 선택하세요.` +
-            (n > 0 ? `<br><b>${n}개 선택됨</b>` : '');
+            `을(를) 얻으려면 버릴 아이템을 ${need > 1 ? `<b>${need}개</b> ` : ''}선택하세요.` +
+            (n > 0 ? `<br><b>${n}개 선택됨</b>${n < need ? ` — ${need - n}개 더 필요` : ''}` : '');
     }
 }
 
@@ -286,7 +302,16 @@ async function _confirmInvSwap() {
     try {
         const drops = Object.fromEntries(_iiOverflow.selected);
         const r = await api('/inventory/swap', { ticket_id: _iiOverflow.ticketId, drops });
-        if (!r.ok) { toast(r.error || '교체 실패', 'error'); return; }
+        if (!r.ok) {
+            toast(r.error || '교체 실패', 'error');
+            // ★ 서버가 티켓을 되돌려 줬으면(칸이 아직 모자란 경우 등) 창을 닫지
+            //   않고 다시 고르게 한다 — 닫아버리면 대기 아이템을 받을 길이 없다.
+            if (r.player) { state.player = r.player; refreshItemModal(state.player); }
+            if (r.ticket_id) _iiOverflow.ticketId = r.ticket_id;
+            _iiOverflow.selected.clear();
+            _updateOverflowConfirmState();
+            return;
+        }
         state.player = r.player;
         // ★ 상점 구매가 가득 찬 인벤토리 때문에 미뤄졌던 경우, 결제는 이 스왑
         //   확정 시점에 서버에서 이뤄진다(app/Inventory.py 참고). 그 차감된 골드는

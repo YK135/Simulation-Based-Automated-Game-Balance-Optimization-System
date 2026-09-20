@@ -123,7 +123,7 @@ class BattleLogMixin:
             out.append(d)
         return out
 
-    def _rl_available_actions(self) -> list:
+    def _rl_available_actions(self, target=None) -> list:
         """이 시점 플레이어가 선택 가능했던 행동 목록.
         ★ 판정은 skill_requirement_error() 하나로 통일한다 — 전투 메뉴의 회색
           처리(get_skills)·측정용 AI·execute_skill 안전망이 쓰는 그 함수다.
@@ -140,7 +140,13 @@ class BattleLogMixin:
         from ai.battle import skill_requirement_error
         acts = ["attack", "escape"]
         p = self.player
-        target = getattr(self, "enemy", None)
+        # ★ 대상은 "이번 행동이 겨누는 적"이다. 예전엔 self.enemy(살아있는 첫 적)를
+        #   썼는데, 다대일에서 2번 적을 골라 공격하면 전투 메뉴(get_skills →
+        #   _current_target)와 판정이 갈렸다 — 화면은 「피의 수확」 사용 가능,
+        #   로그는 no_bleed. 행동 문자열이 대상을 실으면 그 대상을, 없으면
+        #   메뉴와 같은 _current_target()을 쓴다.
+        if target is None:
+            target = self._current_target() if hasattr(self, "_current_target") else getattr(self, "enemy", None)
         blocked = {}
         for sk in getattr(p, "learned_skills", []) or []:
             why = skill_requirement_error(sk, p, target)
@@ -206,13 +212,18 @@ class BattleLogMixin:
                 except ValueError:
                     pass
 
+        # 이번 행동이 겨누는 적 — available/blocked 판정에 그대로 쓴다.
+        tgt_unit = None
+        if is_player and 0 <= tgt < len(self.enemies) and self.enemies[tgt].hp > 0:
+            tgt_unit = self.enemies[tgt]
+
         action_t = {
             "actor": "player" if is_player else "enemy",
             "actor_idx": aidx,
             "type": atype if is_player else "auto",
             "detail": detail,
             "target_idx": tgt,
-            "available": self._rl_available_actions() if is_player else [],
+            "available": self._rl_available_actions(tgt_unit) if is_player else [],
             # 고를 수 없던 스킬과 그 이유 — {스킬: "mp"|"no_bleed"|"hp_high"|"used"|
             # "max_uses"|"no_element"}. available의 여집합이라 "무엇이 왜 빠졌는지"가
             # 남는다(_rl_available_actions가 같은 판정에서 채운다).

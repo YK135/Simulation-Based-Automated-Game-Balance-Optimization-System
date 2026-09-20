@@ -16,7 +16,7 @@ import uuid
 from flask import Blueprint, jsonify, session
 
 from game.Player_Class import create_player_by_job
-from game.Inventory    import Inventory
+from game.Inventory    import Inventory, get_slot
 from game.Lv           import Allocate_Stat_Points
 from ai.battle  import SKILL_META
 from game.Relics import relic_list_public, RELIC_GOLD_CONVERT
@@ -172,6 +172,22 @@ def status():
             "choices":   relic_list_public(offer["choices"]),
             "gold_alt":  RELIC_GOLD_CONVERT,
         }
+
+    # ★ 대기 중인 인벤토리 교체 티켓 — 유물과 같은 이유로 실어 보낸다.
+    #   교체창은 전투 종료 응답(inventory_overflow)으로만 열렸어서, 고르기 전에
+    #   새로고침하면 티켓은 살아 있는데 화면에서 사라져 그 아이템을 못 받았다.
+    #   candidates는 지금 인벤토리에서 다시 계산한다 — 티켓에 박아 두면
+    #   그 사이 아이템을 쓴 경우와 어긋난다.
+    swaps = gs.get("pending_swaps") or []
+    if swaps:
+        inv = gs["inventory"]
+        resp["inventory_overflow"] = [{
+            "ticket_id":  t["ticket_id"],
+            "item":       t["item"],
+            "source":     t.get("source", ""),
+            "price":      t.get("price", 0),
+            "candidates": (list(inv.potions) if get_slot(t["item"]) == "potion" else list(inv.special)),
+        } for t in swaps if t.get("ticket_id") and t.get("item")]
     return jsonify(resp)
 
 
