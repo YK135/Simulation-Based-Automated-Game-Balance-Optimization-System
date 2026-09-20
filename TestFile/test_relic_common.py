@@ -161,19 +161,25 @@ def test_shop_discount():
 
 def test_relic_pool():
     print("\n[5] 공용 풀 8종")
+    # 직업 전용 12종과 제시 규칙은 TestFile/test_relic_job.py — 여기는 공용 풀만 본다
     from game.Relics import RELIC_META, available_relics, relic_choices, shop_relic_items
-    from ai.battle.Relics import COMMON_RELIC_IDS
+    from ai.battle.Relics import COMMON_RELIC_IDS, JOB_RELIC_IDS, RELIC_IDS
 
-    check("메타가 8종", len(RELIC_META) == 8, f"{len(RELIC_META)}")
-    check("전부 공용(job 빈 값)", all(not m["job"] for m in RELIC_META.values()))
-    check("id 집합이 COMMON_RELIC_IDS와 일치", set(RELIC_META) == set(COMMON_RELIC_IDS))
-    check("아무것도 안 가졌으면 8종 다 후보", len(available_relics([], "전사")) == 8)
+    check("공용이 8종", len(COMMON_RELIC_IDS) == 8, f"{len(COMMON_RELIC_IDS)}")
+    check("공용은 전부 job 빈 값", all(not RELIC_META[r]["job"] for r in COMMON_RELIC_IDS))
+    check("메타와 RELIC_IDS가 일치", set(RELIC_META) == set(RELIC_IDS))
+    check("공용 8종이 전부 메타에 있다", set(COMMON_RELIC_IDS) <= set(RELIC_META))
+    check("아무것도 안 가졌으면 공용 8 + 내 직업 4 = 12종이 후보",
+          len(available_relics([], "전사")) == 8 + len(JOB_RELIC_IDS["전사"]),
+          f"{len(available_relics([], '전사'))}")
     owned = list(COMMON_RELIC_IDS[:6])
-    check("가진 것은 후보에서 빠진다", sorted(available_relics(owned, "전사")) == sorted(COMMON_RELIC_IDS[6:]))
+    check("가진 것은 후보에서 빠진다",
+          set(available_relics(owned, "전사")) == set(COMMON_RELIC_IDS[6:]) | set(JOB_RELIC_IDS["전사"]))
     check("제시는 최대 3장", len(relic_choices([], "전사")) == 3)
-    check("남은 게 2종이면 2장만", len(relic_choices(list(COMMON_RELIC_IDS[:6]), "전사")) == 2)
-    check("전부 가지면 제시 없음", relic_choices(list(COMMON_RELIC_IDS), "전사") == [])
-    check("상점도 안 가진 것만 진열", len(shop_relic_items(owned, "전사")) == 2)
+    check("공용만 남았고 2종뿐이면 2장만",
+          len(relic_choices(list(COMMON_RELIC_IDS[:6]) + list(JOB_RELIC_IDS["전사"]), "전사")) == 2)
+    check("전부 가지면 제시 없음", relic_choices(list(RELIC_IDS), "전사") == [])
+    check("상점은 안 가진 공용만 진열", len(shop_relic_items(owned, "전사")) == 2)
 
 
 def test_tanker_locked():

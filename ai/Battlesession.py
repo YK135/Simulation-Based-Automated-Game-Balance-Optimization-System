@@ -23,7 +23,8 @@ from ai.battle import (
     EntitySnapshot, SKILL_META, TurnLog, execute_skill,
     is_free_action, preview_next_dice, skill_requirement_error, SKILL_REQUIREMENT_LABEL,
 )
-from ai.battle.Relics import relic_atb_carry, relic_try_revive, REMAINS_REVIVE_HP_RATIO
+from ai.battle.Relics import (relic_atb_carry, relic_try_revive, REMAINS_REVIVE_HP_RATIO,
+                              relic_battle_start_shield)
 from ai.Auto_AI import EnemyAI
 
 from ai.battle_session.Targeting      import TargetingMixin
@@ -159,6 +160,16 @@ class BattleSession(
             if getattr(e, "first_strike", False):
                 self.enemy_atbs[i] = 100.0
  
+        # ── 유물: 전투 시작 상태 (무쇠 심장 실드 · 표적 안내서 장전 초기화) ──
+        #    "전투당 1회"의 기준이 여기다 — BattleSession 하나가 전투 하나다.
+        self.player.relic_crit_armed = False
+        self.player.relic_crit_used  = False
+        _shield = relic_battle_start_shield(self.player)
+        if _shield > 0:
+            self.relic_start_messages = [f"🫀 무쇠 심장 — 전투 시작 실드 {int(_shield)}"]
+        else:
+            self.relic_start_messages = []
+
         # 전사 패시브용 '공격 행동' 카운터 — 적 공격(일반공격/공격형 스킬) 3회마다 발동
         # 카운트는 Player_Actions._count_warrior_attack()에서만 증가 (아이템/버프/힐 제외)
         # 새 전투(BattleSession 생성)마다 0으로 초기화

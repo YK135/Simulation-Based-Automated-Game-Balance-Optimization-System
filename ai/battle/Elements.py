@@ -4,7 +4,8 @@ from __future__ import annotations
 from random import randint
 
 from .Entity import Debuff, StatusEffect
-from .Relics import frost_mark_mult, frost_mark_on_shatter
+from .Relics import (frost_mark_mult, frost_mark_on_shatter,
+                     relic_resonance_max, relic_mana_circuit)
 from .BossKit import finalboss_element_resist
 from .EliteKit import (
     ICE_SLIME_ARMOR_REDUCTION, ICE_SLIME_BREAK_SPARM_AMOUNT, ICE_SLIME_BREAK_TURNS,
@@ -43,7 +44,8 @@ def mage_resonance_on_cast(attacker, element: str, stype: str) -> str:
     if getattr(attacker, "job", "") != "마법사" or stype != "magical" or element not in RESONANCE_ELEMENTS:
         return ""
     if attacker.resonance_element == element:
-        attacker.resonance_stack = min(RESONANCE_MAX_STACK, attacker.resonance_stack + 1)
+        attacker.resonance_stack = min(relic_resonance_max(attacker, RESONANCE_MAX_STACK),
+                                       attacker.resonance_stack + 1)
         attacker.resonance_switched = False
         return "stack"
     switched = bool(attacker.resonance_element)
@@ -60,7 +62,8 @@ def mage_resonance_mult(attacker, element: str) -> float:
     if getattr(attacker, "resonance_element", "") != element:
         return 1.0
     stack = getattr(attacker, "resonance_stack", 0)
-    return 1.0 + RESONANCE_STEP * max(0, min(RESONANCE_MAX_STACK, stack) - 1)
+    smax = relic_resonance_max(attacker, RESONANCE_MAX_STACK)   # 유물 「공명의 수정」
+    return 1.0 + RESONANCE_STEP * max(0, min(smax, stack) - 1)
 
 
 # 원소 → 상태이상
@@ -159,6 +162,13 @@ def is_element_immune(defender, attack_element: str) -> bool:
     return immune == attack_element
 
 
+def _mana_circuit(attacker, messages: list) -> None:
+    """유물 「마나 회로」 — 반응(융해·과부하·파쇄)이 터질 때마다 MP 회복."""
+    gained = relic_mana_circuit(attacker)
+    if gained > 0:
+        messages.append(f"💠 마나 회로 — 반응으로 MP +{gained}")
+
+
 def _stamp(defender, element: str, reaction: str, damage: int) -> None:
     """UI 데미지 숫자 색 구분용 태그를 defender에 남긴다 (표시 전용, 쓰기만).
     피해가 0이면 남기지 않는다 — 원소 부착만 하는 호출
@@ -201,6 +211,7 @@ def apply_element_and_react(
             messages.append(f"{eff['label']} 발동! +{bonus} 추가 데미지")
             if frost_mark_on_shatter(attacker) > 0:
                 messages.append("❄ 서리 사냥꾼의 각인 — 파쇄! ATB +5")
+            _mana_circuit(attacker, messages)
             messages.append(f"{defender.name}의 원소 큐가 초기화되었다.")
             _restore_innate_element(defender, messages)   # 원소 슬라임 고유 원소 복구
             _elite_ice_slime_break(defender, messages)     # 엘리트 빙결 슬라임: 갑옷 파쇄
@@ -253,6 +264,7 @@ def apply_element_and_react(
                 messages.append(f"{defender.name}에게 추가 {bonus} 피해!")
                 messages.append(f"{defender.name}의 원소 큐가 초기화되었다.")
                 base_damage += bonus
+                _mana_circuit(attacker, messages)          # 유물 「마나 회로」
                 # ── 마법사 패시브: 원소 반응 발생 시 MP 8% 회복 ──
                 if is_mage:
                     mp_gain = int(attacker.maxmp * 0.08)

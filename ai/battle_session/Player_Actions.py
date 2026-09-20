@@ -12,6 +12,7 @@ from ai.battle import (
     consume_atb_drain, skill_requirement_error, SKILL_REQUIREMENT_LABEL, preview_next_dice,
 )
 from ai.battle.Skills import rogue_dice_crit, maybe_hit_bleed, attached_bonus_mult, skill_lifesteal_bonus
+from ai.battle.Relics import relic_dice_roll, relic_on_kill_heal, relic_arm_kill_crit, relic_dodge_atb
 
 
 class PlayerActionsMixin:
@@ -37,7 +38,7 @@ class PlayerActionsMixin:
             dice = fixed                       # 미리 보인 다음 주사위(패 고치기) — 이 공격이 소비한다
             preview_next_dice(self.player)     # 다음 공격의 눈을 바로 다시 보여준다
         else:
-            dice = randint(1, 6)
+            dice = relic_dice_roll(self.player, randint(1, 6))   # 유물 「납으로 만든 주사위」
         self.player._suppress_crit = True
         info = {
             "dice":       dice,
@@ -102,7 +103,25 @@ class PlayerActionsMixin:
         healed = lifesteal_heal(self.player, basis, cast)
         if healed > 0:
             msgs.append(f"🩸 흡혈 +{int(healed)} HP")
+        if hp_before > 0 and target.hp <= 0:
+            self._relic_on_kill(msgs)
         return hp_dmg
+
+    def _relic_on_kill(self, msgs: list) -> None:
+        """플레이어의 공격으로 적이 쓰러졌을 때 터지는 유물.
+        DoT·아이템으로 죽은 경우는 여기를 안 지난다 — "공격으로 처치"만 센다."""
+        healed = relic_on_kill_heal(self.player)
+        if healed > 0:
+            msgs.append(f"🗡 굶주린 칼날 — 처치! HP +{int(healed)}")
+        if relic_arm_kill_crit(self.player):
+            msgs.append("🎯 표적 안내서 — 다음 공격이 확정 치명타!")
+
+    def _relic_on_dodge(self, msgs: list) -> None:
+        """플레이어가 적의 공격을 회피했을 때 — 그림자 걸음(ATB)."""
+        gain = relic_dodge_atb(self.player)
+        if gain > 0:
+            self.player_atb += gain
+            msgs.append(f"👣 그림자 걸음 — 회피! ATB +{int(gain)}")
 
     # ─────────────────────────────────────────
     # 공통: 실드 경유 피해 적용 (Player/Enemy_Actions 공용 — mixin이라 self 공유)

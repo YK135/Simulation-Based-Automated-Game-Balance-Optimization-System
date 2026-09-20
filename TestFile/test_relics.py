@@ -76,7 +76,7 @@ def dummy(hp=5000, spd=1.0, stg=20, **kw):
 # ═══════════════════════════════════════════════════════════
 print("\n[1] 메타·제시 규칙")
 check("공용 풀 정의 — 원년 4종이 전부 들어 있고 공용(job 없음)",
-      set(RELIC_META) == set(RELIC_IDS) == set(COMMON_RELIC_IDS)
+      set(RELIC_META) == set(RELIC_IDS)
       and {RELIC_HOURGLASS, RELIC_GREED_SEAL, RELIC_FROST_MARK, RELIC_PRIEST_REMAINS} <= set(COMMON_RELIC_IDS)
       and all(not RELIC_META[r]["job"] for r in COMMON_RELIC_IDS))
 random.seed(1)
@@ -85,8 +85,8 @@ check("없을 때 3개 제시(중복 없음)", len(c) == 3 and len(set(c)) == 3 
 _all_but_one = list(COMMON_RELIC_IDS[:-1])
 check("하나만 남으면 그 하나만 제시", relic_choices(_all_but_one) == [COMMON_RELIC_IDS[-1]])
 check("전부 보유 → 제시 없음", relic_choices(list(RELIC_IDS)) == [])
-check("상점 진열: 아직 없는 것만, type relic, 가격 200", [x["id"] for x in shop_relic_items([RELIC_GREED_SEAL])] ==
-      [r for r in RELIC_IDS if r != RELIC_GREED_SEAL] and all(x["type"] == "relic" and x["price"] == RELIC_SHOP_PRICE
+check("상점 진열: 아직 없는 공용만, type relic, 가격 200", [x["id"] for x in shop_relic_items([RELIC_GREED_SEAL])] ==
+      [r for r in COMMON_RELIC_IDS if r != RELIC_GREED_SEAL] and all(x["type"] == "relic" and x["price"] == RELIC_SHOP_PRICE
                                                              for x in shop_relic_items([])))
 check("상점 행: effect는 짧은 문구(≤20자), desc는 전체 설명", all(len(x["effect"]) <= 20 and x["desc"] == RELIC_META[x["id"]]["desc"]
       for x in shop_relic_items([])), [x["effect"] for x in shop_relic_items([])])

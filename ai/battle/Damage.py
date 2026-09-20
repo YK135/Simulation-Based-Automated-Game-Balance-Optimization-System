@@ -4,6 +4,7 @@ from __future__ import annotations
 from random import randint, uniform
 
 from .Entity import EntitySnapshot
+from .Relics import relic_execute_mult, relic_take_guaranteed_crit, relic_lifesteal_hit_cap
 
 class DamageCalc:
     """
@@ -86,12 +87,18 @@ class DamageCalc:
             elif damage_type == "magical":
                 base *= defender.magical_resist
 
+        # ── 유물 「처형인의 각인」: 빈사 대상에게 주는 피해 (상성 뒤, 크리 앞) ──
+        base *= relic_execute_mult(attacker, defender)
+
         # ── 크리티컬 ──
         # 도적 주사위 패시브: 도적의 크리는 주사위(6)로만 발생.
         #   호출부(Player_Actions/Engine)가 주사위 공격 전에 attacker._suppress_crit=True를
         #   세팅하면 자연 크리를 억제한다. 반격은 플래그 미설정 → 일반 luc 크리 허용.
         # (구 도적 패시브 '크리 시 70% 확률 방어력 50% 무시'는 삭제됨)
-        if attacker is not None and getattr(attacker, "_suppress_crit", False):
+        # 유물 「표적 안내서」로 장전된 확정 치명타는 주사위 억제보다 우선한다
+        if relic_take_guaranteed_crit(attacker):
+            is_crit = True
+        elif attacker is not None and getattr(attacker, "_suppress_crit", False):
             is_crit = False
         else:
             crit_chance = min(atk_luc * 0.5, 40)
@@ -215,7 +222,8 @@ def lifesteal_heal(attacker: EntitySnapshot, basis: float, cast: "LifestealCast 
         ratio += cast.bonus * (1.0 + attacker.buff_amount("lifesteal_amp"))
     if ratio <= 0 or basis <= 0:
         return 0.0
-    heal = attacker.heal_value(min(basis * ratio, attacker.maxhp * LIFESTEAL_HIT_CAP_RATIO))
+    hit_cap = relic_lifesteal_hit_cap(attacker, LIFESTEAL_HIT_CAP_RATIO)   # 유물 「짐승의 피」
+    heal = attacker.heal_value(min(basis * ratio, attacker.maxhp * hit_cap))
     if cast is not None:
         heal = min(heal, cast.pool)
     heal = min(heal, max(0.0, attacker.maxhp - attacker.hp))

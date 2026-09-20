@@ -31,7 +31,7 @@ from flask import session, request
 
 from game.Inventory import Inventory
 from game.Relics import relic_list_public
-from ai.battle.Relics import relic_potion_slot_penalty
+from ai.battle.Relics import relic_potion_slot_penalty, relic_maxhp_cost_mult
 from ai.battle import EntitySnapshot
 from core.RedisCache import redis_get, redis_set
 from core.ErrorLog import log_error
@@ -449,6 +449,13 @@ def _grant_relic(gs: dict, relic_id: str) -> bool:
     if relic_id in relics:
         return False
     relics.append(relic_id)
+    # 「굶주린 칼날」의 대가 — 얻는 순간 최대 HP를 한 번 깎는다(되돌릴 수 없다).
+    # 레벨업 증가분(game/Lv.py는 maxhp에 더하기만 한다)은 깎지 않으므로
+    # 늦게 얻을수록 체감 비용이 작아진다 — 의도된 절충이다.
+    mult = relic_maxhp_cost_mult(relic_id)
+    if mult < 1.0:
+        player.maxhp = max(1, int(player.maxhp * mult))
+        player.hp = min(player.hp, player.maxhp)
     _sync_inventory_relics(gs)
     return True
 

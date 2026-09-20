@@ -5,7 +5,7 @@ import copy
 from dataclasses import dataclass, field
 from random import randint, uniform
 
-from .Relics import relic_debuff_turns      # 유물 「거울 파편」 — 디버프 지속 보정 (Relics는 의존 없음)
+from .Relics import relic_debuff_turns, relic_bleed_stack_max   # 유물 — 지속·스택 보정 (Relics는 의존 없음)
 
 
 @dataclass
@@ -187,6 +187,8 @@ class EntitySnapshot:
     # ── 유물 (ai/battle/Relics.py · 11-1 2차 7번) — 플레이어 전용, 세션/엔진이 효과를 읽는다 ──
     relics: list = field(default_factory=list)   # 보유 유물 id (Player.relics에서 복사)
     relic_revive_used: bool = False              # 사제의 유해 — 전투당 1회
+    relic_crit_armed: bool = False               # 표적 안내서 — 처치로 장전된 확정 치명타
+    relic_crit_used: bool = False                # 표적 안내서 — 전투당 1회 (장전을 이미 썼다)
 
     # ── 신규 스킬 6종의 전투당 상태 (Combat Content Brief 9·10장 · 11-1 2차 6번) ──
     pending_dice: int = 0        # 도적 「패 고치기」가 저장한 다음 공격 주사위 (0 = 없음, 다음 공격이 소비)
@@ -368,7 +370,7 @@ class EntitySnapshot:
     def apply_debuff(self, debuff: Debuff, caster=None):
         """caster는 유물 「거울 파편」의 지속 보정에만 쓴다 — 모르면 None(받는 쪽만 본다).
         유물이 없으면 turns가 그대로라 기존 계산은 불변이다."""
-        turns = relic_debuff_turns(caster, self, debuff.turns)
+        turns = relic_debuff_turns(caster, self, debuff.turns, kind=debuff.stat)
         for existing in self.debuffs:
             if existing.stat == debuff.stat:
                 existing.amount = debuff.amount
@@ -417,18 +419,19 @@ class EntitySnapshot:
     def apply_status_effect(self, effect: "StatusEffect", caster=None) -> "StatusEffect":
         """상태이상 적용. 같은 타입은 남은 턴 갱신(중복 허용X) — 출혈은 여기에 스택 +1(최대 3).
         반환: 실제로 목록에 있는 효과 객체 (호출부가 스택 수를 읽을 수 있게)."""
-        turns = relic_debuff_turns(caster, self, effect.turns)   # 유물 「거울 파편」
+        turns = relic_debuff_turns(caster, self, effect.turns, kind=effect.effect_type)
+        stack_max = relic_bleed_stack_max(caster, BLEED_STACK_MAX)   # 유물 「사혈 단검」
         for existing in self.status_effects:
             if existing.effect_type == effect.effect_type:
                 existing.turns = max(existing.turns, turns)
                 if effect.effect_type == "bleed":
-                    existing.stacks = min(BLEED_STACK_MAX, existing.stacks + 1)
+                    existing.stacks = min(stack_max, existing.stacks + 1)
                 return existing
         import copy as _copy
         new = _copy.copy(effect)
         new.turns = turns
         if new.effect_type == "bleed":
-            new.stacks = max(1, min(BLEED_STACK_MAX, new.stacks))
+            new.stacks = max(1, min(stack_max, new.stacks))
         self.status_effects.append(new)
         return new
 

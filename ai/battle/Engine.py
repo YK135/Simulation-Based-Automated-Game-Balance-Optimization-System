@@ -17,7 +17,7 @@ from .Skills import (
 from .Items import use_item
 from .Elements import apply_element_and_react
 from .MonsterKit import BAT_TYPE, bat_lifesteal_amount
-from .Relics import relic_try_revive, relic_atb_carry
+from .Relics import relic_try_revive, relic_atb_carry, relic_dice_roll
 
 @dataclass
 class TurnLog:
@@ -213,7 +213,7 @@ class BattleEngine:
             # ── 도적 주사위 (플레이어 공격, 게임 규칙과 동일) ──
             dice = None
             if actor == "player" and attacker.job == "도적":
-                dice = attacker.pending_dice or randint(1, 6)   # 미리 보인 눈이 있으면 소비
+                dice = attacker.pending_dice or relic_dice_roll(attacker, randint(1, 6))   # 미리 보인 눈이 있으면 소비
                 if attacker.pending_dice:
                     preview_next_dice(attacker)                  # 다음 눈을 바로 다시 보여준다
                 attacker._suppress_crit = True
@@ -280,7 +280,7 @@ class BattleEngine:
             _meta = SKILL_META.get(action.detail, {})
             if (actor == "player" and attacker.job == "도적"
                     and _meta.get("type", "") in self._ATTACK_SKILL_TYPES):
-                dice = attacker.pending_dice or randint(1, 6)   # 미리 보인 눈 소비
+                dice = attacker.pending_dice or relic_dice_roll(attacker, randint(1, 6))   # 미리 보인 눈 소비
                 if attacker.pending_dice:
                     preview_next_dice(attacker)
                 attacker._suppress_crit = True

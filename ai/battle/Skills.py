@@ -12,6 +12,7 @@ from .Elements import (
 from .EliteKit import BAT_SCREAM_SPD_AMOUNT, BAT_SCREAM_TURNS
 from .BossKit import MIDBOSS_RIFT_MULT, MIDBOSS_RIFT_ARM_PEN, RIFT_STATUS, is_boss_or_elite
 from .MonsterKit import BAT_WING_SKILL, BAT_WING_ATB_DRAIN, BAT_WING_MP
+from .Relics import relic_dice_roll
 
 SKILL_META = {
     "약화1": {
@@ -614,7 +615,7 @@ def preview_next_dice(attacker: EntitySnapshot) -> int:
     """패 고치기를 배운 도적의 '다음 주사위 미리 보기' — 전투 시작과 눈을 소비한 직후에 굴려 둔다.
     (스킬이 없으면 0 = 미리 보기 없음, 공격 시점에 굴린다.)"""
     if getattr(attacker, "job", "") == "도적" and "패 고치기" in getattr(attacker, "learned_skills", []):
-        attacker.pending_dice = randint(1, 6)
+        attacker.pending_dice = relic_dice_roll(attacker, randint(1, 6))
     else:
         attacker.pending_dice = 0
     return attacker.pending_dice
@@ -765,7 +766,7 @@ def execute_skill(
     # ── 연막으로 얻은 무료 재굴림 (패 고치기) — MP·사용 횟수를 쓰지 않는다 ──
     if meta.get("type") == "dice" and getattr(attacker, "free_rerolls", 0) > 0:
         attacker.free_rerolls -= 1
-        attacker.pending_dice = randint(1, 6)
+        attacker.pending_dice = relic_dice_roll(attacker, randint(1, 6))
         return 0, False, f"dice:{attacker.pending_dice}"
 
     if attacker.mp < real_mp_cost:
@@ -799,7 +800,7 @@ def execute_skill(
 
     if stype == "dice":
         # 패 고치기 — 다음 공격 주사위를 미리 굴려 저장. 호출부(세션/엔진)의 주사위 굴림이 소비한다.
-        attacker.pending_dice = randint(1, 6)
+        attacker.pending_dice = relic_dice_roll(attacker, randint(1, 6))
         attacker.dice_fix_uses += 1
         return 0, False, f"dice:{attacker.pending_dice}"
 

@@ -74,7 +74,7 @@ def _start_battle(gs: dict, enemy, is_boss: bool = False) -> dict:
         "source":      "human",
     }
     na, aidx = bs._peek_next_actor()
-    return bs._state(messages=[f"{enemy.name}이(가) 나타났다!"],
+    return bs._state(messages=[f"{enemy.name}이(가) 나타났다!"] + bs.relic_start_messages,
                      next_actor=na, acting_enemy_idx=aidx)
 
 
@@ -109,7 +109,8 @@ def _start_battle_multi(gs: dict, enemies: list, is_boss: bool = False) -> dict:
         "source":      "human",
     }
     na, aidx = bs._peek_next_actor()
-    return bs._state(messages=[msg], next_actor=na, acting_enemy_idx=aidx)
+    return bs._state(messages=[msg] + bs.relic_start_messages,
+                     next_actor=na, acting_enemy_idx=aidx)
 
 
 # ─────────────────────────────────────────────

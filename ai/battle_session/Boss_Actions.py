@@ -87,6 +87,7 @@ class BossActionsMixin:
                 msgs.append(tanker_msg)
         else:
             msgs.append(f"{self.player.name}이(가) {boss.name}의 대지 균열을 회피했다!")
+            self._relic_on_dodge(msgs)          # 유물 「그림자 걸음」
         self.logs.append(TurnLog(
             turn=self.turn, actor="enemy", action="skill", action_detail=skill,
             damage_dealt=int(dmg) if dmg > 0 else 0,
@@ -207,6 +208,7 @@ class BossActionsMixin:
                 msgs.append(tanker_msg)
         else:
             msgs.append(f"{self.player.name}이(가) {boss.name}의 심연의 손아귀를 피했다!")
+            self._relic_on_dodge(msgs)          # 유물 「그림자 걸음」
         self.logs.append(TurnLog(turn=self.turn, actor="enemy", action="skill", action_detail=GRASP_SKILL,
                                  damage_dealt=int(dmg) if dmg > 0 else 0,
                                  hp_after=max(0, self.player.hp), mp_after=boss.mp, is_dodge=(dmg <= 0)))

@@ -204,6 +204,7 @@ class EnemyActionsMixin:
                 actual = 0 if dodge else int(dmg)
                 if dodge:
                     msgs.append(f"{self.player.name}이(가) {enemy.name}의 공격을 회피했다!")
+                    self._relic_on_dodge(msgs)         # 유물 「그림자 걸음」
                     self._rogue_counter(enemy, msgs)   # 도적: 회피 시 반격
                 else:
                     # ── 물리 원소 반응 (적 기본공격) ──
@@ -413,6 +414,7 @@ class EnemyActionsMixin:
             )
             if dodge:
                 msgs.append(f"{self.player.name}이(가) {priest.name}의 홀리볼트를 회피!")
+                self._relic_on_dodge(msgs)          # 유물 「그림자 걸음」
                 self._rogue_counter(priest, msgs)   # 도적: 회피 시 반격
                 self.logs.append(TurnLog(
                     turn=self.turn, actor="enemy",
@@ -455,6 +457,7 @@ class EnemyActionsMixin:
         )
         if dodge:
             msgs.append(f"{self.player.name}이(가) {priest.name}의 공격을 회피!")
+            self._relic_on_dodge(msgs)          # 유물 「그림자 걸음」
             self._rogue_counter(priest, msgs)   # 도적: 회피 시 반격
             self.logs.append(TurnLog(
                 turn=self.turn, actor="enemy",

@@ -19,7 +19,7 @@ from ai.battle.BossKit import (
     SHADOW_RESUMMON_TURNS, DOOM_FIRST_COUNT, DOOM_REPEAT_COUNT,
 )
 from ai.battle.Elements import RESONANCE_MAX_STACK as _RESONANCE_MAX
-from ai.battle.Relics import relic_telegraph_lead
+from ai.battle.Relics import relic_telegraph_lead, relic_resonance_max
 from ai.battle.MonsterKit import (
     is_goblin, GOBLIN_PACK_STG_CAP, GOBLIN_PACK_STG_PER_ALLY, PRIEST_TYPE, PRIEST_QUICK_REVIVE_SKILL,
 )
@@ -694,7 +694,7 @@ class StateMixin:
             # 마법사 원소 공명 단계 (표시 전용 — Elements.mage_resonance_*). 마법사가 아니면 None
             "player_resonance": (
                 {"element": self.player.resonance_element, "stack": self.player.resonance_stack,
-                 "max": _RESONANCE_MAX}
+                 "max": relic_resonance_max(self.player, _RESONANCE_MAX)}   # 유물 「공명의 수정」
                 if getattr(self.player, "job", "") == "마법사" and self.player.resonance_stack > 0 else None),
             "player_element_aura":   player_element_aura,
             "player_status_effects": player_status_effects,
