@@ -41,7 +41,13 @@ def new_game():
     name = _get_str_field(data, "name", "용사") or "용사"
     job  = data.get("job",  "전사")
 
-    if job not in ("전사", "마법사", "탱커", "도적"):
+    # 탱커는 생성 화면에서 잠겨 있다(index.html의 disabled 버튼) — 서버도 같이 막는다.
+    # 버튼만 잠그면 요청을 직접 만들어 탱커로 시작할 수 있고, 탱커 전용 유물이 없으므로
+    # 그 런은 유물 제시가 반쪽이 된다. 탱커의 스탯·스킬·패시브 자체는 그대로 둔다 —
+    # 골렘·유령 킷이 탱커 스킬을 실제로 쓰고(MONSTER_SKILL_META), 옛 세이브도 그대로 열려야 한다.
+    if job == "탱커":
+        return jsonify({"ok": False, "error": "탱커는 아직 준비 중인 직업입니다."}), 400
+    if job not in ("전사", "마법사", "도적"):
         return jsonify({"ok": False, "error": "잘못된 직업입니다."}), 400
 
     # DB User 생성 — auth_type='guest', nickname 사용 (name/job 필드 없음)

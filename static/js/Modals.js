@@ -62,6 +62,9 @@ function showStartModal(modalId) {
 
 function selectJob(job) {
     if (!JOB_DATA[job]) return;
+    // 버튼이 잠긴 직업(탱커)은 어느 경로로 들어와도 선택되지 않는다
+    const lockedBtn = document.querySelector('.job-btn[data-job="' + job + '"]');
+    if (lockedBtn && lockedBtn.disabled) return;
     state.selectedJob = job;
 
     const data = JOB_DATA[job];

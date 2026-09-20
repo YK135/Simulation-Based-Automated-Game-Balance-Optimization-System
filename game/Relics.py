@@ -4,7 +4,7 @@ game/Relics.py — 유물 목록·설명·가격·제시 규칙 (Combat Content 
 전투 효과 자체는 ai/battle/Relics.py(수치 상수 포함) — 여기는 "무엇을 어떻게 주는가".
 
 규칙 (7장 「죽은 보상 방지」 + 사용자 결정 2026-09-17):
-  · 유물 4종은 전부 직업 공용(직업 필터는 공용 풀만 있으므로 지금은 걸러낼 것이 없다 — job 필드는 자리만).
+  · 공용 8종 — 모든 직업에게 제시되고 상점에도 진열된다(직업 전용은 meta의 job 필드로 거른다).
   · 3종 중 택 1: 엘리트 노드·보스 승리 시 아직 없는 유물 중 최대 3개를 보여주고 하나를 고르게 한다.
     다 마음에 안 들면 골드로 환전(RELIC_GOLD_CONVERT). 선택 없이 주어지는 유물은 없다.
   · 상점에서도 판다(RELIC_SHOP_PRICE) — 아직 없는 유물만 진열.
@@ -15,8 +15,11 @@ from random import sample
 
 from ai.battle.Relics import (
     RELIC_IDS, RELIC_HOURGLASS, RELIC_GREED_SEAL, RELIC_FROST_MARK, RELIC_PRIEST_REMAINS,
+    RELIC_MIRROR_SHARD, RELIC_PROPHECY_BOOK, RELIC_LOOT_SACK, RELIC_TRAVELERS_MAP,
     HOURGLASS_ATB_MULT, GREED_GOLD_BONUS, GREED_POTION_SLOT_PENALTY,
     FROST_MARK_PHYS_BONUS, FROST_MARK_SHATTER_ATB, REMAINS_REVIVE_HP_RATIO,
+    MIRROR_SHARD_TURN_CUT, LOOT_SACK_POTION_SLOT_BONUS, TRAVELERS_MAP_DISCOUNT,
+    PROPHECY_TELEGRAPH_LEAD,
 )
 
 RELIC_OFFER_COUNT = 3        # 한 번에 보여주는 수
@@ -43,6 +46,27 @@ RELIC_META = {
         "id": RELIC_PRIEST_REMAINS, "name": "사제의 유해", "icon": "💀", "job": "",
         "short": f"전투당 1회 부활 {int(REMAINS_REVIVE_HP_RATIO * 100)}%",
         "desc": f"전투당 1회, HP가 0이 될 때 최대 HP {int(REMAINS_REVIVE_HP_RATIO * 100)}%로 되살아난다",
+    },
+    # ── 공용 추가 4종 (브리프 7장 「유물 확장」) ──
+    RELIC_MIRROR_SHARD: {
+        "id": RELIC_MIRROR_SHARD, "name": "거울 파편", "icon": "🪞", "job": "",
+        "short": f"디버프 지속 −{MIRROR_SHARD_TURN_CUT}턴 (양쪽)",
+        "desc": f"내가 받는 디버프도, 내가 거는 디버프도 지속이 {MIRROR_SHARD_TURN_CUT}턴 짧아진다 (최소 1턴)",
+    },
+    RELIC_PROPHECY_BOOK: {
+        "id": RELIC_PROPHECY_BOOK, "name": "예언서", "icon": "📖", "job": "",
+        "short": f"적 예고를 {PROPHECY_TELEGRAPH_LEAD}행동 먼저",
+        "desc": f"적의 예고·스택 배지가 {PROPHECY_TELEGRAPH_LEAD}행동 먼저 경고 상태로 바뀐다",
+    },
+    RELIC_LOOT_SACK: {
+        "id": RELIC_LOOT_SACK, "name": "전리품 자루", "icon": "🎒", "job": "",
+        "short": f"포션칸 +{LOOT_SACK_POTION_SLOT_BONUS}",
+        "desc": f"포션 슬롯 +{LOOT_SACK_POTION_SLOT_BONUS} (탐욕의 인장을 함께 가지면 정확히 상쇄된다)",
+    },
+    RELIC_TRAVELERS_MAP: {
+        "id": RELIC_TRAVELERS_MAP, "name": "여행자의 지도", "icon": "🗺", "job": "",
+        "short": f"상점 아이템 −{int(TRAVELERS_MAP_DISCOUNT * 100)}%",
+        "desc": f"상점의 포션·특수 아이템 가격 {int(TRAVELERS_MAP_DISCOUNT * 100)}% 할인 (유물 가격은 제외)",
     },
 }
 

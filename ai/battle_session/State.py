@@ -19,6 +19,7 @@ from ai.battle.BossKit import (
     SHADOW_RESUMMON_TURNS, DOOM_FIRST_COUNT, DOOM_REPEAT_COUNT,
 )
 from ai.battle.Elements import RESONANCE_MAX_STACK as _RESONANCE_MAX
+from ai.battle.Relics import relic_telegraph_lead
 from ai.battle.MonsterKit import (
     is_goblin, GOBLIN_PACK_STG_CAP, GOBLIN_PACK_STG_PER_ALLY, PRIEST_TYPE, PRIEST_QUICK_REVIVE_SKILL,
 )
@@ -55,7 +56,7 @@ class StateMixin:
     """BattleSession에 상태 JSON 기능을 제공하는 mixin."""
 
     @staticmethod
-    def _pattern_badges(en, player_action_count: int = 0) -> list:
+    def _pattern_badges(en, player_action_count: int = 0, telegraph_lead: int = 0) -> list:
         """적이 '이미 갖고 있는' 패턴 상태를 UI 배지로 노출한다.
 
         ★ 전투 계산에는 전혀 쓰이지 않는 읽기 전용 파생값이다 — 여기서
@@ -67,7 +68,13 @@ class StateMixin:
           kind  : telegraph(예고형) | stack(스택형) | cycle(골렘) | groggy(플레이어측 게이지)
                   | phase(보스 페이즈)
           state : armed(다음 행동에 발동) | charging(진행 중) | idle
+
+        telegraph_lead: 유물 「예언서」 — armed를 몇 행동 먼저 보여줄지(0이면 기존과 동일).
+                        ★ 표시 시점만 당길 뿐, 적의 행동은 전혀 바뀌지 않는다.
         """
+        def armed_at(cur: int, full: int, gap: int = 1) -> bool:
+            """예고·스택이 "다음 행동에 터진다"로 보이는 시점. lead가 0이면 기존 판정 그대로."""
+            return cur >= full - gap - telegraph_lead
         et      = getattr(en, "enemy_type", "")
         leader  = getattr(en, "elite_leader", False)
         phase   = getattr(en, "elite_phase", 0)
@@ -76,7 +83,7 @@ class StateMixin:
 
         if leader and et in _TELEGRAPH_COUNTDOWN:
             label, interval = _TELEGRAPH_COUNTDOWN[et]
-            armed = phase != 0
+            armed = phase != 0 or armed_at(min(counter, interval), interval, gap=0)
             badges.append({
                 "kind":  "telegraph",
                 "label": label,
@@ -93,7 +100,7 @@ class StateMixin:
                 "label": label,
                 "cur":   min(counter, threshold),
                 "max":   threshold,
-                "state": "armed" if counter >= threshold - 1 else "charging",
+                "state": "armed" if armed_at(counter, threshold) else "charging",
             })
 
         if leader and et == "골렘":
@@ -152,9 +159,10 @@ class StateMixin:
                 badges.append({"kind": "telegraph", "label": "대지 균열",
                                "cur": full, "max": full, "state": "armed"})
             elif interval:
+                cyc = min(getattr(en, "boss_cycle", 0), interval)
                 badges.append({"kind": "telegraph", "label": "대지 균열",
-                               "cur": min(getattr(en, "boss_cycle", 0), interval),
-                               "max": interval, "state": "charging"})
+                               "cur": cyc, "max": interval,
+                               "state": "armed" if armed_at(cyc, interval, gap=0) else "charging"})
 
         # 최종 보스 — 페이즈(1~4) + 페이즈별 규칙 (BossKit finalboss_* 필드를 읽기만)
         if is_finalboss(en):
@@ -168,7 +176,7 @@ class StateMixin:
                 cyc = min(getattr(en, "boss_cycle", 0), FINALBOSS_CYCLE_TURNS)
                 badges.append({"kind": "cycle", "label": f"{cur_e} → 다음 {nxt_e}",
                                "cur": cyc, "max": FINALBOSS_CYCLE_TURNS,
-                               "state": "armed" if cyc >= FINALBOSS_CYCLE_TURNS - 1 else "charging"})
+                               "state": "armed" if armed_at(cyc, FINALBOSS_CYCLE_TURNS) else "charging"})
             if getattr(en, "boss_guard", 0.0) > 0:
                 badges.append({"kind": "telegraph", "label": f"그림자 경감 −{int(SHADOW_GUARD * 100)}%",
                                "cur": 1, "max": 1, "state": "charging"})
@@ -179,21 +187,22 @@ class StateMixin:
                 left = en.boss_summon_cd
                 badges.append({"kind": "cycle", "label": "재소환",
                                "cur": SHADOW_RESUMMON_TURNS - left, "max": SHADOW_RESUMMON_TURNS,
-                               "state": "armed" if left <= 1 else "charging"})
+                               "state": "armed" if left <= 1 + telegraph_lead else "charging"})
             if getattr(en, "boss_telegraph_at", -1) >= 0:
                 badges.append({"kind": "telegraph", "label": "심연의 손아귀",
                                "cur": GRASP_INTERVAL, "max": GRASP_INTERVAL, "state": "armed"})
             elif fphase == 3:
+                gcyc = min(getattr(en, "boss_cycle", 0), GRASP_INTERVAL)
                 badges.append({"kind": "telegraph", "label": "심연의 손아귀",
-                               "cur": min(getattr(en, "boss_cycle", 0), GRASP_INTERVAL),
-                               "max": GRASP_INTERVAL, "state": "charging"})
+                               "cur": gcyc, "max": GRASP_INTERVAL,
+                               "state": "armed" if armed_at(gcyc, GRASP_INTERVAL, gap=0) else "charging"})
             if fphase == 4 and getattr(en, "boss_doom_at", -1) >= 0:
                 total = DOOM_FIRST_COUNT if getattr(en, "boss_doom_count", 0) == 0 else DOOM_REPEAT_COUNT
                 left = max(0, en.boss_doom_at - player_action_count)   # 남은 플레이어 행동 수
                 badges.append({"kind": "telegraph",
                                "label": "종언" + (" (즉사)" if getattr(en, "boss_doom_count", 0) else ""),
                                "cur": max(0, total - left), "max": total,
-                               "state": "armed" if left <= 1 else "charging"})
+                               "state": "armed" if left <= 1 + telegraph_lead else "charging"})
 
         # 골렘 그로기는 엘리트 여부와 무관 — 플레이어가 쌓는 게이지라 항상 보여준다
         if et == "골렘":
@@ -651,7 +660,9 @@ class StateMixin:
                 "difficulty":       en_diff,
                 "difficulty_label": self._DIFF_LABEL.get(en_diff, en_diff),
                 # ── 패턴 배지 (표시 전용 파생값 — _pattern_badges 주석 참고) ──
-                "pattern":          self._pattern_badges(en, getattr(self, "_player_action_count", 0)),
+                "pattern":          self._pattern_badges(
+                    en, getattr(self, "_player_action_count", 0),
+                    relic_telegraph_lead(getattr(self.player, "relics", []))),
             })
 
         return {

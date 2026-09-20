@@ -260,6 +260,15 @@
     border-color: var(--accent-gold);
     color: var(--accent-gold);
 }
+/* 준비 중인 직업(탱커) — 목록에는 남기고 선택만 막는다 */
+.job-btn:disabled {
+    opacity: 0.4;
+    cursor: not-allowed;
+}
+.job-btn:disabled:hover {
+    border-color: var(--border);
+    color: var(--text-dim);
+}
 .job-btn.active {
     background: rgba(45, 212, 191, 0.15);
     border-color: var(--accent-gold);

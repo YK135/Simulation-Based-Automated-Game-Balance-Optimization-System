@@ -583,13 +583,15 @@ def skill_lifesteal_bonus(skill_name: str, attacker) -> float:
     return float(meta.get("lifesteal", 0.0) or 0.0)
 
 
-def maybe_hit_bleed(meta: dict, defender, rng=None) -> bool:
-    """칼날 폭풍 — 명중한 타격마다 출혈 확률. 반환 True면 걸었다(스택 +1)."""
+def maybe_hit_bleed(meta: dict, defender, rng=None, attacker=None) -> bool:
+    """칼날 폭풍 — 명중한 타격마다 출혈 확률. 반환 True면 걸었다(스택 +1).
+    attacker는 유물 「거울 파편」의 지속 보정에만 쓴다."""
     chance = meta.get("hit_bleed_chance", 0.0)
     if not chance or defender is None or defender.hp <= 0:
         return False
     if (rng or random)() < chance:
-        defender.apply_status_effect(StatusEffect(effect_type="bleed", turns=3, name="출혈"))
+        defender.apply_status_effect(StatusEffect(effect_type="bleed", turns=3, name="출혈"),
+                                     caster=attacker)
         return True
     return False
 
@@ -821,7 +823,7 @@ def execute_skill(
             amount=amt,
             turns=turns,
             name=skill_name,
-        ))
+        ), caster=attacker)
         return 0, False, skill_name
 
     if stype == "buff":
@@ -939,7 +941,7 @@ def execute_skill(
             return 0, False, ""
 
         total += int(raw)
-        if raw > 0 and maybe_hit_bleed(meta, defender):
+        if raw > 0 and maybe_hit_bleed(meta, defender, attacker=attacker):
             hit_bleeds += 1
 
     if stype == "magical" and "debuff_stat" in meta and random() <= meta.get("debuff_chance", 0.0):
@@ -954,7 +956,7 @@ def execute_skill(
             amount=amt,
             turns=turns,
             name=skill_name,
-        ))
+        ), caster=attacker)
 
     # ── 원소 큐 + 반응 + 상태이상 (element는 위에서 확정 — 원소 폭발은 주입 원소) ──
     extra_msgs: list = []
@@ -969,7 +971,7 @@ def execute_skill(
     #    적용 규칙(중첩 없이 남은 턴 갱신)은 apply_status_effect가 그대로 담당.
     on_hit = meta.get("on_hit_status")
     if on_hit and total > 0 and hasattr(defender, "apply_status_effect"):
-        defender.apply_status_effect(StatusEffect(**on_hit))
+        defender.apply_status_effect(StatusEffect(**on_hit), caster=attacker)
     if hit_bleeds:
         extra_msgs.append(f"🩸 칼날에 베여 출혈 ×{hit_bleeds}")
     if att_mult > 1.0 and total > 0:

@@ -236,7 +236,7 @@ class BattleEngine:
                     if dice in (3, 6):
                         from .Entity import StatusEffect
                         defender.apply_status_effect(StatusEffect(
-                            effect_type="bleed", turns=3, name="출혈"))
+                            effect_type="bleed", turns=3, name="출혈"), caster=attacker)
             actual = 0 if is_dodge else self._hit(attacker, defender, dmg, cast)
             log.damage_dealt = actual
             log.hp_after = defender.hp
@@ -316,7 +316,7 @@ class BattleEngine:
                             _meta.get("element", "") or "physical", _d, _rm)
                         _total_hp += self._hit(attacker, defender, _d, cast)
                         if _d > 0:
-                            maybe_hit_bleed(_meta, defender)      # 칼날 폭풍 — 타격마다 출혈 판정
+                            maybe_hit_bleed(_meta, defender, attacker=attacker)   # 칼날 폭풍
                     # 스킬 전체 1회 효과 (주사위 6 ATB / 출혈, 집중물약 소진)
                     if dice is not None:
                         if rogue_dice_crit(dice, defender):
@@ -324,7 +324,7 @@ class BattleEngine:
                         if dice in (3, 6) and defender.hp > 0:
                             from .Entity import StatusEffect
                             defender.apply_status_effect(StatusEffect(
-                                effect_type="bleed", turns=3, name="출혈"))
+                                effect_type="bleed", turns=3, name="출혈"), caster=attacker)
                         attacker._suppress_crit = False
                         dice = None            # 기존 dice 후처리 블록 스킵
                     if getattr(attacker, "_next_skill_bonus", 1.0) > 1.0:
@@ -344,7 +344,7 @@ class BattleEngine:
                     if dice in (3, 6):
                         from .Entity import StatusEffect
                         defender.apply_status_effect(StatusEffect(
-                            effect_type="bleed", turns=3, name="출혈"))
+                            effect_type="bleed", turns=3, name="출혈"), caster=attacker)
             log.mp_after = attacker.mp
 
             # 집중물약 보너스 (next_skill_bonus)

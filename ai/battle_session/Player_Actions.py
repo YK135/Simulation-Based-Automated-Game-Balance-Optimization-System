@@ -80,7 +80,8 @@ class PlayerActionsMixin:
     def _apply_bleed(self, target, msgs: list | None = None) -> int:
         """출혈 부여(주사위 3·6, 칼날 폭풍 등) — 스택 규칙은 apply_status_effect가 담당(10-4).
         반환: 적용 후 스택 수. msgs가 있으면 스택·틱 비율을 한 줄 남긴다."""
-        eff = target.apply_status_effect(StatusEffect(effect_type="bleed", turns=3, name="출혈"))
+        eff = target.apply_status_effect(StatusEffect(effect_type="bleed", turns=3, name="출혈"),
+                                         caster=self.player)
         if msgs is not None:
             msgs.append(f"🩸 {target.name}에게 출혈! (×{eff.stacks}, 매 행동 maxHP "
                         f"{int(round(BLEED_RATE_PER_STACK * eff.stacks * 100))}%)")
@@ -141,8 +142,8 @@ class PlayerActionsMixin:
         target.physical_hit_streak = getattr(target, "physical_hit_streak", 0) + 1
         if target.physical_hit_streak >= 2:
             target.physical_hit_streak = 0
-            target.apply_debuff(Debuff(stat="arm", amount=0.5, turns=2, name="그로기"))
-            target.apply_debuff(Debuff(stat="sparm", amount=0.5, turns=2, name="그로기"))
+            target.apply_debuff(Debuff(stat="arm", amount=0.5, turns=2, name="그로기"), caster=self.player)
+            target.apply_debuff(Debuff(stat="sparm", amount=0.5, turns=2, name="그로기"), caster=self.player)
             msgs.append(f"🔨 {target.name} 그로기! 방어력이 50% 감소했다!")
 
             # 엘리트 골렘: 충전예고 메시지를 낸 직후 elite_phase가 바로
@@ -512,7 +513,7 @@ class PlayerActionsMixin:
                             r, dodge = 0, False
                         if not dodge:
                             raw += int(r)
-                            if r > 0 and maybe_hit_bleed(meta, tgt):   # 칼날 폭풍 — 타격마다 출혈 판정
+                            if r > 0 and maybe_hit_bleed(meta, tgt, attacker=self.player):   # 칼날 폭풍
                                 _bleeds += 1
                     if _att > 1.0 and raw > 0:
                         raw = int(raw * _att)
@@ -525,7 +526,7 @@ class PlayerActionsMixin:
                         # 명중 시 부여 상태이상(화염 폭풍 점화) — 첫 대상은 execute_skill이 같은 규칙으로 처리
                         _ohs = meta.get("on_hit_status")
                         if _ohs and raw > 0:
-                            tgt.apply_status_effect(StatusEffect(**_ohs))
+                            tgt.apply_status_effect(StatusEffect(**_ohs), caster=self.player)
                         # 주사위 배율/출혈 (ATB/크리 메시지는 첫 대상에서 1회만 출력됨)
                         if dice_info:
                             raw = int(round(raw * dice_info["mult"]))
@@ -761,7 +762,7 @@ class PlayerActionsMixin:
                                 amount=meta["debuff_amount"],
                                 turns=meta["debuff_turns"],
                                 name=item_name,
-                            ))
+                            ), caster=self.player)
                     if meta.get("debuff_stat"):
                         msgs.append(f"  적 전체 속도 {int(meta['debuff_amount']*100)}% 감소 ({meta['debuff_turns']}T)")
 

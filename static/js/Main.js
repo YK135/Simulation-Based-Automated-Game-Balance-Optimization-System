@@ -52,7 +52,10 @@ if (emailCodeInput) {
 }
 
 document.querySelectorAll('.job-btn').forEach(btn => {
-    btn.onclick = () => { if (typeof selectJob === 'function') selectJob(btn.dataset.job); };
+    btn.onclick = () => {
+        if (btn.disabled) return;                       // 준비 중인 직업(탱커)
+        if (typeof selectJob === 'function') selectJob(btn.dataset.job);
+    };
 });
 
 safeBind('btn-newgame-confirm', () => {

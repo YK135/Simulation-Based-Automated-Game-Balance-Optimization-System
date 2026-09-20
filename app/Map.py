@@ -25,6 +25,7 @@ from flask import Blueprint, jsonify
 
 from game.Map      import FloorMap, NORMAL_LAYERS
 from game.Relics   import shop_relic_items
+from ai.battle.Relics import relic_shop_item_price
 from game.Enemy_Class import (
     Make_MidBoss, Make_FinalBoss,
 )
@@ -786,6 +787,9 @@ def _get_shop_items(player_lv: int, relics=None, job: str = "") -> list:
             {"id": "focus_drug", "name": "집중 물약",   "type": "special",
              "effect": "다음 스킬 추가 피해", "price": 100},
         ]
+    # 유물 「여행자의 지도」 — 아이템만 −20%. 유물 가격은 깎지 않는다(7장: 풀 소진 방지)
+    for it in items:
+        it["price"] = relic_shop_item_price(relics or [], it["price"])
     items += shop_relic_items(relics or [], job)
     return items
 

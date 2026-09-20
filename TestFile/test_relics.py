@@ -1,6 +1,10 @@
 # -*- coding: utf-8 -*-
 """
-test_relics.py — 유물 4종 + 3종 택 1 회귀 테스트 (Combat Content Brief 7장 · 11-1 2차 7번)
+test_relics.py — 유물 원년 4종 + 3종 택 1 회귀 테스트 (Combat Content Brief 7장 · 11-1 2차 7번)
+
+공용 풀이 8종으로 늘어난 뒤에도(7장 「유물 확장」 1단계) 이 파일은 원년 4종의
+효과와 제시·상점 규칙을 그대로 고정한다 — 개수는 COMMON_RELIC_IDS에서 읽으므로
+풀이 더 늘어도 깨지지 않는다. 추가 4종은 TestFile/test_relic_common.py.
 
 검증 대상:
   · 깨진 모래시계 — 전투 종료(승리·도주·패배) 시 잔여 ATB ×2 이월, BattleEngine의 final_player_atb도 동일
@@ -24,7 +28,8 @@ from ai.Battlesession import BattleSession
 from ai.battle import EntitySnapshot, StatusEffect, Action, BattleEngine, Buff
 from ai.battle import Damage as D
 from ai.battle.Relics import (
-    RELIC_IDS, RELIC_HOURGLASS, RELIC_GREED_SEAL, RELIC_FROST_MARK, RELIC_PRIEST_REMAINS,
+    RELIC_IDS, COMMON_RELIC_IDS,
+    RELIC_HOURGLASS, RELIC_GREED_SEAL, RELIC_FROST_MARK, RELIC_PRIEST_REMAINS,
     relic_atb_carry, relic_try_revive, frost_mark_mult, relic_gold_mult, relic_potion_slot_penalty,
 )
 from game.Relics import (
@@ -70,12 +75,15 @@ def dummy(hp=5000, spd=1.0, stg=20, **kw):
 
 # ═══════════════════════════════════════════════════════════
 print("\n[1] 메타·제시 규칙")
-check("유물 4종 정의, 전부 공용", set(RELIC_META) == set(RELIC_IDS) == {RELIC_HOURGLASS, RELIC_GREED_SEAL, RELIC_FROST_MARK, RELIC_PRIEST_REMAINS}
-      and all(not m["job"] for m in RELIC_META.values()))
+check("공용 풀 정의 — 원년 4종이 전부 들어 있고 공용(job 없음)",
+      set(RELIC_META) == set(RELIC_IDS) == set(COMMON_RELIC_IDS)
+      and {RELIC_HOURGLASS, RELIC_GREED_SEAL, RELIC_FROST_MARK, RELIC_PRIEST_REMAINS} <= set(COMMON_RELIC_IDS)
+      and all(not RELIC_META[r]["job"] for r in COMMON_RELIC_IDS))
 random.seed(1)
 c = relic_choices([], "전사")
 check("없을 때 3개 제시(중복 없음)", len(c) == 3 and len(set(c)) == 3 and all(x in RELIC_IDS for x in c), c)
-check("3개 보유 → 남은 1개만", relic_choices([RELIC_HOURGLASS, RELIC_GREED_SEAL, RELIC_FROST_MARK]) == [RELIC_PRIEST_REMAINS])
+_all_but_one = list(COMMON_RELIC_IDS[:-1])
+check("하나만 남으면 그 하나만 제시", relic_choices(_all_but_one) == [COMMON_RELIC_IDS[-1]])
 check("전부 보유 → 제시 없음", relic_choices(list(RELIC_IDS)) == [])
 check("상점 진열: 아직 없는 것만, type relic, 가격 200", [x["id"] for x in shop_relic_items([RELIC_GREED_SEAL])] ==
       [r for r in RELIC_IDS if r != RELIC_GREED_SEAL] and all(x["type"] == "relic" and x["price"] == RELIC_SHOP_PRICE
@@ -241,7 +249,9 @@ client, uid, store = inject_test_session(gs)
 from app.Map import _shop_items_for
 items = _shop_items_for(gs["player"])
 relic_rows = [it for it in items if it.get("type") == "relic"]
-check("진열: 4종 relic, 가격 200, 아이콘 포함", len(relic_rows) == 4 and all(it["price"] == RELIC_SHOP_PRICE and it.get("icon") for it in relic_rows))
+check(f"진열: 공용 {len(COMMON_RELIC_IDS)}종 relic, 가격 {RELIC_SHOP_PRICE}, 아이콘 포함",
+      len(relic_rows) == len(COMMON_RELIC_IDS)
+      and all(it["price"] == RELIC_SHOP_PRICE and it.get("icon") for it in relic_rows))
 r = client.post("/api/shop/buy", json={"item_id": RELIC_GREED_SEAL, "price": 0})
 j = r.get_json()
 check("구매: 골드 1000 → 800(요청 price 무시), 유물 추가, 재진열에서 제외",

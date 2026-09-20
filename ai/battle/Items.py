@@ -100,7 +100,7 @@ def use_item(item_name: str, user: EntitySnapshot, enemies: list = None) -> bool
                 tgt.apply_debuff(Debuff(
                     stat=meta["debuff_stat"], amount=meta["debuff_amount"],
                     turns=meta["debuff_turns"], name=item_name,
-                ))
+                ), caster=user)
 
     # ── 버프 ──
     elif category == "buff":

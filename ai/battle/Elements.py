@@ -276,7 +276,9 @@ def apply_element_and_react(
             turns = ELEMENT_STATUS_TURNS[effect_type]
             eff_obj = StatusEffect(effect_type=effect_type, turns=turns, name=attack_element)
             if hasattr(defender, "apply_status_effect"):
-                defender.apply_status_effect(eff_obj)
+                # 실제로 걸린 턴을 읽어서 표시한다 — 유물 「거울 파편」이 깎았을 수 있다
+                turns = getattr(defender.apply_status_effect(eff_obj, caster=attacker),
+                                "turns", turns)
             label = ELEMENT_STATUS_LABEL[effect_type]
             messages.append(f"{defender.name}에게 {label} 상태가 부여되었다. ({turns}T)")
 
