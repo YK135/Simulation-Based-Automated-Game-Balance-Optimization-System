@@ -236,6 +236,7 @@ def _gs_from_snapshot(uid: str, snap: dict) -> Optional[dict]:
     #   재시작/유휴 세션 방출/Redis 히트마다 여기로 옴)라, 매번 고블린/박쥐
     #   시뮬 job을 다시 큐에 넣을 필요가 없다.
     hook = BalanceHook(player, items, show_graph=False, verbose=False, auto_prewarm=False)
+    hook.attach_items_source(inv.to_flat_list)   # app/Game.py의 새 게임 경로와 동일
 
     try:
         db_user_id = int(uid)

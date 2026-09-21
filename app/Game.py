@@ -109,6 +109,9 @@ def new_game():
     items = inv.to_flat_list()
 
     hook = BalanceHook(player, items, show_graph=False, verbose=False)
+    # ★ 튜닝이 읽는 아이템 목록을 인벤토리에 묶는다 — 포션을 쓰거나 사면 다음
+    #   재튜닝이 그 값을 본다(예전엔 새 게임 시점의 목록에 고정돼 있었다).
+    hook.attach_items_source(inv.to_flat_list)
 
     GAME_SESSIONS[uid] = {
         "player":           player,

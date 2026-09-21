@@ -17,15 +17,15 @@ import statistics
 from dataclasses import dataclass
 
 try:
-    from ai.battle  import BattleEngine, EntitySnapshot, SKILL_META
-    from ai.Auto_AI        import PlayerAI, EnemyAI
+    from ai.battle  import EntitySnapshot, SKILL_META
+    from ai.Auto_AI        import PlayerAI
     from game.Enemy_Class  import (
         Make_Goblin, Make_Bat,
         Make_Slime, Make_Golem, Make_Ghost, Make_Assassin, Make_Priest,
     )
 except ModuleNotFoundError:
-    from ai.battle import BattleEngine, EntitySnapshot, SKILL_META
-    from Auto_AI       import PlayerAI, EnemyAI
+    from ai.battle import EntitySnapshot, SKILL_META
+    from Auto_AI       import PlayerAI
     from game.Enemy_Class   import (
         Make_Goblin, Make_Bat,
         Make_Slime, Make_Golem, Make_Ghost, Make_Assassin, Make_Priest,
@@ -221,8 +221,65 @@ class PlayerPowerIndex:
 # 배틀 시뮬레이터
 # ────────────────────────────────────────────
 
+def _run_session_battle(player_snap, enemy_snaps, items, player_ai,
+                        is_boss: bool = False, chapter: int = 1,
+                        max_steps: int = 400):
+    """실전과 같은 BattleSession으로 전투 1회. 반환: 끝난 BattleSession.
+
+    호출부가 승패/턴/HP를 읽거나 to_battle_result()로 복기 로그를 만든다.
+
+    ★ 1v1 시뮬(BattleSimulator)과 1vN 시뮬(MultiBattleSimulator)이 같은 함수를
+      쓴다 — 예전엔 1v1만 ai/battle/Engine.py의 BattleEngine을 따로 돌려서,
+      골렘 3페이즈·사제 부활·엘리트 상태기계처럼 ai/battle_session/에만 있는
+      규칙이 튜닝에서 통째로 빠졌다(BALANCE_PATCH_4: 같은 몬스터로 엔진 97.5%
+      대 세션 0.0%). 포션도 실전과 같은 방식으로 넘기고 매 step AI 시야를
+      맞춘다 — 안 맞추면 AI가 이미 쓴 포션을 계속 고른다(montecarlo와 동일).
+    """
+    from ai.Battlesession import BattleSession
+
+    session = BattleSession(player_snap, enemies=enemy_snaps,
+                            items=list(items or []), is_boss=is_boss)
+    session.battle_meta = {"source": "ai", "chapter": chapter,
+                           "battle_type": f"1v{len(enemy_snaps)}"}
+    state = session.step("status")
+    next_actor = state.get("next_actor", "player")
+
+    steps = 0
+    while not session.done and steps < max_steps:
+        steps += 1
+        if next_actor == "done":
+            break
+        if next_actor == "player":
+            target = session._current_target()
+            if target is None:
+                state = session.step("auto")
+            else:
+                alive = sum(1 for e in session.enemies if e.hp > 0)
+                a = player_ai.decide(session.player, target, enemy_count=max(1, alive))
+                act = {"attack": "attack",
+                       "skill": f"skill:{a.detail}",
+                       "item":  f"item:{a.detail}"}.get(a.action_type, "attack")
+                state = session.step(act)
+                session.player.items = list(session.items)   # 쓴 포션을 AI 시야에서도 지운다
+        else:
+            state = session.step("auto")
+        next_actor = state.get("next_actor", "player")
+
+    if not session.done:                 # 미결 = 적 승리로 본다 (보수적)
+        session.winner = "enemy"
+    return session
+
+
 class BattleSimulator:
-    """N회 반복 시뮬레이션 → 승률 반환.
+    """N회 반복 시뮬레이션 → 승률 반환. 자동 밸런싱(StatTuner)이 쓰는 1v1 시뮬.
+
+    전투 1회는 _run_session_battle()이 돌린다 — 실전과 같은 BattleSession이다.
+    5차 전까지는 ai/battle/Engine.py의 BattleEngine을 돌렸는데, 골렘 3페이즈·
+    사제 부활·엘리트 상태기계가 ai/battle_session/에만 있어서 같은 몬스터로
+    엔진 97.5% 대 세션 0.0%까지 갈라졌다(BALANCE_PATCH_4 → 5). 튜너가 실제
+    게임을 재게 하는 것이 이 클래스의 전제라, 그 갭을 없앴다.
+    대가로 전투 1회가 2.5~9배 느리다 — BalanceHook의 2초 대기 → 폴백 구조가
+    그대로 흡수한다(BALANCE_PATCH_5.md 3-4).
 
     ATB 이월 (BALANCE_PATCH_3):
       EntitySnapshot.atb_remainder 필드로 실제 플레이어의 살아있는 ATB
@@ -254,7 +311,6 @@ class BattleSimulator:
         self.enemy_template  = enemy
         self.n               = n
         self.player_ai       = PlayerAI(player_ai_mode)
-        self.enemy_ai        = EnemyAI()
         self.chapter         = chapter
 
     def run(self) -> SimulationResult:
@@ -265,13 +321,14 @@ class BattleSimulator:
         for _ in range(self.n):
             p_snap = copy.deepcopy(self.player_template)
             e_snap = copy.deepcopy(self.enemy_template)
-            engine = BattleEngine(p_snap, e_snap, chapter=self.chapter)
-            result = engine.run(self.player_ai, self.enemy_ai)
+            session = _run_session_battle(
+                p_snap, [e_snap], list(getattr(p_snap, "items", []) or []),
+                self.player_ai, is_boss=False, chapter=self.chapter)
 
-            if result.winner == "player":
+            if session.winner == "player":
                 wins += 1
-            turn_list.append(result.total_turns)
-            hp_list.append(result.final_player_hp)
+            turn_list.append(session.turn)
+            hp_list.append(max(0.0, session.player.hp))
 
         win_rate = wins / self.n
         return SimulationResult(
@@ -340,74 +397,23 @@ class MultiBattleSimulator:
         self.max_turns        = max_turns
 
     def run(self) -> SimulationResult:
-        """
-        N회 반복 시뮬 → SimulationResult 반환 (★ 새 ATB 시스템 호환).
+        """N회 반복 시뮬 → SimulationResult.
 
-        새 ATB: step() 응답의 next_actor에 따라 분기.
-          - "player": _decide_player_action() 결과로 step
-          - "enemy":  step("auto")로 적 자동 행동
-          - "done":   루프 종료
+        전투 1회의 진행은 _run_session_battle()이 맡는다 — 1v1 시뮬(BattleSimulator)과
+        완전히 같은 루프다. 예전엔 이 클래스만 자체 루프를 갖고 있었고 1v1은
+        BattleEngine을 따로 돌려서, 같은 전투를 두 가지 방식으로 진행했다.
         """
-        # 지연 import — 순환참조 방지
-        try:
-            from ai.Battlesession import BattleSession
-        except ModuleNotFoundError:
-            from Battlesession import BattleSession
-
         wins = 0
         turn_list = []
         hp_list = []
-
-        # 시뮬용 PlayerAI
         player_ai = PlayerAI(self.player_ai_mode)
 
         for _ in range(self.n):
-            p_snap = copy.deepcopy(self.player_template)
+            p_snap  = copy.deepcopy(self.player_template)
             e_snaps = [copy.deepcopy(e) for e in self.enemy_templates]
-            items = list(self.items_template)
-
-            session = BattleSession(
-                p_snap,
-                enemies=e_snaps,
-                items=items,
-                is_boss=False,
-            )
-
-            # ── 새 ATB: 첫 응답에서 next_actor 받기 ──
-            # BattleSession은 __init__에서 큐를 자동 빌드, 첫 step("status")로 상태 조회.
-            # 또는 첫 step()을 _decide_player_action으로 호출하기 전에
-            # action_queue[0] 확인해서 누구 차례인지 알아낼 수도 있음.
-            # 가장 간단한 방법: 매 step 응답의 next_actor 사용.
-            # 첫 응답 받기 위해 "status" 호출.
-            state = session.step("status")
-            next_actor = state.get("next_actor", "player")
-
-            # ── 시뮬 루프 ──
-            step_count = 0
-            max_steps = self.max_turns * 4   # ATB 추가 행동 고려해 여유 4배
-
-            while not session.done and step_count < max_steps:
-                step_count += 1
-
-                if next_actor == "done":
-                    break
-
-                if next_actor == "enemy":
-                    # 적 자동 행동
-                    state = session.step("auto")
-                elif next_actor == "player":
-                    # 플레이어 AI 결정 후 행동
-                    action = self._decide_player_action(session, player_ai)
-                    state = session.step(action)
-                else:
-                    # 예외 (next_actor 미정) — auto로 처리
-                    state = session.step("auto")
-
-                next_actor = state.get("next_actor", "player")
-
-            # max_steps 초과 = 미결 → 적 측 승리로 간주 (보수적)
-            if not session.done:
-                session.winner = "enemy"
+            session = _run_session_battle(
+                p_snap, e_snaps, list(self.items_template), player_ai,
+                is_boss=False, max_steps=self.max_turns * 4)
 
             if session.winner == "player":
                 wins += 1
@@ -423,32 +429,6 @@ class MultiBattleSimulator:
             avg_final_hp=round(statistics.mean(hp_list), 1),
             win_rate_label=BattleSimulator._label(win_rate),
         )
-
-    @staticmethod
-    def _decide_player_action(session, player_ai) -> str:
-        """
-        살아있는 적 중 현재 타깃을 defender로 사용, 살아있는 적 수를
-        enemy_count로 넘겨 AoE 스킬(슬래시 등)의 다대일 가치가 실제로
-        스코어링에 반영되게 한다 — 이전엔 enemy_count 없이 호출돼 항상
-        1v1 취급되어(_skill_efficiency의 aoe 배수가 적용 안 됨) 다대일
-        전투에서 광역기 선택 확률이 실전보다 과소평가됐다.
-        반환된 Action을 BattleSession이 받는 action 문자열로 변환.
-        """
-        target = session._current_target()
-        if target is None:
-            return "attack"  # 폴백 — 사실 호출 전에 done 체크되어 도달 안 함
-
-        alive = sum(1 for e in session.enemies if e.hp > 0)
-        action_obj = player_ai.decide(session.player, target, enemy_count=max(1, alive))
-
-        if action_obj.action_type == "attack":
-            return "attack"
-        elif action_obj.action_type == "skill":
-            return f"skill:{action_obj.detail}"
-        elif action_obj.action_type == "item":
-            return f"item:{action_obj.detail}"
-        else:
-            return "attack"
 
 # ────────────────────────────────────────────
 # 스탯 역산기 — 플레이어 상태 반영 버전
@@ -715,6 +695,7 @@ def _unit_to_snap(unit) -> EntitySnapshot:
         first_strike=getattr(unit, 'first_strike', False),
         first_attack_bonus=getattr(unit, 'first_attack_bonus', 1.0),
         enemy_type=getattr(unit, 'enemy_type', unit.name),
+        debuff_resist=getattr(unit, 'debuff_resist', 0.0),
     )
 
 

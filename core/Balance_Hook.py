@@ -11,6 +11,7 @@ Balance_Hook.py
 
 import os
 import queue
+import copy
 import threading
 import subprocess
 import platform
@@ -111,6 +112,15 @@ def _player_to_snap(player, item_list: list) -> EntitySnapshot:
         spd=getattr(player, "spd", 10.0),  # SPD 반영 (도적 등 고SPD 직업 대응)
         learned_skills=skills,
         items=list(item_list),
+        # ★ job과 relics — 실전 변환(app/Shared._player_to_snap)에는 있는데 여기만
+        #   빠져 있었다(외부 검토 지적, 재현 확인: job='' / relics=[]).
+        #   job이 비면 시뮬 플레이어에게 직업 패시브가 하나도 붙지 않는다 —
+        #   전사 3회 공격당 회복(Engine.py), 도적 주사위와 회피 반격, 탱커
+        #   피격 회복(Entity.passive_on_hit_received)이 전부 죽는다. 즉 튜너는
+        #   실제보다 약한 플레이어로 승률을 재고, 목표 승률을 맞추려고 몬스터를
+        #   아래로 깎았다. relics도 같은 이유로 전달한다(사제의 유해 부활 등).
+        job=getattr(player, "job", ""),
+        relics=list(getattr(player, "relics", []) or []),
         # 밸런스 3차: 실제 플레이어의 살아있는 ATB 잔여값을 시뮬 입력에 반영
         # (가짜 평균값이 아니라 지금 이 플레이어가 실제로 들고 있는 값 — 이미
         # PlayerPowerIndex가 HP/MP/아이템 등 다른 실시간 상태를 반영하는 것과
@@ -253,7 +263,8 @@ class BalanceHook:
 
     def __init__(self, player, item_list, show_graph=False, verbose=True, auto_prewarm=True):
         self.player     = player
-        self.item_list  = item_list
+        self._item_list      = list(item_list or [])
+        self._items_source   = None      # attach_items_source()가 붙이면 그쪽이 우선
         self.show_graph = show_graph
         self.verbose    = verbose
 
@@ -457,6 +468,32 @@ class BalanceHook:
 
         return enemy_snap
 
+    # ── 튜닝 입력이 되는 아이템 목록 ──────────────────────────
+    #  ★ 예전엔 생성 시점의 list를 그대로 들고 있었다. 그런데 이 값은 레벨업
+    #    재튜닝(on_level_up → get_enemy)까지 살아남아 PlayerPowerIndex.calc()의
+    #    포션 개수 항으로 들어간다 — 포션을 다 쓰거나 상점에서 사도 다음 재튜닝이
+    #    "새 게임 때의 포션 3개"로 목표 승률을 잡았다는 뜻이다(외부 검토 지적).
+    #    gs["items"]는 매번 갱신되는데 여기로 전달하는 연결이 없었다.
+    #  ★ 호출부마다 대입하게 만들면 또 한 곳이 빠진다 — 그래서 "읽을 때 당겨온다".
+    #    attach_items_source()로 인벤토리를 붙여 두면 항상 현재 값을 쓴다.
+    @property
+    def item_list(self) -> list:
+        if self._items_source is not None:
+            try:
+                return list(self._items_source() or [])
+            except Exception:
+                pass          # 세션이 이미 정리된 경우 등 — 마지막 값으로 폴백
+        return list(self._item_list)
+
+    @item_list.setter
+    def item_list(self, value):
+        self._item_list = list(value or [])
+
+    def attach_items_source(self, fn) -> None:
+        """현재 아이템 목록을 돌려주는 callable을 붙인다(예: lambda: inv.to_flat_list()).
+        app/Game.py(새 게임)·app/Shared.py(세션 복구)가 gs를 만든 직후 호출한다."""
+        self._items_source = fn
+
     def _pick_difficulty(self) -> str:
         import random
         pool = []
@@ -466,9 +503,15 @@ class BalanceHook:
 
     def _cache_sim_log(self, enemy_snap, sim_result, difficulty, chapter: int = 1):
         """AI 최적 전투 시뮬 1회 → 로그 저장 (복기 비교용)"""
+        # ★ 복기 비교용 시뮬도 실전과 같은 BattleSession으로 돌린다 — 예전엔
+        #   BattleEngine이라 골렘 3페이즈·사제 부활 같은 세션 전용 규칙이 빠진
+        #   "다른 전투"와 플레이어를 비교했다(BALANCE_PATCH_4와 같은 원인).
+        from ai.Simulator import _run_session_battle
         p_snap = _player_to_snap(self.player, self.item_list)
-        engine = BattleEngine(p_snap, enemy_snap, chapter=chapter)
-        result = engine.run(PlayerAI("balanced"), EnemyAI())
+        session = _run_session_battle(p_snap, [copy.deepcopy(enemy_snap)],
+                                      list(getattr(p_snap, "items", []) or []),
+                                      PlayerAI("balanced"), chapter=chapter)
+        result = session.to_battle_result()
         self._last_sim_result = result
 
         if result.winner == "player":

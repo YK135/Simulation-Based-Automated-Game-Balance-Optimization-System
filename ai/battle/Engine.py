@@ -145,6 +145,31 @@ class BattleEngine:
             for actor in actors:
                 self.action_count += 1
 
+                # ── 상태이상 틱 + 마비 판정 ────────────────────────────
+                #  ★ 실전(ai/Battlesession.py)은 행동하는 쪽의 차례가 오면 먼저
+                #    tick_status_effects()로 지속 피해를 넣고 지속시간을 깎은 뒤,
+                #    is_paralyzed()면 그 차례를 통째로 날린다. 이 엔진에는 그 두
+                #    단계가 통째로 없었다(외부 검토 지적) — 그런데 상태이상을
+                #    붙이기는 한다(아래 주사위 출혈 3곳, apply_element_and_react의
+                #    점화·동상·마비). 결과는:
+                #      · 출혈 · 점화 · 균열 → 피해 0 (도적의 지속 피해 축이 튜닝에 안 보임)
+                #      · 동상 → 턴이 안 줄어 전투 내내 SPD −50% 영구
+                #      · 마비 → 붙지만 판정이 없어 아무 효과 없음
+                #    튜너가 이 엔진으로 몬스터 스탯을 맞추므로 실전 난이도가 그만큼
+                #    어긋난다. 실전과 같은 순서로 맞춘다.
+                unit = self.player if actor == "player" else self.enemy
+                unit.tick_status_effects()          # 메시지는 시뮬에선 버린다
+                if unit.hp <= 0:
+                    if actor == "player":
+                        if not relic_try_revive(self.player):
+                            return self._make_result("enemy")
+                    else:
+                        return self._make_result("player")
+                if unit.is_paralyzed():
+                    # 차례만 날린다. 실전은 이 자리에서 tick_buffs()도 부르지만,
+                    # 이 루프는 틱 끝에서 이미 부르므로 여기서 또 부르면 두 번 깎인다.
+                    continue
+
                 if actor == "player":
                     action = player_ai(self.player, self.enemy)
                     # 자유 행동(패 고치기 재굴림)은 차례를 넘기지 않는다 — 최대 3회(전투당 상한)까지 다시 결정
