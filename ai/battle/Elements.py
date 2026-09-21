@@ -287,12 +287,18 @@ def apply_element_and_react(
         if randint(1, 100) <= prob:
             turns = ELEMENT_STATUS_TURNS[effect_type]
             eff_obj = StatusEffect(effect_type=effect_type, turns=turns, name=attack_element)
-            if hasattr(defender, "apply_status_effect"):
-                # 실제로 걸린 턴을 읽어서 표시한다 — 유물 「거울 파편」이 깎았을 수 있다
-                turns = getattr(defender.apply_status_effect(eff_obj, caster=attacker),
-                                "turns", turns)
             label = ELEMENT_STATUS_LABEL[effect_type]
-            messages.append(f"{defender.name}에게 {label} 상태가 부여되었다. ({turns}T)")
+            landed = True
+            if hasattr(defender, "apply_status_effect"):
+                applied = defender.apply_status_effect(eff_obj, caster=attacker)
+                landed = applied is not None
+                if landed:
+                    # 실제로 걸린 턴을 읽어서 표시한다 — 유물 「거울 파편」이 깎았을 수 있다
+                    turns = getattr(applied, "turns", turns)
+            if landed:
+                messages.append(f"{defender.name}에게 {label} 상태가 부여되었다. ({turns}T)")
+            else:                                          # debuff_resist (보스)
+                messages.append(f"🛡 {defender.name}이(가) {label}을(를) 저항했다!")
 
     _stamp(defender, attack_element, reacted, base_damage)
     return base_damage

@@ -591,10 +591,9 @@ def maybe_hit_bleed(meta: dict, defender, rng=None, attacker=None) -> bool:
     if not chance or defender is None or defender.hp <= 0:
         return False
     if (rng or random)() < chance:
-        defender.apply_status_effect(StatusEffect(effect_type="bleed", turns=3, name="출혈"),
-                                     caster=attacker)
-        return True
-    return False
+        eff = defender.apply_status_effect(StatusEffect(effect_type="bleed", turns=3, name="출혈"),
+                                           caster=attacker)
+        return eff is not None            # debuff_resist로 튕기면 "걸었다"가 아니다
 
 
 def attached_bonus_mult(meta: dict, defender) -> float:
@@ -819,12 +818,14 @@ def execute_skill(
             2
         )
         turns = randint(meta["debuff_turns"][0], meta["debuff_turns"][1])
-        defender.apply_debuff(Debuff(
+        landed = defender.apply_debuff(Debuff(
             stat=meta["debuff_stat"],
             amount=amt,
             turns=turns,
             name=skill_name,
         ), caster=attacker)
+        if not landed:                    # debuff_resist — 호출부가 "감소!"를 찍지 않게 사유를 넘긴다
+            return 0, False, f"{skill_name}|🛡 {defender.name}이(가) 저항했다!"
         return 0, False, skill_name
 
     if stype == "buff":

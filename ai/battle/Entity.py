@@ -3,7 +3,7 @@ from __future__ import annotations
 
 import copy
 from dataclasses import dataclass, field
-from random import randint, uniform
+from random import randint, uniform, random as _rand
 
 from .Relics import relic_debuff_turns, relic_bleed_stack_max   # 유물 — 지속·스택 보정 (Relics는 의존 없음)
 
@@ -186,6 +186,9 @@ class EntitySnapshot:
 
     # ── 유물 (ai/battle/Relics.py · 11-1 2차 7번) — 플레이어 전용, 세션/엔진이 효과를 읽는다 ──
     relics: list = field(default_factory=list)   # 보유 유물 id (Player.relics에서 복사)
+    debuff_resist: float = 0.0                   # 남이 거는 디버프·상태이상을 튕겨낼 확률
+                                                 #   (보스 전용 — 현재 최종 보스 0.25, 중간 보스 0.0.
+                                                 #    값의 근거는 BALANCE_PATCH_5.md 2장)
     relic_revive_used: bool = False              # 사제의 유해 — 전투당 1회
     relic_crit_armed: bool = False               # 표적 안내서 — 처치로 장전된 확정 치명타
     relic_crit_used: bool = False                # 표적 안내서 — 전투당 1회 (장전을 이미 썼다)
@@ -367,19 +370,34 @@ class EntitySnapshot:
                 return f"[탱커 패시브] 마법피격 → HP +{gained}"
         return ""
 
-    def apply_debuff(self, debuff: Debuff, caster=None):
-        """caster는 유물 「거울 파편」의 지속 보정에만 쓴다 — 모르면 None(받는 쪽만 본다).
-        유물이 없으면 turns가 그대로라 기존 계산은 불변이다."""
+    def _resists_debuff(self, caster) -> bool:
+        """debuff_resist — "남이" 거는 디버프·상태이상을 확률로 튕겨낸다.
+
+        caster를 모르거나(None) 자기 자신이 거는 경우는 저항하지 않는다. 자기에게
+        거는 디버프가 실제로 있기 때문이다 — 서리 결계(공격한 적을 느리게),
+        엘리트 고블린 대장의 격노, 골렘 그로기는 전부 caster 없이 들어온다.
+        기본값 0.0이므로 일반 몬스터·플레이어는 이 분기를 타도 아무 일이 없다."""
+        if caster is None or caster is self:
+            return False
+        resist = float(getattr(self, "debuff_resist", 0.0) or 0.0)
+        return resist > 0.0 and _rand() < resist
+
+    def apply_debuff(self, debuff: Debuff, caster=None) -> bool:
+        """디버프 적용. 반환 True면 실제로 걸렸다(False = debuff_resist로 저항).
+        caster는 저항 판정과 유물 지속 보정에 쓴다 — 모르면 None."""
+        if self._resists_debuff(caster):
+            return False
         turns = relic_debuff_turns(caster, self, debuff.turns, kind=debuff.stat)
         for existing in self.debuffs:
             if existing.stat == debuff.stat:
                 existing.amount = debuff.amount
                 existing.turns = turns
                 existing.name = debuff.name
-                return
+                return True
         new = copy.copy(debuff)
         new.turns = turns
         self.debuffs.append(new)
+        return True
 
     def apply_buff(self, buff: Buff):
         for existing in self.buffs:
@@ -416,9 +434,11 @@ class EntitySnapshot:
         return msgs
 
     # ── 원소 상태이상 ──
-    def apply_status_effect(self, effect: "StatusEffect", caster=None) -> "StatusEffect":
-        """상태이상 적용. 같은 타입은 남은 턴 갱신(중복 허용X) — 출혈은 여기에 스택 +1(최대 3).
-        반환: 실제로 목록에 있는 효과 객체 (호출부가 스택 수를 읽을 수 있게)."""
+    def apply_status_effect(self, effect: "StatusEffect", caster=None) -> "StatusEffect | None":
+        """상태이상 적용. 같은 타입은 남은 턴 갱신(중복 허용X) — 출혈은 여기에 스택 +1.
+        반환: 실제로 목록에 있는 효과 객체. debuff_resist로 저항하면 None."""
+        if self._resists_debuff(caster):
+            return None
         turns = relic_debuff_turns(caster, self, effect.turns, kind=effect.effect_type)
         stack_max = relic_bleed_stack_max(caster, BLEED_STACK_MAX)   # 유물 「사혈 단검」
         for existing in self.status_effects:
@@ -567,6 +587,7 @@ class EntitySnapshot:
             attack_element=getattr(enemy, "attack_element", ""),
             is_elite=getattr(enemy, "is_elite", False),
             elite_leader=getattr(enemy, "elite_leader", False),
+            debuff_resist=getattr(enemy, "debuff_resist", 0.0),
         )
         # 원소 슬라임 등: 전투 시작 시 초기 원소 큐 설정
         init_q = getattr(enemy, "init_element_queue", [])

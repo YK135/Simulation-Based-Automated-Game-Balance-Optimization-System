@@ -95,7 +95,11 @@ def player_turn(s, action="attack"):
 print("\n[0] 식별·스탯 불변")
 b = boss()
 check("enemy_type 최종 보스", is_finalboss(b) and b.enemy_type == "최종 보스")
-check("스탯 불변 (HP 3450 / STG 64 / ARM 51 / SPARM 58 / SPD 34)", (b.maxhp, b.stg, b.arm, b.sparm, b.spd) == (3450, 64, 51, 58, 34))
+# 6차 조정(2026-09-21): 실제 도착 레벨(중앙값 Lv20)에 맞춰 hp·stg·arm·sparm·sp를 ×0.72.
+# spd·luc·mp는 그대로 — game/Enemy_Class.Make_FinalBoss의 주석에 근거가 있다.
+check("스탯 (HP 2484 / STG 46 / ARM 37 / SPARM 42 / SPD 34 / 디버프저항 0.25)",
+      (b.maxhp, b.stg, b.arm, b.sparm, b.spd) == (2484, 46, 37, 42, 34)
+      and abs(getattr(b, "debuff_resist", 0) - 0.25) < 1e-9)
 check("페이즈 경계", [finalboss_phase_for(x) for x in (1.0, 0.71, 0.70, 0.41, 0.40, 0.16, 0.15, 0.0)] == [1, 1, 2, 2, 3, 3, 4, 4])
 
 # ═══════════════════════════════════════════════════════════
@@ -135,7 +139,7 @@ r = player_turn(s)                               # 70% 아래로 → 페이즈 2
 check("페이즈 2 진입 + 그림자 2마리, 순환 원소 해제", B.boss_phase == 2 and len(s.enemies) == 3
       and all(is_shadow(e) for e in s.enemies[1:]) and B.element_queue == [], (B.boss_phase, [e.name for e in s.enemies]))
 sh = s.enemies[1]
-check("그림자: HP 276(8%), STG 25.6(40%), MP 0, 보상 없음, ATB 칸 추가", abs(sh.maxhp - 276) < 1e-6 and abs(sh.stg - 25.6) < 1e-6
+check("그림자: HP 198.7(8%), STG 18.4(40%), MP 0, 보상 없음, ATB 칸 추가", abs(sh.maxhp - 2484 * 0.08) < 1e-6 and abs(sh.stg - 46 * 0.40) < 1e-6
       and sh.maxmp == 0 and sh.reward_eligible is False and len(s.enemy_atbs) == 3 and len(s._origins) == 3)
 check("보스 경감 0.25 + 배지", B.boss_guard == 0.25 and any("그림자 경감" in x["label"] for x in s._state()["enemies"][0]["pattern"]))
 hp0 = B.hp
@@ -208,8 +212,8 @@ r = boss_turn(s)
 check("다음 보스 행동에 손아귀 + ATB 0 + 메시지", s.logs[-1].action_detail == GRASP_SKILL and s.player_atb <= 34.0
       and any("ATB가 0" in x for x in r["messages"]), (s.logs[-1].action_detail, s.player_atb, r["messages"]))
 grasp = s.logs[-1].damage_dealt                 # 같은 행동의 HP 흡수(MP 0 → 4%)는 따로 — 손아귀 피해만 본다
-check("손아귀 피해 = STG 64 × 2.5 기준 (ARM 40: 64×200/140×2.5 = 228)", grasp == 228, grasp)
-check("같은 행동에서 흡수 4000도 따로 들어감", hp_p - s.player.hp == 228 + 4000, hp_p - s.player.hp)
+check("손아귀 피해 = STG 46 × 2.5 기준 (ARM 40: 46×200/140×2.5 = 164)", grasp == 164, grasp)
+check("같은 행동에서 흡수 4000도 따로 들어감", hp_p - s.player.hp == 164 + 4000, hp_p - s.player.hp)
 
 # ═══════════════════════════════════════════════════════════
 print("\n[4] 페이즈 4 — 종언")
@@ -222,6 +226,10 @@ check("페이즈 4 진입: 방어 −40%, 플레이어 회복 ×0.5, 카운트 =
       and abs(B.sparm - sparm0 * 0.6) < 1e-6 and s.player.heal_taken_mult == 0.5
       and B.boss_doom_at == s._player_action_count + 3 - 1, (B.arm, s.player.heal_taken_mult, B.boss_doom_at, s._player_action_count))
 check("진입 메시지", any("종언" in x for x in r["messages"]))
+# 이 시나리오는 「종언」 카운트만 본다 — 아래 스크립트된 플레이어 턴이 보스를 먼저
+# 죽이면 안 된다. 6차 조정으로 보스 HP가 3450 → 2484가 되면서 14% 잔여(348)가
+# 실제로 킬 사정권에 들어왔다. 공격력을 죽여 카운트만 흐르게 한다.
+s.player.stg = s.player.sp = 1
 check("회복 반감 heal_value(1000) = 500", s.player.heal_value(1000) == 500.0)
 s.player.hp = 5000
 s.player.items = ["HP_M_potion"]; s.items = ["HP_M_potion"]

@@ -83,6 +83,10 @@ class PlayerActionsMixin:
         반환: 적용 후 스택 수. msgs가 있으면 스택·틱 비율을 한 줄 남긴다."""
         eff = target.apply_status_effect(StatusEffect(effect_type="bleed", turns=3, name="출혈"),
                                          caster=self.player)
+        if eff is None:                       # debuff_resist (보스)
+            if msgs is not None:
+                msgs.append(f"🛡 {target.name}이(가) 출혈을 저항했다!")
+            return 0
         if msgs is not None:
             msgs.append(f"🩸 {target.name}에게 출혈! (×{eff.stacks}, 매 행동 maxHP "
                         f"{int(round(BLEED_RATE_PER_STACK * eff.stacks * 100))}%)")
@@ -623,10 +627,16 @@ class PlayerActionsMixin:
             else:
                 stype = meta.get("type")
                 if stype == "debuff":
-                    stat_kor = {"arm":"방어력","sparm":"마법방어력",
-                                "stg":"공격력","spd":"스피드"}.get(
-                        meta.get("debuff_stat",""), "스탯")
-                    msgs.append(f"{skill_name} 사용 → {target.name} {stat_kor} 감소!")
+                    # execute_skill이 "스킬명|사유"를 보내면 저항한 것이다 (기존 "|" 규약)
+                    _parts = [p for p in (debuff_name or "").split("|") if p]
+                    if len(_parts) > 1:
+                        msgs.append(f"{skill_name} 사용!")
+                        msgs.extend(_parts[1:])
+                    else:
+                        stat_kor = {"arm":"방어력","sparm":"마법방어력",
+                                    "stg":"공격력","spd":"스피드"}.get(
+                            meta.get("debuff_stat",""), "스탯")
+                        msgs.append(f"{skill_name} 사용 → {target.name} {stat_kor} 감소!")
                     self.logs.append(TurnLog(
                         turn=self.turn,
                         actor="player",
