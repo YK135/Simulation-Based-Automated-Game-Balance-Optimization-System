@@ -131,6 +131,25 @@ gh = EntitySnapshot(name="유령", hp=300, maxhp=300, mp=50, maxmp=50, stg=10, a
 execute_skill("강화1", gh, dummy())
 check("유령 강화1은 몬스터판 2턴 그대로", gh.buffs and gh.buffs[0].turns == 2 and gh.buffs[0].amount == 0.12, gh.buffs)
 
+# ── 「추진력」 지속 2 → 8턴 (BALANCE_PATCH_10) ──
+# 2턴짜리는 시전 행동에서 1턴이 줄어 **덮는 행동이 1회뿐**이고, balanced AI가
+# "내 실효 SPD ≥ 상대 실효 SPD"일 때 SPD 버프를 걸기 때문에 가장 빠른 도적이
+# 전투의 33~63%를 0딜 재시전에 썼다. 효과·비용은 그대로 둔다.
+rg = player(job="도적", skills=["추진력"], mp=200)
+execute_skill("추진력", rg, dummy())
+check("추진력 8턴 · +10% (효과·비용 불변)",
+      rg.buffs and rg.buffs[0].turns == 8 and abs(rg.buffs[0].amount - 0.10) < 1e-9
+      and SKILL_META["추진력"]["mp"] == 13, rg.buffs)
+# 덮는 행동 수 = 지속 − 1 (시전 행동에서 같이 줄어든다)
+_covered = 0
+for _ in range(20):
+    rg.tick_buffs()
+    if any(b.stat == "spd" for b in rg.buffs):
+        _covered += 1
+check("추진력이 실제로 덮는 행동은 7회(지속 8 − 시전 1)", _covered == 7, _covered)
+check("암살자판 추진력은 2턴 그대로(전투당 1회라 트레드밀이 없다)",
+      MONSTER_SKILL_META["추진력"]["buff_turns"] == 2, MONSTER_SKILL_META["추진력"])
+
 # ═══════════════════════════════════════════════════════════
 print("\n[3] 급소찌르기 출혈 보너스")
 r = player(job="도적", skills=["급소찌르기1"], luc=0)
