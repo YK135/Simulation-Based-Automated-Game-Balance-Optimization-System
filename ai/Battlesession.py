@@ -214,6 +214,29 @@ class BattleSession(
         # 모두 죽었으면 마지막 적 (메시지 표시용)
         return self.enemies[-1] if self.enemies else None
 
+    def _close_out_battle(self, msgs: list) -> None:
+        """전투가 끝나는 모든 분기에서 **반드시** 한 번 — 전투 종료 시점의 뒷정리.
+          ① 남은 ATB를 다음 전투로 이월(원본 Player에도 동기화 — 스냅샷은 전투마다 새로 뜬다)
+          ② 아직 만료되지 않은 버프의 대가 정산 — 「피의 맹세」(8턴)는 전투가 버프보다 먼저
+             끝나는 일이 흔해서, 이게 없으면 대가를 안 내고 끝난다(실측: 중간 보스전 지불 0).
+
+        승리·도주·패배·전멸 5곳이 ①의 같은 네 줄을 복사해 두고 있었고 ②가 그 5곳 전부에
+        붙어야 하므로 한 곳으로 모았다 — 한 곳만 빠뜨려도 "그 분기로 끝나면 공짜"가 된다.
+        DoT 사망 분기는 원래부터 ATB를 이월하지 않으므로(그 동작은 유지) 여기를 거치지 않는다;
+        쓰러진 뒤의 정산은 어차피 _pay_expire_cost가 hp ≤ 0에서 아무것도 하지 않는다.
+        메시지는 msgs에 덧붙인다 — 지불이 없으면 아무것도 추가되지 않는다.
+        ①만 try/except로 감싼다(기존 동작 유지 — 이월 실패가 전투 결과를 날리면 안 된다).
+        ②는 감싸지 않는다: 여기서 예외를 삼키면 **대가를 조용히 안 받고 끝나는** 바로 그 버그가
+        되므로, 터지면 드러나야 한다(내용은 자기 버프 목록 순회뿐이라 실패할 여지가 없다)."""
+        try:
+            carried = relic_atb_carry(self.player, self.player_atb)
+            self.player.atb_remainder = carried
+            if self.player_original is not None:
+                self.player_original.atb_remainder = carried
+        except Exception:
+            pass
+        msgs.extend(self.player.settle_buff_costs())
+
     def step(self, action: str) -> dict:
         """공개 진입점 — 행동 전후를 (state, action, result)로 자동 기록."""
         pre = self._rl_pre(action)
@@ -267,14 +290,8 @@ class BattleSession(
         if not self.action_queue:
             self.done = True
             self.winner = "player"
-            try:
-                self.player.atb_remainder = relic_atb_carry(self.player, self.player_atb)
-                # ★ 원본에도 동기화 (이월값 유지)
-                if self.player_original is not None:
-                    self.player_original.atb_remainder = relic_atb_carry(self.player, self.player_atb)
-            except Exception:
-                pass
             msgs.append("모든 적을 처치했다!")
+            self._close_out_battle(msgs)
             return self._state(messages=msgs, next_actor="done")
 
         actor_type, idx = self.action_queue[0]   # peek (pop은 행동 후)
@@ -339,31 +356,19 @@ class BattleSession(
             if p_result == "escaped":
                 self.done = True
                 self.winner = "escaped"
-                try:
-                    self.player.atb_remainder = relic_atb_carry(self.player, self.player_atb)
-                    # ★ 원본에도 동기화 (이월값 유지)
-                    if self.player_original is not None:
-                        self.player_original.atb_remainder = relic_atb_carry(self.player, self.player_atb)
-                except Exception:
-                    pass
                 msgs.append("도망에 성공했다!")
+                self._close_out_battle(msgs)
                 return self._state(messages=msgs, next_actor="done")
 
             # 모든 적 사망 체크
             if not self._alive_enemies():
                 self.done = True
                 self.winner = "player"
-                try:
-                    self.player.atb_remainder = relic_atb_carry(self.player, self.player_atb)
-                    # ★ 원본에도 동기화 (이월값 유지)
-                    if self.player_original is not None:
-                        self.player_original.atb_remainder = relic_atb_carry(self.player, self.player_atb)
-                except Exception:
-                    pass
                 if len(self.enemies) > 1:
                     msgs.append("모든 적을 처치했다!")
                 else:
                     msgs.append(f"{self.enemies[0].name}을(를) 처치했다!")
+                self._close_out_battle(msgs)
                 return self._state(messages=msgs, next_actor="done")
 
             # ── ★ 모든 살아있는 entity ATB += 자기 SPD ──
@@ -468,14 +473,8 @@ class BattleSession(
             if self.player.hp <= 0 and not self._relic_revive(msgs):
                 self.done = True
                 self.winner = "enemy"
-                try:
-                    self.player.atb_remainder = relic_atb_carry(self.player, self.player_atb)
-                    # ★ 원본에도 동기화 (이월값 유지)
-                    if self.player_original is not None:
-                        self.player_original.atb_remainder = relic_atb_carry(self.player, self.player_atb)
-                except Exception:
-                    pass
                 msgs.append(f"{self.player.name}이(가) 쓰러졌다...")
+                self._close_out_battle(msgs)
                 return self._state(messages=msgs, next_actor="done")
 
             # ── 모든 적 사망 체크(적 턴 도중에도 적이 죽을 수 있음) ──
@@ -487,16 +486,11 @@ class BattleSession(
             if not self._alive_enemies():
                 self.done = True
                 self.winner = "player"
-                try:
-                    self.player.atb_remainder = relic_atb_carry(self.player, self.player_atb)
-                    if self.player_original is not None:
-                        self.player_original.atb_remainder = relic_atb_carry(self.player, self.player_atb)
-                except Exception:
-                    pass
                 if len(self.enemies) > 1:
                     msgs.append("모든 적을 처치했다!")
                 else:
                     msgs.append(f"{self.enemies[0].name}을(를) 처치했다!")
+                self._close_out_battle(msgs)
                 return self._state(messages=msgs, next_actor="done")
 
             # ── 모든 살아있는 entity ATB += 자기 SPD ──

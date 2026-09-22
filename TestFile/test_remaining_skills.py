@@ -4,7 +4,9 @@ test_remaining_skills.py — 남은 신규 스킬 11종 + 스킬 2택 1 회귀 �
 
 검증 대상:
   · 전사 — 불굴(HP 35% 이하·전투당 1회, 실드 25% + 피해 −20% 2턴) / 광풍 베기(AoE 0.90 + 시전 흡혈 8%) /
-    철벽 의지(피해 −20% + 흡혈량 2배 3턴) / 피의 맹세(흡혈 40% 3턴, 만료 시 현재 HP 20% 지불 · 죽지 않음)
+    철벽 의지(피해 −20% + 흡혈량 2배 3턴) / 피의 맹세(흡혈 40% 8턴, 만료 시 현재 HP 20% 지불 · 죽지 않음)
+    (맹세·약점 표식의 지속 3턴 → 8턴: 후속 ①. 전투가 버프보다 먼저 끝나면 만료 지불을 놓치므로
+     전투 종료 시 정산이 붙었다 — 그 계약은 TestFile/test_vamp_mark_tuning.py)
   · 마법사 — 연쇄 번개(AoE lightning 0.80, 원소 부착 대상 ×1.3) / 마나 장막(받는 피해 50% MP 대납) /
     서리 결계(나를 공격한 적에게 ice + SPD −10%, 세션·엔진)
   · 도적 — 약점 표식(받는 피해 +8%, 주사위 5 크리) / 혈흔 추적(출혈 대상 명중 시 ATB +25) /
@@ -131,24 +133,25 @@ check("피의 맹세: lifesteal_oath 0.4, 격노와 다른 stat", w.buff_amount(
 w.apply_buff(Buff(stat="lifesteal", amount=0.25, turns=3, name="피의 격노"))
 check("격노와 합산 0.65 (서로 덮어쓰지 않음)", abs(w.effective_lifesteal() - 0.65) < 1e-9)
 w.hp = 800
-m1 = w.tick_buffs(); m2 = w.tick_buffs()
-check("2턴 지나도 비용 없음", w.hp == 800 and not m1 and not m2)
-m3 = w.tick_buffs()
-check("만료 시 현재 HP 20% 지불(800 → 640) + 메시지", w.hp == 640 and any("피의 맹세" in x and "지불" in x for x in m3), m3)
+early = [w.tick_buffs() for _ in range(7)]      # 8턴 - 시전 틱 = 7회는 아직 만료 전
+check("만료 전에는 비용 없음(7턴)", w.hp == 800 and not any(early), (w.hp, early))
+m8 = w.tick_buffs()
+check("만료 시 현재 HP 20% 지불(800 → 640) + 메시지", w.hp == 640 and any("피의 맹세" in x and "지불" in x for x in m8), m8)
 w2 = ent(skills=["피의 맹세"]); execute_skill("피의 맹세", w2, dummy()); w2.hp = 1
-for _ in range(3):
+for _ in range(8):
     w2.tick_buffs()
 check("HP 1에서 만료돼도 죽지 않음", w2.hp == 1.0)
-# 세션: 3턴 버프는 시전한 행동의 끝에서부터 줄어든다(강화 등 기존 버프와 같은 규칙) — 시전 + 2행동 뒤 만료
-s = BattleSession(ent(skills=["피의 맹세"]), enemies=[dummy()])
+# 세션: 버프는 시전한 행동의 끝에서부터 줄어든다(강화 등 기존 버프와 같은 규칙) — 8턴이면 시전 + 7행동 뒤 만료
+s = BattleSession(ent(skills=["피의 맹세"]), enemies=[dummy(hp=100000)])
 seen = []
 r = s.step("skill:피의 맹세"); seen.append(any("피의 맹세 종료" in m for m in r["messages"]))
-for _ in range(3):
+for _ in range(9):
     s.action_queue = [("player", -1)]
     with deterministic():
         r = s.step("attack")
     seen.append(any("피의 맹세 종료" in m for m in r["messages"]))
-check("세션: 시전 뒤 두 번째 행동에서 만료 메시지 한 번", seen == [False, False, True, False], seen)
+check("세션: 시전 뒤 7번째 행동에서 만료 메시지 딱 한 번",
+      seen.count(True) == 1 and seen.index(True) == 7, seen)
 
 # ═══════════════════════════════════════════════════════════
 print("\n[2] 마법사 — 연쇄 번개 · 마나 장막 · 서리 결계")
@@ -212,7 +215,7 @@ r_ = ent(job="도적", skills=["약점 표식"])
 t = dummy()
 with deterministic():
     execute_skill("약점 표식", r_, t)
-check("약점 표식: 취약 +8% 3턴, 이름으로 판별", has_weak_mark(t) and any(d.stat == "vulnerable" and d.amount == 0.08 and d.turns == 3 for d in t.debuffs))
+check("약점 표식: 취약 +8% 8턴, 이름으로 판별", has_weak_mark(t) and any(d.stat == "vulnerable" and d.amount == 0.08 and d.turns == 8 for d in t.debuffs))
 check("rogue_dice_crit: 6 항상, 5는 표식 대상만", rogue_dice_crit(6, None) and rogue_dice_crit(5, t) and not rogue_dice_crit(5, dummy())
       and not rogue_dice_crit(4, t))
 s = BattleSession(ent(job="도적"), enemies=[dummy()])
@@ -387,12 +390,17 @@ rr = PlayerAI("reactive")
 w = ent(job="전사", skills=["불굴", "강타1"]); w.hp = 300
 check("reactive 전사: HP 30%면 불굴", rr.decide(w, dummy()).detail == "불굴")
 w = ent(job="전사", skills=["피의 맹세", "강타1"])
-check("reactive 전사: 단일 타격뿐이면 맹세는 손해(지불 200 > 회수 80) → 강타1", rr.decide(w, dummy()).detail == "강타1")
+# 지속 8턴(후속 ①): 덮는 행동 7회 × 회수 80 = 560 > 지불 400이라 단일 타격뿐이어도 이득이다.
+# (3턴이던 때는 2회 × 80 = 160 < 400으로 손해여서 강타1을 골랐다.)
+check("reactive 전사: 오래 버틸 적이면 단일 타격뿐이어도 맹세", rr.decide(w, dummy()).detail == "피의 맹세")
+check("reactive 전사: 곧 끝나는 전투에는 맹세를 안 쓴다",
+      rr.decide(w, dummy(hp=300)).detail != "피의 맹세")
 w = ent(job="전사", skills=["피의 맹세", "광풍 베기"]); w.hp = 600
 check("reactive 전사: 광역 3대상이면 이득(회수 240 > 지불 120) → 피의 맹세",
       rr.decide(w, dummy(), enemy_count=3).detail == "피의 맹세")
-check("_lifesteal_buff_profit 부호", PlayerAI._lifesteal_buff_profit(w, dummy(), "피의 맹세", 3) > 0
-      > PlayerAI._lifesteal_buff_profit(ent(skills=["피의 맹세"]), dummy(), "피의 맹세", 1))
+check("_lifesteal_buff_profit 부호 — 긴 전투 양수 / 곧 끝나는 전투 음수",
+      PlayerAI._lifesteal_buff_profit(w, dummy(), "피의 맹세", 3) > 0
+      > PlayerAI._lifesteal_buff_profit(w, dummy(hp=300), "피의 맹세", 1))
 mg = ent(job="마법사", skills=["서리 결계", "파이어볼1"])
 check("reactive 마법사: 서리 결계 선행", rr.decide(mg, dummy()).detail == "서리 결계")
 rg = ent(job="도적", skills=["약점 표식", "급소찌르기1"])

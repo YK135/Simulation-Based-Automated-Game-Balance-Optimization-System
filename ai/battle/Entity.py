@@ -417,6 +417,16 @@ class EntitySnapshot:
                 alive.append(d)
         self.debuffs = alive
 
+    def _pay_expire_cost(self, buff: "Buff") -> str | None:
+        """버프의 만료 대가(expire_hp_cost)를 현재 HP에서 지불 — 절대 죽지 않는다(max 1).
+        지불할 게 없거나 이미 쓰러졌으면 None. tick_buffs()와 settle_buff_costs()가 공유한다."""
+        if buff.expire_hp_cost <= 0 or self.hp <= 0:
+            return None
+        before = self.hp
+        self.hp = max(1.0, self.hp * (1.0 - buff.expire_hp_cost))
+        self._record_hit("damage", before - self.hp, via="cost", element="", reaction="")
+        return f"🩸 {buff.name} 종료 — HP {int(before - self.hp)} 지불"
+
     def tick_buffs(self) -> list:
         """버프 1턴 소진. 만료되는 버프에 expire_hp_cost가 있으면 현재 HP에서 지불(피의 맹세).
         반환: 메시지 리스트 (없으면 [] — 기존 호출부는 반환값을 쓰지 않아도 된다)."""
@@ -425,12 +435,25 @@ class EntitySnapshot:
             if b.turns > 1:
                 b.turns -= 1
                 alive.append(b)
-            elif b.expire_hp_cost > 0 and self.hp > 0:
-                before = self.hp
-                self.hp = max(1.0, self.hp * (1.0 - b.expire_hp_cost))
-                self._record_hit("damage", before - self.hp, via="cost", element="", reaction="")
-                msgs.append(f"🩸 {b.name} 종료 — HP {int(before - self.hp)} 지불")
+            else:
+                m = self._pay_expire_cost(b)
+                if m:
+                    msgs.append(m)
         self.buffs = alive
+        return msgs
+
+    def settle_buff_costs(self) -> list:
+        """전투가 끝날 때 한 번 — **아직 만료되지 않은** 버프의 대가를 정산하고 목록을 비운다.
+        「피의 맹세」처럼 대가를 만료 시점에 내는 버프는 전투가 버프보다 먼저 끝나면
+        tick_buffs()가 한 번도 만료 처리를 못 해 **대가를 안 내고 끝난다**(실측: 8턴 지속에서
+        중간 보스전 지불 0). 전투 종료는 만료와 같으므로 여기서 같은 값을 같은 방식으로 받는다.
+        쓰러진 상태(hp ≤ 0)면 _pay_expire_cost가 아무것도 하지 않는다 — 시체에서 더 받지 않는다."""
+        msgs = []
+        for b in self.buffs:
+            m = self._pay_expire_cost(b)
+            if m:
+                msgs.append(m)
+        self.buffs = []
         return msgs
 
     # ── 원소 상태이상 ──

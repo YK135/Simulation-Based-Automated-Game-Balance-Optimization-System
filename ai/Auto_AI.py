@@ -344,27 +344,36 @@ class PlayerAI:
     def _lifesteal_buff_profit(attacker: EntitySnapshot, defender: EntitySnapshot, skill: str,
                                enemy_count: int) -> float:
         """흡혈 버프(피의 격노·피의 맹세)의 기대 손익 = 기대 회수량 − HP 지불 (양수일 때만 쓸 가치가 있다).
-        문서 수치 그대로 두기로 한 결정(2026-09-17)에 맞춘 측정용 판단:
-          · 3턴 버프는 시전 행동에서 1턴이 줄어 실제로는 (turns − 1)회 행동을 덮는다
+          · 버프는 시전 행동에서 1턴이 줄어 (turns − 1)회 행동을 덮는다
+          · **적이 먼저 죽으면 거기서 끝난다** — 8턴 버프를 5턴 만에 끝나는 전투에 걸면
+            남은 지속은 버려진다. 그래서 덮는 행동 수를 "남은 적 HP ÷ 내 1행동 피해"로
+            한 번 더 자른다(후속 ①). 이 자르기가 없으면 짧은 전투에서도 무조건 걸어
+            HP만 버린다 — 실측: 암살자상(4~6턴) 잔여 HP 69.7% → 51.7%.
+          · 회피하면 흡혈도 0이므로 명중률(= 1 − 회피율, DamageCalc._calc과 같은 식)을 곱한다
           · 회수 = 타격당 min(피해 × 비율, maxHP 4%) × 타수(광역이면 × 적 수), 시전당 maxHP 12% 상한
           · 지불 = 현재 HP × 비율 (격노는 즉시, 맹세는 만료 시 — 둘 다 현재 HP 기준으로 어림)"""
         from ai.battle.Damage import LIFESTEAL_HIT_CAP_RATIO, LIFESTEAL_CAST_CAP_RATIO
         meta = SKILL_META.get(skill) or {}
         ratio = meta.get("buff_amount", 0.0)
-        actions = max(0, meta.get("buff_turns", 0) - 1)
         base = attacker.effective_stg() * 200 / (100 + max(0.0, defender.effective_arm()))
         hit_cap = attacker.maxhp * LIFESTEAL_HIT_CAP_RATIO
-        best = min(base * ratio, hit_cap)                                  # 일반공격 1타
+        best, best_dmg = min(base * ratio, hit_cap), base                  # 일반공격 1타
         for sk in attacker.learned_skills:
             m = SKILL_META.get(sk) or {}
             if m.get("type") != "physical" or attacker.mp < m.get("mp", 0) * 2:
                 continue
-            per_hit = min(base * m.get("mult", 1.0) * ratio, hit_cap)
             hits = m.get("hits", 1) * (max(1, enemy_count) if m.get("aoe") else 1)
-            best = max(best, per_hit * hits)
+            heal = min(base * m.get("mult", 1.0) * ratio, hit_cap) * hits
+            if heal > best:
+                best, best_dmg = heal, base * m.get("mult", 1.0) * hits
         per_action = min(best, attacker.maxhp * LIFESTEAL_CAST_CAP_RATIO)
+        # 회피율: def_luc × 0.4 (상한 25) + dodge_bonus — DamageCalc._calc의 판정과 같은 값
+        evade = min(float(getattr(defender, "luc", 0.0)) * 0.4, 25.0) + defender.effective_dodge_bonus() * 100
+        hit_rate = max(0.0, 1.0 - min(evade, 95.0) / 100.0)
+        kill_actions = defender.hp / best_dmg if best_dmg > 0 else 0.0
+        actions = max(0.0, min(meta.get("buff_turns", 0) - 1, kill_actions))
         cost = attacker.hp * meta.get("hp_cost_ratio", meta.get("expire_hp_cost", 0.0))
-        return per_action * actions - cost
+        return per_action * actions * hit_rate - cost
 
     def _reactive_new_skills(self, attacker: EntitySnapshot, defender: EntitySnapshot,
                              hp_ratio: float, mp_ratio: float, enemy_count: int) -> Action | None:

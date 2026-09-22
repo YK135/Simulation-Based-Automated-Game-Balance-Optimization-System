@@ -9,7 +9,8 @@ test_new_skills.py — 신규 스킬 6종 회귀 테스트 (Combat Content Brief
     부착 원소가 없으면 사용 불가(usable False + reason, 무효 요청은 MP 없이 차례만 소비), 공명에 주입 원소 반영
   · 방패치기 — 0.70배 + 명중 시 대상 ATB −25, 보스·엘리트는 −12 · 전투당 3회(4회째 피해만), 회피 시 감소 없음,
     BattleEngine도 같은 규칙
-  · 피의 격노 — MP 0 · 현재 HP 15% 지불(1 미만으로 안 내려감) · 3턴 흡혈 25% (10-4 상한은 test_bleed_lifesteal)
+  · 피의 격노 — MP 0 · 현재 HP 15% 지불(1 미만으로 안 내려감) · 8턴 흡혈 25% (10-4 상한은 test_bleed_lifesteal)
+    (지속 3턴 → 8턴: 후속 ①. 수지가 안 맞은 원인이 행동 비용이었다 — TestFile/test_vamp_mark_tuning.py)
   · 패 고치기 — 배우면 다음 주사위가 미리 보이고(전투 시작·소비 직후 굴림), 시전은 MP만 쓰는 재굴림(턴 소비 없음),
     전투당 3회, 다음 공격이 소비, 상태 JSON player_dice, 엔진 동일 (턴을 쓰는 첫 형태는 dice_fix_measure.py에서 손해로 측정)
   · 피의 수확 — 출혈 스택 전부 소비 → 스택당 maxHP 6% 고정 피해(보스·엘리트 3%), 출혈 없으면 사용 불가
@@ -189,14 +190,14 @@ w = ent(skills=["피의 격노"], mp=0)
 w.hp = 1000
 d, lack, info = execute_skill("피의 격노", w, dummy())
 lb = [b for b in w.buffs if b.stat == "lifesteal"]
-check("MP 0으로도 시전, HP 1000 → 850, 흡혈 버프 25% 3턴", not lack and w.hp == 850 and lb and lb[0].amount == 0.25 and lb[0].turns == 3,
+check("MP 0으로도 시전, HP 1000 → 850, 흡혈 버프 25% 8턴", not lack and w.hp == 850 and lb and lb[0].amount == 0.25 and lb[0].turns == 8,
       (w.hp, w.buffs))
 w.hp = 1.0
 execute_skill("피의 격노", w, dummy())
 check("HP 1에서도 죽지 않음(max 1)", w.hp == 1.0)
 s = BattleSession(ent(skills=["피의 격노"]), enemies=[dummy()])
 r = s.step("skill:피의 격노")
-check("세션 메시지: HP 지불 + 3턴 흡혈", any("지불" in x and "흡혈 25%" in x for x in r["messages"]), r["messages"])
+check("세션 메시지: HP 지불 + 흡혈 25%", any("지불" in x and "흡혈 25%" in x for x in r["messages"]), r["messages"])
 sk = next(x for x in r["skills"] if x["name"] == "피의 격노")
 check("get_skills hp_cost 15", sk["hp_cost"] == 15 and sk["mp"] == 0, sk)
 
@@ -290,12 +291,16 @@ w = ent(skills=["강타1", "연속공격1", "방패치기", "피의 격노"], mp
 fast = dummy(spd=80.0)
 b, rr = PlayerAI("balanced"), PlayerAI("reactive")
 check("balanced 전사: 신규 스킬을 고르지 않는다(연속공격1)", b.decide(w, fast).detail == "연속공격1")
-# 피의 격노 손익(2026-09-17 결정 — 수치 유지, AI만 손익 판단): 만피(2000)면 지불 300 > 회수 160 → 안 씀
-check("reactive 전사: 만피에선 격노가 손해라 쓰지 않음", rr.decide(w, fast).detail != "피의 격노")
-w.hp = 1000                                   # 지불 150 < 회수(연속공격1 2타 × 40 × 2행동 = 160)
-check("reactive 전사: 지불이 회수보다 작으면 피의 격노", rr.decide(w, fast).detail == "피의 격노")
+# 피의 격노 손익 — 지속 8턴 재조정(후속 ①) 뒤의 기준은 "회수할 시간이 있는 전투인가"다.
+#   허수아비 HP 5000: 덮는 행동 7회 × 회수 80(연속공격1 2타 × 40) = 560 > 지불 300 → 만피에서도 쓴다.
+#   (3턴이던 때는 덮는 행동이 2회뿐이라 160 < 300으로 안 썼다 — 그게 수지가 안 맞던 이유다.)
+check("reactive 전사: 오래 버틸 적에게는 격노를 쓴다", rr.decide(w, fast).detail == "피의 격노")
+#   같은 만피인데 적이 허약하면(HP 400 ≒ 1.25행동) 회수할 시간이 없다 — 지속 상한이 아니라
+#   "남은 적 HP ÷ 1행동 피해"가 덮는 행동 수를 자른다.
+frail = dummy(hp=400, spd=80.0)
+check("reactive 전사: 곧 끝나는 전투에는 격노를 안 쓴다", rr.decide(w, frail).detail != "피의 격노")
 from ai.battle import Buff
-w.apply_buff(Buff(stat="lifesteal", amount=0.25, turns=3, name="피의 격노"))
+w.apply_buff(Buff(stat="lifesteal", amount=0.25, turns=8, name="피의 격노"))
 check("reactive 전사: 버프 중 + 상대가 빠르면 방패치기", rr.decide(w, fast).detail == "방패치기")
 w.atb_drain_uses = 3
 boss = dummy(spd=80.0, et="중간 보스")
