@@ -37,15 +37,19 @@ try:
     from game.Lv import auto_resolve_skill_choices          # noqa: E402
 except ImportError:                                         # 2택 1이 없던 트리
     auto_resolve_skill_choices = None
+import _measure_relics as MR                                # noqa: E402  (같은 TestFile/ 안)
 
 SEED = 20260917
 N = int(os.environ.get("N", "200"))
 LEVELS = [int(x) for x in os.environ.get("LEVELS", "20,25").split(",")]
 SKILL_PICK = os.environ.get("SKILL_PICK", "new")
-JOBS = ("전사", "마법사", "도적")
+JOBS = tuple(x.strip() for x in os.environ.get("JOBS", "전사,마법사,도적").split(",") if x.strip())
 MODES = ("balanced", "reactive")
 MAIN_STAT = {"전사": "stg", "마법사": "sp", "도적": "stg"}
 ITEMS = ["HP_L_potion", "HP_M_potion", "MP_L_potion", "MP_M_potion"]
+# 들고 들어가는 유물 — 세미콜론으로 여러 조합을 한 번에 잰다. 기본 "none"은 예전과 같은 출력.
+#   예: RELICS="none;2;4;6"  ·  RELICS="none;relic_priest_remains"
+RELIC_SPECS = [x.strip() for x in os.environ.get("RELICS", "none").split(";") if x.strip()]
 MAX_STEPS = 600
 SHADOW = "심연의 그림자"
 
@@ -84,12 +88,17 @@ def pick_target(bs):
     return min(shadows)[1] if shadows else None
 
 
-def run_one(p, mode, seed):
+def run_one(p, mode, seed, relic_spec="none"):
+    # 유물 추첨은 전용 RNG로 — 전역 난수열을 건드리면 유물 없는 팔과 비교가 어긋난다.
+    relics = MR.draw(relic_spec, p.job, random.Random(seed ^ 0x5EED))
+    items = MR.items_for(relics, ITEMS)
     random.seed(seed)
     unit = Make_FinalBoss(p.lv)
     s = EntitySnapshot.from_player(p)
-    s.hp, s.mp, s.items = s.maxhp, s.maxmp, list(ITEMS)
-    bs = BattleSession(s, enemy=EntitySnapshot.from_enemy(unit), items=list(ITEMS),
+    s.hp, s.mp, s.items = s.maxhp, s.maxmp, list(items)
+    MR.apply_to_snapshot(s, relics)        # relics · 굶주린 칼날 maxHP 대가
+    s.hp = min(s.hp, s.maxhp)
+    bs = BattleSession(s, enemy=EntitySnapshot.from_enemy(unit), items=list(items),
                        enemy_origins=[unit], is_boss=True)
     bs.battle_meta = {"source": "ai", "battle_type": "final_boss", "chapter": 2}
     ai = PlayerAI(mode)
@@ -148,25 +157,26 @@ def main():
     say("입력: Lv1→목표 Lv_up, 선택 포인트 주 스탯, 아이템 HP_L+HP_M+MP_L+MP_M. 대상: 그림자 먼저.")
     say("도달 = 보스 HP 기준 페이즈(70/40/15%). 종언 사망 = 「종언」 직후 패배. 손아귀 = 명중 1회 피해(실드 전).")
     say("")
-    say(f"{'Lv':>3} {'직업':<4} {'AI':<9} {'승률':>6} {'턴':>5} {'P2+':>6} {'P3+':>6} {'P4':>6} "
+    say(f"{'Lv':>3} {'직업':<4} {'AI':<9} {'유물':<13} {'승률':>6} {'턴':>5} {'P2+':>6} {'P3+':>6} {'P4':>6} "
         f"{'패배 시 보스HP':>12} {'종언 사망':>8} {'종언/전투':>8} {'손아귀':>6} {'그림자 처치':>9} {'포션':>5} {'남은 MP':>7}")
     for lv in LEVELS:
         for job in JOBS:
             p = build_player(job, lv)
             for mode in MODES:
-                rows = [run_one(p, mode, SEED * 1000 + lv * 37 + i) for i in range(N)]
-                win = statistics.mean(x["win"] for x in rows)
-                ph = Counter(phase_of(x["min_ratio"]) for x in rows)
-                reach = lambda k: sum(v for kk, v in ph.items() if kk >= k) / N
-                losses = [x for x in rows if not x["win"]]
-                bl = statistics.mean(x["boss_left"] for x in losses) if losses else 0.0
-                dd = sum(x["doom_death"] for x in rows) / N
-                grasp = [g for x in rows for g in x["grasp"]]
-                say(f"{lv:>3} {job:<4} {mode:<9} {pct(win):>6} {statistics.mean(x['turns'] for x in rows):5.1f} "
-                    f"{pct(reach(2)):>6} {pct(reach(3)):>6} {pct(reach(4)):>6} "
-                    f"{(pct(bl) if losses else '-'):>12} {pct(dd):>8} {statistics.mean(x['doom'] for x in rows):8.2f} "
-                    f"{(statistics.mean(grasp) if grasp else 0):6.0f} {statistics.mean(x['shadow_kills'] for x in rows):9.2f} "
-                    f"{statistics.mean(x['potions'] for x in rows):5.2f} {pct(statistics.mean(x['mp_left'] for x in rows)):>7}")
+                for spec in RELIC_SPECS:
+                    rows = [run_one(p, mode, SEED * 1000 + lv * 37 + i, spec) for i in range(N)]
+                    win = statistics.mean(x["win"] for x in rows)
+                    ph = Counter(phase_of(x["min_ratio"]) for x in rows)
+                    reach = lambda k: sum(v for kk, v in ph.items() if kk >= k) / N
+                    losses = [x for x in rows if not x["win"]]
+                    bl = statistics.mean(x["boss_left"] for x in losses) if losses else 0.0
+                    dd = sum(x["doom_death"] for x in rows) / N
+                    grasp = [g for x in rows for g in x["grasp"]]
+                    say(f"{lv:>3} {job:<4} {mode:<9} {MR.label(spec):<13} {pct(win):>6} {statistics.mean(x['turns'] for x in rows):5.1f} "
+                        f"{pct(reach(2)):>6} {pct(reach(3)):>6} {pct(reach(4)):>6} "
+                        f"{(pct(bl) if losses else '-'):>12} {pct(dd):>8} {statistics.mean(x['doom'] for x in rows):8.2f} "
+                        f"{(statistics.mean(grasp) if grasp else 0):6.0f} {statistics.mean(x['shadow_kills'] for x in rows):9.2f} "
+                        f"{statistics.mean(x['potions'] for x in rows):5.2f} {pct(statistics.mean(x['mp_left'] for x in rows)):>7}")
         say("")
     text = "\n".join(out)
     print(text)

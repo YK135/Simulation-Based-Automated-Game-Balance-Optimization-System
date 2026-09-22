@@ -25,7 +25,7 @@ SEED = 20260917
 LEVELS = [int(x) for x in os.environ.get("LEVELS", "8,10,12,15").split(",")]
 OUT = os.environ.get("OUT", "boss_measure.out")
 N = int(os.environ.get("N", "300"))
-JOBS = ("전사", "마법사", "도적")
+JOBS = tuple(x.strip() for x in os.environ.get("JOBS", "전사,마법사,도적").split(",") if x.strip())
 MODES = ("balanced", "reactive")
 ITEMS = ["HP_M_potion", "HP_M_potion", "MP_M_potion"]   # montecarlo.py start_items(15)와 동일
 MAX_STEPS = 400
@@ -47,6 +47,10 @@ except ImportError:                                         # 패턴 이전 트�
     BOSS_TELEGRAPH_DETAIL = "boss_telegraph"
 
 MAIN_STAT = {"전사": "stg", "마법사": "sp", "탱커": "arm", "도적": "stg"}
+
+import _measure_relics as MR                                # noqa: E402  (같은 TestFile/ 안)
+# 들고 들어가는 유물 — 세미콜론으로 여러 조합을 한 번에 잰다. 기본 "none"은 예전과 같은 출력.
+RELIC_SPECS = [x.strip() for x in os.environ.get("RELICS", "none").split(";") if x.strip()]
 
 
 def git_rev():
@@ -73,10 +77,12 @@ def build_player(job, level):
     return p
 
 
-def player_snap(p):
+def player_snap(p, relics=None):
     s = EntitySnapshot.from_player(p)
     s.hp, s.mp = s.maxhp, s.maxmp
-    s.items = list(ITEMS)
+    s.items = MR.items_for(relics, ITEMS)
+    MR.apply_to_snapshot(s, relics)      # relics · 굶주린 칼날 maxHP 대가
+    s.hp = min(s.hp, s.maxhp)
     return s
 
 
@@ -101,12 +107,15 @@ def classify_player_action(action: str) -> str:
     return "기타"
 
 
-def run_one(job, mode, p, rng_seed):
+def run_one(job, mode, p, rng_seed, relic_spec="none"):
     """전투 1회 — 지표에 필요한 사건만 골라 기록한다."""
+    # 유물 추첨은 전용 RNG로 — 전역 난수열을 건드리면 유물 없는 팔과 비교가 어긋난다.
+    relics = MR.draw(relic_spec, job, random.Random(rng_seed ^ 0x5EED))
+    items = MR.items_for(relics, ITEMS)
     random.seed(rng_seed)
     boss_unit = Make_MidBoss(p.lv)
-    bs = BattleSession(player_snap(p), enemy=EntitySnapshot.from_enemy(boss_unit),
-                       items=list(ITEMS), enemy_origins=[boss_unit], is_boss=True)
+    bs = BattleSession(player_snap(p, relics), enemy=EntitySnapshot.from_enemy(boss_unit),
+                       items=list(items), enemy_origins=[boss_unit], is_boss=True)
     bs.battle_meta = {"source": "ai", "battle_type": "mid_boss", "chapter": 1}
     ai = PlayerAI(mode)
     boss = bs.enemies[0]
@@ -196,10 +205,12 @@ def main():
     for lv in LEVELS:
         for job in JOBS:
             for mode in MODES:
-                rows = [run_one(job, mode, players[(job, lv)], SEED * 1000 + i) for i in range(N)]
-                results[(lv, job, mode)] = rows
+                for spec in RELIC_SPECS:
+                    rows = [run_one(job, mode, players[(job, lv)], SEED * 1000 + i, spec)
+                            for i in range(N)]
+                    results[(lv, job, mode, spec)] = rows
 
-    hdr = (f"{'Lv':<4} {'직업':<4} {'AI':<9} {'승률':>6} {'평균턴':>6} {'P2도달':>6} {'P3도달':>6} {'패배시보스HP':>9} "
+    hdr = (f"{'Lv':<4} {'직업':<4} {'AI':<9} {'유물':<13} {'승률':>6} {'평균턴':>6} {'P2도달':>6} {'P3도달':>6} {'패배시보스HP':>9} "
            f"{'예고/전투':>7} {'균열명중':>6} {'회피':>4} {'1회HP피해':>8} {'1회흡수':>7} {'직후사망':>6} "
            f"{'포션/전투':>7} {'종료MP':>6} {'예고/총피해':>8}")
     say("[본표] 판정 지표 — 레벨 × 직업 × AI")
@@ -207,14 +218,15 @@ def main():
     for lv in LEVELS:
       for job in JOBS:
         for mode in MODES:
-            rows = results[(lv, job, mode)]
+          for spec in RELIC_SPECS:
+            rows = results[(lv, job, mode, spec)]
             losses = [r for r in rows if not r["win"]]
             hits = [d for r in rows for d in r["rift_hp_dmg"]]
             absorbs = [d for r in rows for d in r["rift_absorb"]]
             n_hits = sum(r["rift_hits"] for r in rows)
             n_dodge = sum(r["rift_dodges"] for r in rows)
             tot_taken = sum(r["dmg_taken_total"] for r in rows)
-            say(f"{lv:<4} {job:<4} {mode:<9} {pct(mean([r['win'] for r in rows])):>6} {mean([r['turns'] for r in rows]):>6.1f} "
+            say(f"{lv:<4} {job:<4} {mode:<9} {MR.label(spec):<13} {pct(mean([r['win'] for r in rows])):>6} {mean([r['turns'] for r in rows]):>6.1f} "
                 f"{pct(mean([r['max_phase'] >= 2 for r in rows])):>6} {pct(mean([r['max_phase'] >= 3 for r in rows])):>6} "
                 f"{pct(mean([r['boss_hp_left'] for r in losses])) if losses else '   -  ':>9} "
                 f"{mean([r['telegraphs'] for r in rows]):>7.2f} {n_hits:>6} {n_dodge:>4} "
@@ -230,19 +242,21 @@ def main():
     for lv in LEVELS:
       for job in JOBS:
         for mode in MODES:
-            c = Counter(r["after_tele"] for r in results[(lv, job, mode)] if r["after_tele"])
+          for spec in RELIC_SPECS:
+            c = Counter(r["after_tele"] for r in results[(lv, job, mode, spec)] if r["after_tele"])
             total = sum(c.values())
             dist = ", ".join(f"{k} {100 * v / total:.0f}%" for k, v in c.most_common()) if total else "(예고 없음)"
-            say(f"  Lv{lv:<3}{job:<4} {mode:<9} n={total:<4} {dist}")
+            say(f"  Lv{lv:<3}{job:<4} {mode:<9} {MR.label(spec):<13} n={total:<4} {dist}")
     say("")
     say("[부록 B] 두 AI의 격차 (reactive − balanced) — 보조 지표. 둘 다 쉽게 이기거나 둘 다 지면 격차는 작다.")
     for lv in LEVELS:
       for job in JOBS:
-        b, r_ = results[(lv, job, "balanced")], results[(lv, job, "reactive")]
+       for spec in RELIC_SPECS:
+        b, r_ = results[(lv, job, "balanced", spec)], results[(lv, job, "reactive", spec)]
         dw = mean([x["win"] for x in r_]) - mean([x["win"] for x in b])
         hb = mean([d for x in b for d in x["rift_hp_dmg"]]); hr = mean([d for x in r_ for d in x["rift_hp_dmg"]])
         ab = mean([d for x in b for d in x["rift_absorb"]]); ar = mean([d for x in r_ for d in x["rift_absorb"]])
-        say(f"  Lv{lv:<3}{job:<4} 승률 {dw * 100:+5.1f}%p   균열 1회 HP 피해 {hb:6.1f} → {hr:6.1f}   실드 흡수 {ab:6.1f} → {ar:6.1f}   "
+        say(f"  Lv{lv:<3}{job:<4} {MR.label(spec):<13} 승률 {dw * 100:+5.1f}%p   균열 1회 HP 피해 {hb:6.1f} → {hr:6.1f}   실드 흡수 {ab:6.1f} → {ar:6.1f}   "
             f"패배 시 보스 잔여 HP {pct(mean([x['boss_hp_left'] for x in b if not x['win']]))} → "
             f"{pct(mean([x['boss_hp_left'] for x in r_ if not x['win']]))}")
 
