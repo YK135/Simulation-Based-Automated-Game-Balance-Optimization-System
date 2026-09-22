@@ -120,9 +120,10 @@ check("ice 부착 → 주입 원소 fire, 사용 가능", skill_effective_elemen
       and skill_requirement_error("원소 폭발", m, t) == "")
 with deterministic():
     d, lack, info = execute_skill("원소 폭발", m, t)
-raw = int(200 * 1.2)                                               # 240
+# 계수는 SKILL_META에서 읽는다 — 수치가 바뀔 때마다 이 줄이 깨지지 않게(후속 ②에서 1.2 → 2.3).
+raw = int(200 * SKILL_META["원소 폭발"]["mult"])
 expect = raw + int(raw * (REACTION_EFFECTS["melt"]["bonus_mult"] + MAGE_REACTION_BONUS - 1.0))
-check("ice에 원소 폭발 = 240 + 융해(1.5+0.05) 보너스 = 372", d == expect and "융해" in info, (d, expect, info))
+check(f"ice에 원소 폭발 = {raw} + 융해(1.5+0.05) 보너스 = {expect}", d == expect and "융해" in info, (d, expect, info))
 check("주입 원소가 공명에 반영(fire 1단계)", m.resonance_element == "fire" and m.resonance_stack == 1)
 check("반응 뒤 큐 초기화(슬라임은 고유 원소 없음)", t.element_queue == [])
 # lightning → fire(과부하), fire → lightning(과부하)
@@ -321,8 +322,36 @@ t = dummy(); t.element_queue = ["ice"]
 from ai.Auto_AI import _reaction_bonus
 check("reactive 마법사: 원소 폭발은 ice 대상에서 융해(1.5+0.05) 확정 가점을 받는다",
       abs(_reaction_bonus(SKILL_META["원소 폭발"], t, mg) - 1.55) < 1e-9)
-check("같은 대상에 파이어볼1도 융해가 나므로 MP 효율이 좋은 파이어볼1이 이긴다(설계 수치 그대로 — 보고 대상)",
+check("ice 대상에서는 파이어볼1이 이긴다 — 같은 융해를 더 싸게 낸다(후속 ② 조정 후에도 유지)",
       _best_attack_skill(mg, t, reaction_aware=True) == "파이어볼1")
+
+# ── 원소 폭발의 선택 계약 (후속 ②) ──
+#   계수/MP가 파이어볼1의 MP당 효율(0.150)을 넘으면 **기본 AI(balanced)가 주력으로 바꿔
+#   자동 밸런싱 기준선이 통째로 움직인다**(실측: 2.3/MP 15면 balanced 최종 보스 52.7% → 76.7%).
+#   그래서 2.3/17 = 0.135로 문턱 아래에 두고, 반응을 읽는 reactive만 "fire가 붙어 대체재가
+#   약한" 한 자리에서 고르게 했다. 이 두 성질이 이 스킬 조정의 핵심이라 여기서 고정한다.
+_burst, _fb = SKILL_META["원소 폭발"], SKILL_META["파이어볼1"]
+check("원소 폭발의 MP당 효율 < 파이어볼1 (balanced 선택 불변 = 튜너 기준선 불변)",
+      _burst["mult"] / _burst["mp"] < _fb["mult"] / _fb["mp"],
+      (_burst["mult"] / _burst["mp"], _fb["mult"] / _fb["mp"]))
+_eb = ent(job="마법사", skills=["원소 폭발", "파이어볼1", "라이트닝1", "아이스볼릿1"], mp=500)
+for _elem in ("ice", "fire", "lightning"):
+    _t = dummy(); _t.element_queue = [_elem]
+    check(f"balanced: {_elem} 부착이어도 원소 폭발을 고르지 않는다",
+          b.decide(_eb, _t).detail != "원소 폭발", b.decide(_eb, _t).detail)
+_tf = dummy(); _tf.element_queue = ["fire"]
+check("reactive: fire가 붙으면 원소 폭발 (파이어볼은 중첩뿐 · 라이트닝은 계수가 낮다)",
+      rr.decide(_eb, _tf).detail == "원소 폭발", rr.decide(_eb, _tf).detail)
+_ti = dummy(); _ti.element_queue = ["ice"]
+check("reactive: ice가 붙으면 파이어볼1 (같은 융해를 더 싸게 낸다)",
+      rr.decide(_eb, _ti).detail == "파이어볼1", rr.decide(_eb, _ti).detail)
+# 예외 하나 — **자기 원소에 면역인 대상**(화염 슬라임)에서는 파이어볼1이 효율 -1로 배제되므로
+# balanced의 최선이 라이트닝1(0.129)에서 원소 폭발(0.135)로 바뀐다. 이것이 balanced가 달라지는
+# 유일한 자리이고, 동시에 브리프가 말한 "원소 슬라임 상대로 특히 강하다"는 설계 의도 그대로다.
+# 반응 배율은 두 스킬에 똑같이 곱해지므로 "reactive만 쓰고 balanced는 안 쓰는" 수치는 존재하지 않는다.
+_fs = dummy(et="화염 슬라임"); _fs.element_queue = ["fire"]
+check("화염 슬라임(fire 면역)에서는 balanced도 원소 폭발 — 파이어볼1이 면역으로 배제되는 자리",
+      b.decide(_eb, _fs).detail == "원소 폭발", b.decide(_eb, _fs).detail)
 t2 = dummy()
 check("부착 원소 없으면 원소 폭발은 후보에서 빠진다", _best_attack_skill(mg, t2, reaction_aware=True) == "파이어볼1"
       and _best_attack_skill(mg, t2) == "파이어볼1")
