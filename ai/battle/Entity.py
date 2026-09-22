@@ -141,6 +141,7 @@ class EntitySnapshot:
     elite_pattern_used: bool = False   # 전투당 1회 한정 능력(분노/추진력/부활/분열, 일반 사제의 약식 소생) 사용 여부
     is_summoned: bool = False          # 분열로 생성된 개체
     reward_eligible: bool = True       # False면 처치해도 경험치/보상 제외
+    split_stun: int = 0                # 증식 슬라임 본체가 분열 직후 건너뛸 남은 행동 수
 
     # ── 일반 몬스터 정체성 (ai/battle/MonsterKit.py 「일반 몬스터 정체성 규칙」) ──
     pack_bonus: float = 0.0        # 고블린 무리 전술 — 살아있는 고블린 수에 따른 STG 가산(세션이 동기화)

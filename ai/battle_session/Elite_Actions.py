@@ -13,9 +13,11 @@ from ai.battle.MonsterKit import (
 from ai.battle.EliteKit import (
     GOBLIN_START_BUFF_AMOUNT, GOBLIN_START_BUFF_TURNS,
     GOBLIN_RAGE_HP_THRESHOLD, GOBLIN_RAGE_STG_AMOUNT, GOBLIN_RAGE_DEF_AMOUNT,
+    GOBLIN_RALLY_INTERVAL, GOBLIN_RALLY_AMOUNT, GOBLIN_RALLY_TURNS,
     BAT_SCREAM_INTERVAL,
     SLIME_SPLIT_COUNT, SLIME_SPLIT_HP_RATIO, SLIME_SPLIT_STAT_RATIO,
-    ASSASSIN_MARK_INTERVAL, ASSASSIN_MARK_TURNS, ASSASSIN_RETREAT_HP_THRESHOLD,
+    SLIME_SPLIT_TRIGGER_RATIO, SLIME_SPLIT_STUN_ACTIONS,
+    ASSASSIN_MARK_INTERVAL, ASSASSIN_MARK_TURNS, ASSASSIN_SPRINT_HP_THRESHOLD,
     GOLEM_PHASE_GUARD, GOLEM_PHASE_CHARGE, GOLEM_PHASE_STRIKE,
     PRIEST_REVIVE_HP_RATIO, PRIEST_PHASE_IDLE, PRIEST_PHASE_PREPARING,
 )
@@ -24,14 +26,20 @@ from ai.battle.EliteKit import (
 class EliteActionsMixin:
     """BattleSession에 엘리트 몬스터 패턴 기능을 제공하는 mixin."""
 
-    def _check_elite_death(self, target: EntitySnapshot, msgs: list) -> None:
-        """엘리트 리더가 방금 hp<=0이 됐을 때의 후처리(분열/부활취소).
-        직접 피해(_apply_dmg_shielded)와 상태이상 DoT 사망(Battlesession의
-        원소 상태이상 틱 처리) 양쪽 사망 경로에서 모두 호출해야 한다 —
-        한쪽에서만 호출하면 화상/출혈로 죽은 증식 슬라임이 분열하지 않는다."""
-        if target.hp > 0 or not getattr(target, "elite_leader", False):
+    def _check_elite_hp(self, target: EntitySnapshot, msgs: list) -> None:
+        """엘리트 리더의 HP가 방금 바뀐 뒤 걸리는 문턱 판정 — 분열(살아있을 때/죽었을 때)과
+        부활 의식 중단. 직접 피해(_apply_dmg_shielded)와 상태이상 DoT(Battlesession의
+        원소 상태이상 틱 처리) 양쪽 경로에서 모두 호출해야 한다 — 한쪽에서만 호출하면
+        화상/출혈로 문턱을 넘은 증식 슬라임이 분열하지 않는다."""
+        if not getattr(target, "elite_leader", False):
             return
         et = getattr(target, "enemy_type", "")
+        if target.hp > 0:
+            # 살아있는 채 문턱을 넘은 증식 슬라임 — 본체는 남고 새끼 둘이 붙는다
+            if (et == "슬라임" and target.maxhp > 0
+                    and target.hp / target.maxhp <= SLIME_SPLIT_TRIGGER_RATIO):
+                self._split_slime(target, msgs, alive=True)
+            return
         if et == "슬라임":
             self._split_slime(target, msgs)
         elif et == "사제" and getattr(target, "elite_phase", 0) != 0:
@@ -74,6 +82,27 @@ class EliteActionsMixin:
             enemy.apply_debuff(Debuff(stat="sparm", amount=GOBLIN_RAGE_DEF_AMOUNT,
                                        turns=9999, name="분노"))
             msgs.append(f"{enemy.name}이(가) 분노하여 방어를 포기했다!")
+
+        # ── 호령 (브리프 3장) — 격노 이후 대장의 행동 3회마다 살아있는 동료 STG +10%(2턴) ──
+        # ① 카운터는 전투 시작부터 돌고 발동만 격노 뒤에 열린다. 격노 뒤부터 세면
+        #    대부분의 전투가 그 전에 끝나 발동이 0.0~0.6회/전투로 사문화된다
+        #    (실측: 이 방식이 2~5배 자주 터지고 승률 차이는 양쪽 모두 A와 ±0.1%p).
+        # ② 대장 자신은 대상이 아니다 — apply_buff는 같은 stat을 덮어쓰므로,
+        #    자신에게 걸면 분노(STG +15%, 무기한)가 호령(+10%, 2턴)에 지워져
+        #    격노가 오히려 약해진다.
+        # ③ 동료가 하나도 없으면 카운터를 소비하지 않는다(대장 단독 전투에서는
+        #    아무 일도 일어나지 않고, 사제가 동료를 되살리면 바로 터진다).
+        enemy.elite_pattern_turn += 1
+        if not enemy.elite_pattern_used or enemy.elite_pattern_turn < GOBLIN_RALLY_INTERVAL:
+            return
+        allies = [e for e in self.enemies if e is not enemy and e.hp > 0]
+        if not allies:
+            return
+        enemy.elite_pattern_turn = 0
+        for a in allies:
+            a.apply_buff(Buff(stat="stg", amount=GOBLIN_RALLY_AMOUNT,
+                              turns=GOBLIN_RALLY_TURNS, name="호령"))
+        msgs.append(f"{enemy.name}이(가) 호령했다! 동료 {len(allies)}마리의 공격력이 올랐다!")
 
     # ── 흡혈 박쥐 ──
     # elite_phase: 0=평시, 1=이번 행동에 막 예고됨(elite_forced_action이 watch로
@@ -118,7 +147,7 @@ class EliteActionsMixin:
             msgs.append("암살 표식이 빛나며 급소 공격이 강화되었다!")
 
         if (not enemy.elite_pattern_used and enemy.maxhp > 0
-                and enemy.hp / enemy.maxhp <= ASSASSIN_RETREAT_HP_THRESHOLD):
+                and enemy.hp / enemy.maxhp <= ASSASSIN_SPRINT_HP_THRESHOLD):
             enemy.elite_pattern_used = True
             enemy.apply_buff(Buff(stat="spd", amount=0.10, turns=2, name="추진력"))
             msgs.append(f"{enemy.name}이(가) 추진력을 사용해 거리를 벌린다!")
@@ -179,7 +208,9 @@ class EliteActionsMixin:
     # 증식 슬라임 — 분열
     # ═══════════════════════════════════════════════════════
 
-    def _split_slime(self, origin: EntitySnapshot, msgs: list) -> None:
+    def _split_slime(self, origin: EntitySnapshot, msgs: list, alive: bool = False) -> None:
+        """분열 — 전투당 1회. alive=True면 본체가 살아남고 그 대신
+        SLIME_SPLIT_STUN_ACTIONS만큼 행동을 건너뛴다(브리프 3장의 "분열 직후 본체 행동 불가")."""
         if origin.elite_pattern_used:
             return
         origin.elite_pattern_used = True
@@ -207,6 +238,10 @@ class EliteActionsMixin:
             self._origins.append(None)
 
         msgs.append(f"{origin.name}이(가) 작은 슬라임 두 마리로 분열했다!")
+        if alive:
+            origin.split_stun = SLIME_SPLIT_STUN_ACTIONS
+            msgs.append(f"{origin.name}은(는) 갈라진 충격으로 {SLIME_SPLIT_STUN_ACTIONS}번의 "
+                        f"행동을 잃었다 — 지금이 기회다!")
 
     # ═══════════════════════════════════════════════════════
     # 사제 — 부활 (Enemy_Actions._priest_action에서 호출)

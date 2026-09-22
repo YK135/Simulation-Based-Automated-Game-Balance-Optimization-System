@@ -94,6 +94,72 @@ def test_slime_split():
     check("증식은 전투당 1회만 (재분열 없음)", len(session.enemies) == 3)
 
 
+def test_slime_alive_split_and_stun():
+    """브리프 3장 — 분열은 본체가 **살아있는 채** HP 30%를 지날 때 일어나고,
+    그 직후 본체는 2번의 행동을 잃는다. 늘어난 적 수(본체+새끼 2)를 경직이
+    되돌려주는 구조라, 둘 중 하나만 넣으면 난이도가 한쪽으로 쏠린다."""
+    player = mk_player()
+    enemy = mk_elite("슬라임", hp=100, stg=10, spd=1.0)
+    session = BattleSession(player, enemy=enemy, items=[])
+    slime = session.enemies[0]
+
+    session._apply_dmg_shielded(slime, 60, [])      # 100 → 40 (40%)
+    check("문턱(30%) 위에서는 분열하지 않음", len(session.enemies) == 1,
+          f"len={len(session.enemies)} hp={slime.hp}")
+
+    session._apply_dmg_shielded(slime, 15, [])      # 40 → 25 (25%)
+    check("HP 30% 이하에서 살아있는 채 분열", len(session.enemies) == 3,
+          f"len={len(session.enemies)}")
+    check("본체가 살아남는다(사망 분열과 다른 점)", slime.hp > 0, f"hp={slime.hp}")
+    check("본체는 보상 대상으로 남는다", slime.reward_eligible is True)
+    check("본체가 2행동 경직", slime.split_stun == 2, f"stun={slime.split_stun}")
+    children = [e for e in session.enemies if e.enemy_type == "작은 슬라임"]
+    check("새끼 HP는 본체 maxhp의 30%", children and abs(children[0].maxhp - 100 * 0.30) < 0.01)
+
+    n_logs = len(session.logs)
+    session._single_enemy_action(slime, [])
+    check("경직 중에는 행동을 통째로 건너뛴다",
+          session.logs[n_logs].action_detail == "split_stun", session.logs[n_logs])
+    check("경직 카운트가 1 줄어든다", slime.split_stun == 1)
+    session._single_enemy_action(slime, [])
+    check("두 번째 행동도 건너뛴다", slime.split_stun == 0)
+
+    before = len(session.enemies)
+    session._apply_dmg_shielded(slime, 999, [])
+    check("문턱 재진입·사망에도 재분열 없음(전투당 1회)", len(session.enemies) == before,
+          f"len={len(session.enemies)}")
+
+
+def test_slime_one_shot_still_splits_on_death():
+    """문턱 구간을 한 방에 건너뛰어 즉사시키면 사망 시점 분열(기존 경로)이 그대로 남는다 —
+    총 HP 풀(본체 100% + 새끼 2×30%)이 한 방 딜에 따라 달라지지 않게 하는 폴백."""
+    player = mk_player()
+    enemy = mk_elite("슬라임", hp=100, stg=10)
+    session = BattleSession(player, enemy=enemy, items=[])
+    slime = session.enemies[0]
+    session._apply_dmg_shielded(slime, 999, [])     # 100% → 즉사 (문턱을 밟지 않음)
+    check("즉사시켜도 분열은 일어난다", len(session.enemies) == 3, f"len={len(session.enemies)}")
+    check("즉사 분열에서는 본체가 시체", slime.hp <= 0)
+    check("즉사 분열에는 경직이 없다", getattr(slime, "split_stun", 0) == 0)
+
+
+def test_dot_threshold_triggers_alive_split():
+    """상태이상 DoT로 문턱만 넘은 경우(죽지 않음) — 직접 피해와 같은 판정을 거쳐야 한다.
+    이 경로를 빠뜨리면 화상으로 31%→25%가 된 슬라임이 다음 직접 피해까지 분열을 미룬다."""
+    from ai.battle import StatusEffect
+    player = mk_player()
+    slime = mk_elite("슬라임", hp=100, stg=1, spd=1.0)
+    session = BattleSession(player, enemy=slime, items=[])
+    slime = session.enemies[0]
+    slime.hp = 32.0
+    slime.apply_status_effect(StatusEffect(effect_type="ignite", turns=3, name="fire", dot_rate=0.05))
+    session.action_queue = [("enemy", 0)]
+    result = session.step("auto")
+    check("DoT로 문턱만 넘어도 분열", len(session.enemies) == 3,
+          f"len={len(session.enemies)} messages={result.get('messages')}")
+    check("DoT 분열도 본체가 살아남는다", session.enemies[0].hp > 0, f"hp={session.enemies[0].hp}")
+
+
 def test_defeated_list_excludes_summoned():
     from app.Battle import _get_defeated_list
 
@@ -415,6 +481,59 @@ def test_goblin_start_buff_and_rage():
     check("분노는 전투당 1회만", len(rage_buffs) == 1, f"count={len(rage_buffs)}")
 
 
+def test_goblin_rally():
+    """브리프 3장 「호령」 — 격노 이후 대장의 행동 3회마다 살아있는 동료 STG +10%(2턴).
+    대장 자신은 대상이 아니다(분노가 같은 stat의 버프라 덮어써지면 격노가 약해진다)."""
+    from ai.battle.EliteKit import GOBLIN_RALLY_INTERVAL
+    player = mk_player()
+    leader = mk_elite("고블린", hp=100, stg=10)
+    escort = mk_elite("박쥐", hp=100, stg=10, elite_leader=False)
+    session = BattleSession(player, enemies=[leader, escort], items=[])
+    leader, escort = session.enemies
+
+    for _ in range(GOBLIN_RALLY_INTERVAL + 2):
+        session._elite_goblin_pre(leader, [])
+    check("격노 전에는 호령이 나가지 않는다",
+          not any(b.name == "호령" for b in escort.buffs), escort.buffs)
+    check("격노 전에도 카운터는 돈다", leader.elite_pattern_turn >= GOBLIN_RALLY_INTERVAL,
+          f"turn={leader.elite_pattern_turn}")
+
+    leader.hp = leader.maxhp * 0.4          # 격노 진입
+    msgs = []
+    session._elite_goblin_pre(leader, msgs)
+    check("격노한 행동에서 곧바로 호령", any(b.name == "호령" for b in escort.buffs), escort.buffs)
+    check("호령 대상은 동료 — 대장 자신의 STG 버프는 분노 그대로",
+          any(b.stat == "stg" and b.name == "분노" for b in leader.buffs), leader.buffs)
+    check("호령 발동 시 카운터 리셋", leader.elite_pattern_turn == 0)
+    check("호령 로그 출력", any("호령" in m for m in msgs), msgs)
+
+    rally = [b for b in escort.buffs if b.name == "호령"][0]
+    check("호령 수치 +10% / 2턴", abs(rally.amount - 0.10) < 1e-9 and rally.turns == 2,
+          f"{rally.amount}/{rally.turns}")
+
+    # 동료가 죽으면 호령은 나가지 않고 카운터도 소비되지 않는다
+    escort.hp = 0
+    for _ in range(GOBLIN_RALLY_INTERVAL + 3):
+        session._elite_goblin_pre(leader, [])
+    check("혼자 남으면 호령이 나가지 않고 카운터가 쌓인 채 남는다",
+          leader.elite_pattern_turn > GOBLIN_RALLY_INTERVAL, f"turn={leader.elite_pattern_turn}")
+
+
+def test_non_elite_goblin_never_rallies():
+    """일반 노드의 고블린은 리더가 아니라 _elite_pre_action을 거치지 않는다 —
+    호령/분노/전투 함성 중 어느 것도 나가면 안 된다."""
+    player = mk_player()
+    g1 = mk_elite("고블린", hp=100, stg=10, elite_leader=False)
+    g2 = mk_elite("고블린", hp=100, stg=10, elite_leader=False)
+    session = BattleSession(player, enemies=[g1, g2], items=[])
+    g1, g2 = session.enemies
+    g1.hp = g1.maxhp * 0.2
+    for _ in range(6):
+        session._single_enemy_action(g1, [])
+    check("일반 고블린은 호령하지 않는다",
+          not any(b.name == "호령" for b in g2.buffs), g2.buffs)
+
+
 # ═══════════════════════════════════════════════════════
 # 공통 인프라 — 다대일 이중 보정 / DoT 사망 분열
 # ═══════════════════════════════════════════════════════
@@ -479,6 +598,9 @@ def main():
     try:
         test_non_elite_no_pattern()
         test_slime_split()
+        test_slime_alive_split_and_stun()
+        test_slime_one_shot_still_splits_on_death()
+        test_dot_threshold_triggers_alive_split()
         test_defeated_list_excludes_summoned()
         test_golem_cycle()
         test_golem_groggy_interrupt()
@@ -494,6 +616,8 @@ def main():
         test_bat_lifesteal_and_scream()
         test_bat_no_lifesteal_when_shielded_or_dodged()
         test_goblin_start_buff_and_rage()
+        test_goblin_rally()
+        test_non_elite_goblin_never_rallies()
         test_no_double_multi_enemy_scaling()
         test_dot_death_triggers_split()
         test_battle_ends_normally_with_split()

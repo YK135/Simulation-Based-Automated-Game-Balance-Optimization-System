@@ -10,7 +10,7 @@ from ai.battle.EliteKit import (
     ASSASSIN_MARK_INTERVAL, BAT_SCREAM_INTERVAL,
     FIRE_SLIME_STACK_THRESHOLD, LIGHTNING_SLIME_STACK_THRESHOLD,
     GOLEM_PHASE_GUARD, GOLEM_PHASE_CHARGE, GOLEM_PHASE_STRIKE,
-    PRIEST_PHASE_PREPARING,
+    PRIEST_PHASE_PREPARING, SLIME_SPLIT_STUN_ACTIONS,
 )
 from ai.battle.BossKit import (
     is_midboss, MIDBOSS_PHASE_LABEL, MIDBOSS_RIFT_INTERVAL,
@@ -111,6 +111,16 @@ class StateMixin:
                 "cur":   phase + 1,
                 "max":   len(_GOLEM_PHASE_LABEL),
                 "state": state,
+            })
+
+        # 증식 슬라임 본체 — 분열 직후 경직(플레이어에게 유리한 창이라 아군색 groggy)
+        if getattr(en, "split_stun", 0) > 0:
+            badges.append({
+                "kind":  "groggy",
+                "label": "분열 충격",
+                "cur":   en.split_stun,
+                "max":   SLIME_SPLIT_STUN_ACTIONS,
+                "state": "armed",
             })
 
         if leader and et == "사제" and phase == PRIEST_PHASE_PREPARING \

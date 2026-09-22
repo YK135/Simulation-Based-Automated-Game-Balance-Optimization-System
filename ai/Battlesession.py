@@ -423,6 +423,11 @@ class BattleSession(
             if hasattr(enemy, "tick_status_effects"):
                 for m in enemy.tick_status_effects():
                     msgs.append(m)
+                if enemy.hp > 0:
+                    # 상태이상으로 죽지는 않고 문턱만 넘은 경우(증식 슬라임 분열) —
+                    # 직접 피해와 같은 판정을 거친다. 죽은 경우는 아래 분기가 같은
+                    # 훅을 부르므로 여기서 두 번 부르지 않는다.
+                    self._check_elite_hp(enemy, msgs)
             # 점화로 사망
             if enemy.hp <= 0:
                 self.action_queue.pop(0)
@@ -437,7 +442,7 @@ class BattleSession(
                 #   잘못 호출되는) 버그가 있었다.
                 msgs.append(f"{self._dot_label(enemy)} {enemy.name}을(를) "
                             f"{self._dot_name(enemy)} 데미지로 처치했다!")
-                self._check_elite_death(enemy, msgs)   # 분열/부활취소 — 직접피해 경로와 동일하게 처리
+                self._check_elite_hp(enemy, msgs)   # 분열/부활취소 — 직접피해 경로와 동일하게 처리
                 self._check_boss_phase(enemy, msgs)    # 최종 보스·그림자: 경감 해제/그림자 정리 — 직접피해 경로와 동일
                 if getattr(enemy, "enemy_type", "") == "고블린":
                     self._sync_goblin_pack(msgs)       # 지속 피해로 죽어도 무리 전술은 즉시 다시 센다

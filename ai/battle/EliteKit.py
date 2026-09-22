@@ -18,6 +18,11 @@ GOBLIN_START_BUFF_TURNS = 2
 GOBLIN_RAGE_HP_THRESHOLD = 0.50
 GOBLIN_RAGE_STG_AMOUNT = 0.15
 GOBLIN_RAGE_DEF_AMOUNT = 0.15
+# 호령 — 격노 이후 대장의 행동 N회마다 살아있는 "동료"에게만 STG 가산(브리프 3장).
+# 카운터(elite_pattern_turn)는 전투 시작부터 돌고 발동만 격노 뒤에 열린다.
+GOBLIN_RALLY_INTERVAL = 3
+GOBLIN_RALLY_AMOUNT = 0.10
+GOBLIN_RALLY_TURNS = 2
 
 # ── 흡혈 박쥐 ──
 BAT_LIFESTEAL_RATIO = 0.20
@@ -30,6 +35,13 @@ BAT_SCREAM_TURNS = 2
 SLIME_SPLIT_COUNT = 2
 SLIME_SPLIT_HP_RATIO = 0.30
 SLIME_SPLIT_STAT_RATIO = 0.65
+# 분열은 본체가 이 비율 이하로 **살아있는 채** 떨어질 때 일어난다(브리프 3장).
+# 한 방에 이 구간을 건너뛰고 즉사시키면 사망 시점에 분열한다 — 어느 쪽이든
+# 전투당 1회(elite_pattern_used)이고, 총 HP 풀(본체 100% + 새끼 2×30%)은 같다.
+SLIME_SPLIT_TRIGGER_RATIO = 0.30
+# 살아있는 채 분열한 직후 본체가 건너뛰는 행동 수 — 새끼 둘이 한꺼번에 늘어난
+# 행동 수를 되돌려주는 자리다(빼면 같은 HP를 같은 턴에 더 많이 맞는다).
+SLIME_SPLIT_STUN_ACTIONS = 2
 
 # ── 원소 슬라임(화염/빙결/번개) ──
 FIRE_SLIME_STACK_THRESHOLD = 3
@@ -50,7 +62,12 @@ GOLEM_PHASE_STRIKE = 2
 ASSASSIN_MARK_INTERVAL = 3
 ASSASSIN_MARK_TURNS = 2
 ASSASSIN_MARK_BONUS = 0.25
-ASSASSIN_RETREAT_HP_THRESHOLD = 0.30
+# HP가 이 비율 이하가 되면 「추진력」(SPD +10%, 2턴). 예전 이름은 …_RETREAT_…였지만
+# 실제로 전장을 떠나는 코드는 없었다 — 브리프 3장의 "퇴각 시 보상 완화"는 있지도 않은
+# 동작을 고치려던 항목이라 구현하지 않기로 했다(BALANCE_PATCH_8.md).
+# 근거(실측): 퇴각을 넣으면 **암살자 단독 엘리트 승리의 38~93%에서 처치를 놓친다** —
+# 골드를 주고 경험치를 반만 깎아도 대부분의 판에서 엘리트 보상이 반토막 난다.
+ASSASSIN_SPRINT_HP_THRESHOLD = 0.30
 
 # ── 타락한 고위 사제 (2단계: 평시 → 준비 → 발동 후 평시로 복귀) ──
 PRIEST_REVIVE_HP_RATIO = 0.25

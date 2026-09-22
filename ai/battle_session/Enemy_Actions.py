@@ -152,6 +152,22 @@ class EnemyActionsMixin:
             frost_ward_retaliate(self.player, enemy, msgs)
 
     def _single_enemy_action_core(self, enemy, msgs: list):
+        # ── 분열 직후 본체 경직 (증식 슬라임) ──
+        # 어떤 판단보다 먼저 본다 — 이 행동은 통째로 사라진다. 버프/디버프 틱은
+        # 고블린 도주 분기와 같은 이유로 그대로 거친다(차례는 소비됐으므로).
+        if getattr(enemy, "split_stun", 0) > 0:
+            enemy.split_stun -= 1
+            msgs.append(f"{enemy.name}은(는) 아직 몸을 추스르지 못했다! "
+                        f"(남은 {enemy.split_stun}회)")
+            self.logs.append(TurnLog(
+                turn=self.turn, actor="enemy", action="watch", action_detail="split_stun",
+                hp_after=enemy.hp, mp_after=enemy.mp,
+            ))
+            enemy.tick_buffs()
+            enemy.tick_debuffs()
+            self.player.tick_debuffs()
+            return
+
         # ── 사제 전용 행동 (다른 아군 회복/버프) ──
         # enemy_type이 "사제"면 별도 로직 사용. 일반 EnemyAI 안 거침.
         # ⚠ return 제거 — 메서드 끝의 tick 처리(buff/debuff 1턴 감소)를
