@@ -16,8 +16,11 @@ rogue_band_measure.py — 도적 고레벨 구간을 밴드 안으로 되돌릴 
     `max(5, min(85, luc*3 - i*20))`로 **LUC가 정한다**(`ai/battle/Skills.py:roll_multi_hit_count`).
     기대 배율 Lv5 1.07 → Lv15 1.73 → **Lv20 2.20** → Lv25 2.24(포화). 레벨만으로 2배가 된다.
   · LUC는 **도적만 자란다**(`0.6 + lv//6`; 전사 `lv%2` · 마법사 `lv%4`는 진동만 한다).
-  · 그리고 `PlayerPowerIndex.calc`는 HP/MP/아이템/max(stg,sp)/SPD/스킬축만 본다 — **LUC 항이 아예 없다.**
-    SPD는 최소한 계단이라도 있지만(≥14에서 +0.15, 도적은 Lv1부터 포화) LUC는 감시 자체가 없다.
+  · 그리고 `PlayerPowerIndex.calc`의 **지수는 LUC로 움직이지 않는다** — `_skill_expected_dmg`가
+    `multi_hit` 기대 타수를 `min(2.0 + luc*0.05, max_hits)`로 추정하긴 하는데, `calc()`가 그 값을
+    `skill_power > 0` 한 줄로만 써서 크기를 버린다(LUC 38.9와 30.5의 지수가 똑같이 1.79).
+    ※ 다만 **튜너 자체는 측정 승률로 이진탐색을 돌아** 도적이 약해지면 몬스터도 내려간다 —
+      실측 폭은 LUC −22%에 몬스터 HP 0 ~ −4.6%로 작다. 보스는 튜너를 아예 안 거친다.
   → 즉 도적의 미보정 성장축은 SPD가 아니라 **LUC → 연속찌르기 타수**다.
 
 레버가 갈리는 지점: 「연속찌르기」는 **단일 대상**이다. 다대일에서는 balanced가 `aoe`인 「난사1」을

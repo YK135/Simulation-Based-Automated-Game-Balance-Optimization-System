@@ -12,9 +12,13 @@ test_rogue_scaling.py — 도적 고레벨 스케일링의 "의도된 수치" �
      타수가 `max(5, min(85, luc*3 - i*20))`이라 LUC가 곧 화력이다.
   2. 도적만 LUC·SPD가 자란다 — `0.6 + lv//6` · `0.9 + lv//8`.
      전사(`lv%2`)·마법사(`lv%4`)는 진동만 하고 커지지 않는다.
-  3. ★ `PlayerPowerIndex.calc`에는 **LUC 항이 없다** — LUC만 다른 두 플레이어의 지수가 같다.
-     이건 버그 보고가 아니라 **알려진 미보정 축**이다(SPD는 ≥14에서 +0.15인 계단이라도 있다).
-     여기에 LUC 항을 넣는 것은 일반 몬스터를 전부 올리는 변경이라 전 구간 재측정이 필요하다.
+  3. ★ `PlayerPowerIndex.calc`의 **지수가 LUC로 안 움직인다** — LUC만 다른 두 플레이어의 지수가 같다.
+     LUC를 참조하지 않는다는 뜻이 **아니다**: `_skill_expected_dmg`가 `multi_hit` 기대 타수를
+     `min(2.0 + luc*0.05, max_hits)`로 추정한다. 다만 `calc()`가 그 값을 `skill_power > 0`
+     한 줄로만 써서 크기가 버려진다. 버그 보고가 아니라 **알려진 성질**이다.
+     ※ 튜너 전체가 LUC에 둔감하다는 뜻도 아니다 — `StatTuner.tune()`은 지수가 아니라 측정
+       승률로 이진탐색을 돌아 LUC 변화를 일부 흡수한다(실측: LUC −22%에 몬스터 HP 0~−4.6%).
+     지수에 LUC 항을 넣는 것은 목표 승률을 바꾸는 변경이라 전 구간 재측정이 필요하다.
      넣게 되면 이 테스트의 [3]을 그때 같이 고쳐라.
   4. 유령의 다단히트 회피 패널티가 살아 있다 — 타수를 깎는 레버(prob_decay·max_hits)는
      유령의 설계된 대응 수단을 같이 깎는다는 뜻이라, 기각 근거의 일부다.
@@ -87,7 +91,7 @@ check("LUC 100도 4타 고정은 아니다 — 85% 상한이 살아 있다",
       sum(hi_hits) / len(hi_hits))
 check("어떤 LUC에서도 max_hits를 못 넘는다", max(lo_hits + hi_hits) <= m["max_hits"])
 
-print("\n[3] ★ PlayerPowerIndex는 LUC를 안 본다 (알려진 미보정 축 — 고치면 전 구간 재측정)")
+print("\n[3] ★ PlayerPowerIndex의 지수는 LUC로 안 움직인다 (참조는 하되 > 0 판정으로 뭉갠다)")
 base = snap(luc=6)
 lucky = snap(luc=60)
 check("LUC만 다른 두 플레이어의 지수가 같다",
