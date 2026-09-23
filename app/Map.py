@@ -69,6 +69,13 @@ _ITEM_DROP_POOL = [
 
 NORMAL_GRADE_POOL  = {"하": 0.35, "중": 0.45, "상": 0.20}
 NORMAL_GRADE_3     = {"하": 0.45, "중": 0.55}          # 3마리: hard 금지
+
+# ⚠️ 아래 두 표와 _early_game_multi_scale()은 **더 이상 실전 경로에서 쓰이지 않는다.**
+#   다대일이 튜너를 우회하면서(12차: 일반, 13차: 엘리트 2마리) "할인"이라는 전제가
+#   깨졌고, _multi_stat_scale() / _elite_stat_scale()의 **가산** 사다리가 대신한다.
+#   지우지 않고 남겨 둔 이유는 둘뿐이다 — (1) 예전 측정 기록을 재현하는
+#   TestFile/rogue_band_measure.py가 아직 import한다, (2) "다대일은 할인이었다"는
+#   과거 설계를 읽을 수 있게 한다. **새 코드에서 쓰지 말 것.**
 STAT_SCALE         = {1: 1.00, 2: 0.90, 3: 0.80}
 ELITE_STAT_SCALE   = {1: 1.00, 2: 0.90}
 
@@ -79,8 +86,9 @@ def _early_game_multi_scale(player_lv: int) -> float:
     Lv1~5 구간에서는 단일 대상 스킬로 3마리를 상대해야 해서 기존 -20%
     보정만으로는 부족했음 (MC 실측: 전사 Lv1 1v3 30%, 목표 45%↑).
 
-    ★ 지금은 **엘리트 노드에서만** 쓴다. 일반 다대일은 _multi_stat_scale()이
-      대신하며, 그쪽이 이 완화까지 흡수했다(Lv5 이하는 배율이 가장 낮다).
+    ⚠️ **지금은 어떤 실전 경로에서도 안 쓴다.** 일반 다대일은 _multi_stat_scale(),
+      엘리트는 _elite_stat_scale()이 맡고 두 사다리가 이 완화까지 흡수했다.
+      TestFile/rogue_band_measure.py가 옛 규칙을 재현하느라 아직 import한다.
 
     ★ game/Enemy_Class.py의 _level_curve_mult()와는 별개 배율(다른 문제를
       겨냥함)이라 두 배율이 함께 곱해진다 — 밸런스 재조정 시 이 함수만
@@ -115,11 +123,40 @@ _MULTI_SCALE_LADDER = {
 }
 
 
+# ── 엘리트 다대일 배율 ────────────────────────────────────────────
+# ★ **단독 엘리트에는 적용하지 않는다(1.0).** 측정으로 단독은 이미 밴드 안이었다 —
+#   전 직업 × Lv5~25의 15칸이 47.7~69.6%다(TestFile/elite_scale_measure.out).
+#   즉 튜너는 "하드 튜닝 몬스터 + 패턴"을 제대로 맞추고 있다. 문제는 2마리뿐이고,
+#   그건 12차에서 일반 다대일을 고친 것과 정확히 같은 범주 오류다
+#   (1v1용으로 튜닝된 상대를 둘 붙이고 0.90만 곱했다 → 전 직업 0.0~14.6%).
+#
+# 그래서 처방도 2마리에만 건다 — 리더·동료를 등급 팩토리 「상」으로 뽑고(_make_elite_encounter)
+#   아래 가산을 곱한다. 값은 실전 경로 그대로 잰 하이브리드 스윕에서 읽었다
+#   (N=120/셀, TestFile/elite_scale_measure.out, HYBRID=1).
+#
+# 일반 2마리 사다리(1.9→1.3)보다 낮은 이유: 엘리트는 둘 다 「상」 등급이고 리더에 패턴이
+#   붙으므로 출발선이 더 높다. 일반 2마리 풀은 하35/중45/상20이 섞인다.
+_ELITE_SCALE_LADDER = [(5, 1.5), (10, 1.5), (15, 1.3), (20, 1.2), (999, 1.1)]
+
+
+def _elite_stat_scale(player_lv: int, n: int) -> float:
+    """엘리트 노드에서 적이 n마리일 때 몬스터 스탯에 곱할 배율.
+
+    n == 1이면 1.0 — 단독 엘리트는 튜너가 이미 맞춰 놨으므로 건드리지 않는다.
+    """
+    if n <= 1:
+        return 1.0
+    for max_lv, mult in _ELITE_SCALE_LADDER:
+        if player_lv <= max_lv:
+            return mult
+    return _ELITE_SCALE_LADDER[-1][1]
+
+
 def _multi_stat_scale(player_lv: int, n: int) -> float:
     """일반 전투 노드에서 적이 n마리일 때 몬스터 스탯에 곱할 배율.
 
     n == 1이면 1.0(보정 없음 — 그 칸은 자동 튜너가 맡는다).
-    엘리트는 여기를 쓰지 않는다(ELITE_STAT_SCALE + _early_game_multi_scale 유지).
+    엘리트는 _elite_stat_scale()을 쓴다(단독은 1.0 — 튜너가 이미 맞춰 놨다).
     """
     if n <= 1:
         return 1.0
@@ -226,7 +263,7 @@ def _make_enemies(hook, n: int, grade_pool: dict, chapter: int = 1, layer: int =
       보스가 이미 같은 이유로 튜너를 우회한다(Make_MidBoss/Make_FinalBoss는
       _apply_grade도 거치지 않고 직접 튜닝). 다대일도 같은 부류로 옮긴 것이고,
       그래서 다대일의 난이도 조절은 이제 손으로 맞춘 곡선
-      (_level_curve_mult · STAT_SCALE · _early_game_multi_scale)이 전담한다.
+      (_level_curve_mult · _multi_stat_scale)이 전담한다.
 
       ※ n >= 2에서도 hook.get_enemy()가 하던 **백그라운드 튜닝 예열은 유지**한다 —
         그 몬스터를 나중에 1v1로 만날 때 폴백을 쓰지 않도록.
@@ -262,13 +299,25 @@ def _make_enemies(hook, n: int, grade_pool: dict, chapter: int = 1, layer: int =
     return enemies, grades
 
 
-def _make_elite_encounter(hook, chapter: int = 1, layer: int = 1):
-    """엘리트 노드 전용 — 리더 1마리(패턴 보유) + 필요 시 동료 1마리(일반 hard 등급).
+def _make_elite_encounter(hook, chapter: int = 1, layer: int = 1, player_lv: int = None):
+    """엘리트 노드 전용 — 리더 1마리(패턴 보유) + 필요 시 동료 1마리.
 
     리더 타입은 ELITE_CHAPTER_POOL[chapter]에서 뽑고, 증식 슬라임(_ELITE_SOLO_ONLY)은
     항상 단독, 사제(_ELITE_PAIR_ONLY)는 항상 동료 필수, 그 외는 기존처럼 랜덤 1~2마리.
-    동료는 일반 CHAPTER_TIER_POOL에서 hard 등급으로 뽑아 elite_leader=False로 둔다
-    (패턴 없는 평범한 hard 몬스터 — 리더의 패턴만 발동)."""
+    동료는 일반 CHAPTER_TIER_POOL에서 뽑아 elite_leader=False로 둔다
+    (패턴 없는 평범한 몬스터 — 리더의 패턴만 발동).
+
+    ★ **단독이면 튜너(hook.get_enemy hard), 2마리면 등급 팩토리 「상」**이다.
+      측정으로 갈린 결과다 — 단독은 전 직업 × Lv5~25의 15칸이 47.7~69.6%로 이미
+      밴드 안인데(튜너가 패턴까지 포함해 제대로 맞추고 있다) 2마리는 0.0~14.6%다.
+      2마리 쪽은 12차에서 일반 다대일을 고친 것과 같은 범주 오류이므로 같은 처방을
+      쓰고, 단독은 손대지 않는다. 단독까지 등급으로 바꾸면 100%가 된다(실측).
+
+    ★ **배율을 이 함수 안에서 적용해서 돌려준다** — 호출부가 셋(app/Map.py의 라우트,
+      app/Master.py, TestFile/montecarlo.py)인데 이미 갈라져 있었다(montecarlo만
+      _early_game_multi_scale을 빼먹어, 스윕이 재는 저레벨 엘리트가 실전과 달랐다).
+      호출부에서 또 곱하지 말 것.
+    """
     leader_type = choice(ELITE_CHAPTER_POOL.get(chapter) or ELITE_CHAPTER_POOL[1])
 
     if leader_type in _ELITE_SOLO_ONLY:
@@ -278,7 +327,12 @@ def _make_elite_encounter(hook, chapter: int = 1, layer: int = 1):
     else:
         paired = randint(1, 2) == 2
 
-    leader_snap = hook.get_enemy(leader_type, difficulty="hard", chapter=chapter)
+    if paired:
+        # 2마리 — 등급 팩토리(튜너 우회). 나중에 이 종류를 단독으로 만날 때를 위해 예열만.
+        leader_snap = hook.make_graded_enemy(leader_type, "상")
+        hook.prewarm(leader_type, chapter)
+    else:
+        leader_snap = hook.get_enemy(leader_type, difficulty="hard", chapter=chapter)
     leader_unit = hook.make_battle_unit(leader_snap)
     leader_unit.is_elite = True
     leader_unit.elite_leader = True
@@ -298,11 +352,15 @@ def _make_elite_encounter(hook, chapter: int = 1, layer: int = 1):
         pool = CHAPTER_TIER_POOL.get((chapter, tier)) or CHAPTER_TIER_POOL[(2, "late")]
         escort_pool = [t for t in pool if t != "사제"] or pool
         escort_type = choice(escort_pool)
-        escort_snap = hook.get_enemy(escort_type, difficulty="hard", chapter=chapter)
+        escort_snap = hook.make_graded_enemy(escort_type, "상")
+        hook.prewarm(escort_type, chapter)
         escort_unit = hook.make_battle_unit(escort_snap)
         enemies.append(escort_unit)
         grades.append("상")
 
+    if player_lv is None:
+        player_lv = getattr(getattr(hook, "player", None), "lv", 1)
+    _apply_stat_scale(enemies, _elite_stat_scale(player_lv, len(enemies)))
     return enemies, grades
 
 
@@ -602,10 +660,12 @@ def map_choose():
         hook = gs["hook"]
 
         if node_type == "elite":
-            # ── 엘리트: 리더(패턴 보유) + 필요 시 동료 1마리, hard 고정 ──
-            enemies, grades = _make_elite_encounter(hook, chapter, layer=node.layer)
+            # ── 엘리트: 리더(패턴 보유) + 필요 시 동료 1마리 ──
+            # ★ 배율은 _make_elite_encounter()가 이미 적용해서 돌려준다 — 여기서 또 곱하지 말 것.
+            enemies, grades = _make_elite_encounter(hook, chapter, layer=node.layer,
+                                                    player_lv=player.lv)
             n_enemies = len(enemies)
-            scale     = ELITE_STAT_SCALE.get(n_enemies, ELITE_STAT_SCALE[2])
+            scale     = 1.0
         else:
             # ── 일반: 1~3마리, 3마리일 때 hard 금지 ──
             rd = randint(1, 20)
@@ -616,10 +676,6 @@ def map_choose():
             scale      = _multi_stat_scale(player.lv, n_enemies)
             enemies, grades = _make_enemies(hook, n_enemies, grade_pool, chapter,
                                              layer=node.layer)
-
-        if n_enemies > 1 and node_type == "elite":
-            # 엘리트는 여전히 튜닝된 몬스터를 쓰므로 기존 할인 체계를 유지한다.
-            scale *= _early_game_multi_scale(player.lv)
 
         # 다대일 스탯 보정 (BattleSession 내 보정과 중복 방지 — 외부에서만 처리)
         if n_enemies > 1:

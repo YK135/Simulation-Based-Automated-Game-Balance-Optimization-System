@@ -154,7 +154,7 @@ def master_battle_elite():
     if gs.get("battle"):
         return jsonify({"ok": False, "error": "전투 중에는 사용할 수 없습니다."}), 400
 
-    from .Map import _make_elite_encounter, _apply_stat_scale, _early_game_multi_scale, ELITE_STAT_SCALE
+    from .Map import _make_elite_encounter
 
     data    = _get_json_body()
     chapter = data.get("chapter")
@@ -173,15 +173,11 @@ def master_battle_elite():
     #   풀에서 뽑을지만 결정하는 테스트용 오버라이드.
     hook  = gs["hook"]
     layer = gs.get("battle_map_layer") or 1
-    enemies, _grades = _make_elite_encounter(hook, chapter=chapter, layer=layer)
-
-    # 실제 노드맵 엘리트 스폰(app/Map.py choose_node)과 동일한 다대일 보정 —
-    # BattleSession은 더 이상 자체적으로 이 보정을 하지 않으므로 여기서
-    # 반드시 한 번 적용해야 실제 맵 엘리트전과 강함이 같아진다.
-    if len(enemies) > 1:
-        scale = ELITE_STAT_SCALE.get(len(enemies), ELITE_STAT_SCALE[2])
-        scale *= _early_game_multi_scale(gs["player"].lv)
-        _apply_stat_scale(enemies, scale)
+    # ★ 다대일 보정은 _make_elite_encounter()가 안에서 적용해 돌려준다 — 여기서 또
+    #   곱하면 두 번 걸린다. 예전엔 이 세 호출부가 각자 곱했고 실제로 갈라져 있었다
+    #   (montecarlo.py만 _early_game_multi_scale을 빼먹어 저레벨 엘리트가 실전과 달랐다).
+    enemies, _grades = _make_elite_encounter(hook, chapter=chapter, layer=layer,
+                                             player_lv=gs["player"].lv)
 
     gs["battle_node_type"] = "elite"
     gs["pending_node_id"]  = None

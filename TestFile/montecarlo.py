@@ -135,10 +135,10 @@ def build_battle(btype, plv, job):
         return [EntitySnapshot.from_enemy(u)], [u], True
 
     if btype == "elite":
-        units, _grades = _make_elite_encounter(hook, chapter, layer=layer)
-        n = len(units)
-        if n > 1:
-            _apply_stat_scale(units, ELITE_STAT_SCALE.get(n, ELITE_STAT_SCALE[2]))
+        # 배율은 _make_elite_encounter()가 안에서 적용한다(여기서 또 곱하면 두 번 걸린다).
+        # ★ 예전엔 이 줄이 ELITE_STAT_SCALE만 곱하고 _early_game_multi_scale을 빼먹어서,
+        #   스윕이 재는 저레벨 엘리트가 실전보다 20% 셌다.
+        units, _grades = _make_elite_encounter(hook, chapter, layer=layer, player_lv=plv)
         esnaps = [EntitySnapshot.from_enemy(u) for u in units]
         return esnaps, units, False
 

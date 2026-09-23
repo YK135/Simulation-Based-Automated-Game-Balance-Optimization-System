@@ -22,7 +22,8 @@ import sys, os
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from app.Map import (
-    _multi_stat_scale, _apply_stat_scale, _make_enemies,
+    _multi_stat_scale, _elite_stat_scale, _apply_stat_scale,
+    _make_enemies, _make_elite_encounter,
     STAT_SCALE, ELITE_STAT_SCALE, NORMAL_GRADE_POOL, NORMAL_GRADE_3,
 )
 
@@ -122,11 +123,49 @@ e = _Snap()
 _apply_stat_scale([e], 0.8)
 check("할인도 그대로 동작한다 (엘리트 경로)", e.hp == 80 and e.stg == 8.0, (e.hp, e.stg))
 
-print("\n[4] 엘리트는 이 경로를 쓰지 않는다")
-check("ELITE_STAT_SCALE은 여전히 할인이다",
+print("\n[4] 엘리트 — 단독은 튜너 유지, 2마리만 등급 팩토리 + 가산")
+# ★ 단독 엘리트는 실측으로 이미 밴드 안이다(전 직업 × Lv5~25 = 47.7~69.6%).
+#   여기를 등급 팩토리로 바꾸면 100%가 된다 — 그래서 단독은 손대지 않는다.
+check("단독 엘리트는 배율 1.0 (건드리지 않는다)",
+      all(_elite_stat_scale(lv, 1) == 1.0 for lv in (1, 5, 10, 15, 20, 25)))
+e2 = [_elite_stat_scale(lv, 2) for lv in (1, 5, 10, 15, 20, 25)]
+check("엘리트 2마리는 가산이다 (> 1.0)", all(x > 1.0 for x in e2), e2)
+check("레벨과 함께 단조 감소", all(a >= b for a, b in zip(e2, e2[1:])), e2)
+check("일반 2마리 가산보다 낮다 (엘리트는 둘 다 「상」 + 리더 패턴이라 출발선이 높다)",
+      all(_elite_stat_scale(lv, 2) < _multi_stat_scale(lv, 2) for lv in (5, 10, 15, 20, 25)),
+      [(_elite_stat_scale(lv, 2), _multi_stat_scale(lv, 2)) for lv in (5, 10, 15, 20, 25)])
+
+# 경로 분기 — 단독은 get_enemy(튜너), 2마리는 make_graded_enemy(등급)
+import app.Map as _M
+import random as _rnd
+solo_hits = pair_hits = 0
+for seed in range(60):
+    h = _FakeHook()
+    _rnd.seed(seed)
+    units, _g = _make_elite_encounter(h, chapter=2, layer=4, player_lv=10)
+    if len(units) == 1:
+        solo_hits += 1
+        if not (len(h.tuned_calls) == 1 and len(h.graded_calls) == 0):
+            solo_hits = -999
+    else:
+        pair_hits += 1
+        if not (len(h.graded_calls) == 2 and len(h.tuned_calls) == 0):
+            pair_hits = -999
+check("단독 엘리트는 튜너만 부른다", solo_hits > 0, solo_hits)
+check("2마리 엘리트는 등급 팩토리만 부르고 튜너는 안 부른다", pair_hits > 0, pair_hits)
+
+# 배율을 호출부가 아니라 이 함수가 적용한다 (호출부 셋이 갈라졌던 자리)
+h = _FakeHook()
+_rnd.seed(1)
+units, _g = _make_elite_encounter(h, chapter=2, layer=4, player_lv=10)
+if len(units) > 1:
+    check("2마리면 함수가 이미 배율을 적용해서 돌려준다 (호출부가 또 곱하면 안 된다)",
+          units[0].hp != 100.0, units[0].hp)
+else:
+    check("단독이면 스탯을 건드리지 않는다", units[0].hp == 100.0, units[0].hp)
+
+check("(대조) 옛 ELITE_STAT_SCALE은 할인이었다 — 실전 경로에서는 더 이상 안 쓴다",
       ELITE_STAT_SCALE[2] < 1.0, ELITE_STAT_SCALE)
-check("엘리트 2마리 할인이 일반 2마리 가산과 다르다 (같은 값이면 배선이 섞인 것)",
-      ELITE_STAT_SCALE[2] != _multi_stat_scale(10, 2))
 
 print(f"\n결과: {PASS} passed, {FAIL} failed")
 sys.exit(1 if FAIL else 0)
