@@ -78,7 +78,9 @@ def _early_game_multi_scale(player_lv: int) -> float:
     확률로 3마리가 나올 수 있는데, 전사가 광역기(슬래시1)를 배우기 전인
     Lv1~5 구간에서는 단일 대상 스킬로 3마리를 상대해야 해서 기존 -20%
     보정만으로는 부족했음 (MC 실측: 전사 Lv1 1v3 30%, 목표 45%↑).
-    STAT_SCALE/ELITE_STAT_SCALE 위에 곱해서 적용.
+
+    ★ 지금은 **엘리트 노드에서만** 쓴다. 일반 다대일은 _multi_stat_scale()이
+      대신하며, 그쪽이 이 완화까지 흡수했다(Lv5 이하는 배율이 가장 낮다).
 
     ★ game/Enemy_Class.py의 _level_curve_mult()와는 별개 배율(다른 문제를
       겨냥함)이라 두 배율이 함께 곱해진다 — 밸런스 재조정 시 이 함수만
@@ -90,6 +92,44 @@ def _early_game_multi_scale(player_lv: int) -> float:
     return 1.0
 
 
+# ── 일반 다대일 배율 (튜너 우회 경로 전용) ──────────────────────────
+# ★ 할인이 아니라 **가산**이다. STAT_SCALE(0.90/0.80)은 "1v1이 약 55%가 되게
+#   튜닝된 칼날 위 몬스터"를 n마리 붙일 때의 할인이었다. _make_enemies가
+#   다대일에서 튜너를 우회하면서 전제가 깨졌다 — 등급 팩토리 몬스터는 1v1
+#   승률이 이미 100% 수준이라, 깎아 주면 2~3마리도 90~100%가 된다
+#   (우회 직후 전 구간 스윕 실측: 1v2 0/18칸 · 1v3 1/18칸만 밴드 안).
+#
+# 값은 실전 경로 그대로 잰 배율 스윕에서 읽었다(N=60/셀, 3직업 × 1.0/1.2/1.4/1.6,
+#   TestFile/multi_scale_measure.out). 3마리는 레벨 사다리가 깨끗하게 나왔다 —
+#   세 직업이 **동시에** 밴드에 드는 배율이 Lv5 1.6 · Lv10 1.4 · Lv15 1.2 · Lv20 1.0이다.
+#   레벨이 오를수록 가산이 줄어드는 이유는 _level_curve_mult()가 이미 레벨당
+#   +6%씩 몬스터를 올려 주기 때문이다(두 배율이 곱해진다 — 위 주석 참고).
+#
+# 2마리가 3마리보다 큰 가산을 원하는 건 이상해 보이지만 출발선이 다르다 —
+#   NORMAL_GRADE_3가 「상」을 금지해서(하45/중55) 3마리 노드는 애초에 약한
+#   등급만 나온다. 2마리 풀은 상20이 섞인다.
+_MULTI_SCALE_LADDER = {
+    # n: [(이 레벨 이하, 배율), ...] — 위에서부터 처음 맞는 칸
+    2: [(5, 1.9), (10, 1.6), (15, 1.5), (20, 1.4), (999, 1.3)],
+    3: [(5, 1.6), (10, 1.4), (15, 1.2), (999, 1.0)],
+}
+
+
+def _multi_stat_scale(player_lv: int, n: int) -> float:
+    """일반 전투 노드에서 적이 n마리일 때 몬스터 스탯에 곱할 배율.
+
+    n == 1이면 1.0(보정 없음 — 그 칸은 자동 튜너가 맡는다).
+    엘리트는 여기를 쓰지 않는다(ELITE_STAT_SCALE + _early_game_multi_scale 유지).
+    """
+    if n <= 1:
+        return 1.0
+    ladder = _MULTI_SCALE_LADDER.get(n) or _MULTI_SCALE_LADDER[3]
+    for max_lv, mult in ladder:
+        if player_lv <= max_lv:
+            return mult
+    return ladder[-1][1]
+
+
 def _pick_grade(pool: dict) -> str:
     """가중치 기반 난이도 선택."""
     from random import choices as _rc
@@ -99,8 +139,13 @@ def _pick_grade(pool: dict) -> str:
 
 
 def _apply_stat_scale(enemies: list, scale: float) -> None:
-    """다대일 스탯 보정 적용 (인플레이스)."""
-    if scale >= 1.0:
+    """다대일 스탯 보정 적용 (인플레이스).
+
+    ★ 예전엔 `scale >= 1.0`이면 곧바로 반환했다(할인 전용이었으므로). 일반
+      다대일이 튜너를 우회하면서 _multi_stat_scale()이 1.0을 넘는 **가산**을
+      돌려주게 됐고, 그 조기 반환이 남아 있으면 가산이 통째로 무시된다.
+      이제 1.0(정확히)일 때만 아무것도 하지 않는다."""
+    if scale == 1.0:
         return
     for e in enemies:
         for attr in ("hp", "maxhp"):
@@ -161,16 +206,35 @@ def _make_enemies(hook, n: int, grade_pool: dict, chapter: int = 1, layer: int =
     ※ 구 방식(플레이어 레벨 min_lv 기반 hook.pick_random_enemy_type)은 폐기 —
       챕터+노드 구간 기준 고정 풀(CHAPTER_TIER_POOL)에서만 출현.
 
-    ※ BALANCE_PATCH_3에서 hook.get_encounter() 기반 그룹 튜닝을 여기 연결해
-      다대일 스탯도 개별 1v1 대신 실제 그룹 승률로 튜닝해봤으나, 검증
-      과정에서 승률-배율 곡선이 가파른(cliff형) 조합에 대해 이진탐색이
-      n=150 표본으로는 재현 불가능한 값에 수렴하는 문제가 확인됐다 — 같은
-      조합/목표를 두 번 다시 튜닝하면 배율이 0.15↔0.385처럼 서로 다르게
-      나오고, 그 값을 그대로 다시 측정하면 목표(약 67%)와 무관하게 6%~93%
-      사이 아무 값이나 나온다. 그래서 연결을 철회했다(BALANCE_PATCH_3.md
-      참고). get_encounter() 자체와 MultiBattleSimulator의 enemy_count
-      버그 수정은 남겨뒀지만 이 함수는 다시 개별 get_enemy() + 호출부의
-      STAT_SCALE로 돌아간다."""
+    ★ n == 1이면 자동 튜닝(hook.get_enemy), n >= 2면 등급 팩토리
+      (hook.make_graded_enemy) — **다대일은 튜너를 거치지 않는다.**
+
+      튜너는 "1v1이 목표 승률(약 55%)이 되도록" 몬스터 하나를 맞춘다. 그렇게
+      칼날 위에 세운 상대를 2~3마리 뽑아 평평한 STAT_SCALE(0.90/0.80)만
+      곱하면 산수가 안 맞는다 — 턴제에서 n마리는 받는 피해도, 깎아야 할 HP도
+      n배다. 실측(N=150, 실전 스폰 규칙 그대로):
+
+          1v1  전사 46.7/53.3/62.0 · 마법사 58.0/50.7/56.7 · 도적 56.0/64.7/57.3  (Lv10/15/20)
+          1v2  전 직업 0.0 ~ 1.3%
+          1v3  전 직업 0.0 ~ 0.7%   ← 패배 시 적 HP가 63~93% 남는다
+
+      접전이 아니라 계산이 성립하지 않는 것이다. 같은 칸을 등급 팩토리로
+      바꾸면 절벽이 곡선이 된다(전사 1v3: Lv10 100% → Lv15 68% → Lv20 20%).
+      이유는 단순하다 — 튜닝된 몬스터는 "1v1에서 간신히 이기는" 상대라 둘이
+      되면 즉시 뒤집히지만, 등급 몬스터는 여유가 있어 마릿수에 완만하게 반응한다.
+
+      보스가 이미 같은 이유로 튜너를 우회한다(Make_MidBoss/Make_FinalBoss는
+      _apply_grade도 거치지 않고 직접 튜닝). 다대일도 같은 부류로 옮긴 것이고,
+      그래서 다대일의 난이도 조절은 이제 손으로 맞춘 곡선
+      (_level_curve_mult · STAT_SCALE · _early_game_multi_scale)이 전담한다.
+
+      ※ n >= 2에서도 hook.get_enemy()가 하던 **백그라운드 튜닝 예열은 유지**한다 —
+        그 몬스터를 나중에 1v1로 만날 때 폴백을 쓰지 않도록.
+      ※ 이전 시도: BALANCE_PATCH_3의 hook.get_encounter() 그룹 튜닝은 연결했다가
+        철회했다(이진탐색이 계단형 목적함수에서 재현 불가능한 값에 수렴 —
+        같은 조합을 두 번 튜닝하면 배율이 0.15↔0.385로 갈렸다). 그 계단은 튜너
+        입력 버그(d614105)를 고친 뒤에도 그대로 남아 있음을 재측정으로 확인했다.
+        get_encounter()는 구현·테스트된 상태로 남아 있지만 연결하지 않는다."""
     tier = _node_tier(layer)
     pool = CHAPTER_TIER_POOL.get((chapter, tier)) or CHAPTER_TIER_POOL[(2, "late")]
 
@@ -184,8 +248,14 @@ def _make_enemies(hook, n: int, grade_pool: dict, chapter: int = 1, layer: int =
 
         grade      = _pick_grade(grade_pool)
         diff_key   = _GRADE_TO_KEY.get(grade, "normal")
-        # difficulty 파라미터로 원하는 난이도 직접 지정
-        snap       = hook.get_enemy(enemy_type, difficulty=diff_key, chapter=chapter)
+        if n > 1:
+            # 다대일 — 등급 팩토리(튜너 우회). 위 docstring 참고.
+            snap = hook.make_graded_enemy(enemy_type, grade)
+            # 이 종류를 나중에 1v1로 만날 때를 위해 예열만 걸어 둔다(결과는 안 쓴다).
+            hook.prewarm(enemy_type, chapter)
+        else:
+            # 단독 — difficulty 파라미터로 원하는 난이도 직접 지정
+            snap = hook.get_enemy(enemy_type, difficulty=diff_key, chapter=chapter)
         unit       = hook.make_battle_unit(snap)
         enemies.append(unit)
         grades.append(grade)
@@ -541,11 +611,14 @@ def map_choose():
             rd = randint(1, 20)
             n_enemies  = 1 if rd <= 11 else (2 if rd <= 15 else 3)
             grade_pool = NORMAL_GRADE_3 if n_enemies == 3 else NORMAL_GRADE_POOL
-            scale      = STAT_SCALE[n_enemies]
+            # ★ 일반 다대일은 STAT_SCALE(할인)이 아니라 _multi_stat_scale(가산)을 쓴다
+            #   — _make_enemies가 이 칸에서 튜너를 우회하기 때문. 그쪽 docstring 참고.
+            scale      = _multi_stat_scale(player.lv, n_enemies)
             enemies, grades = _make_enemies(hook, n_enemies, grade_pool, chapter,
                                              layer=node.layer)
 
-        if n_enemies > 1:
+        if n_enemies > 1 and node_type == "elite":
+            # 엘리트는 여전히 튜닝된 몬스터를 쓰므로 기존 할인 체계를 유지한다.
             scale *= _early_game_multi_scale(player.lv)
 
         # 다대일 스탯 보정 (BattleSession 내 보정과 중복 방지 — 외부에서만 처리)

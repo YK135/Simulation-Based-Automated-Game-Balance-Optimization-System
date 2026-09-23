@@ -35,6 +35,7 @@ import random as _random_mod
 from app.Map import (
     _make_enemies, _make_elite_encounter,
     STAT_SCALE, ELITE_STAT_SCALE, _early_game_multi_scale, _apply_stat_scale,
+    _multi_stat_scale,
     NORMAL_GRADE_POOL, NORMAL_GRADE_3,
 )
 
@@ -145,8 +146,9 @@ def build_battle(btype, plv, job):
     grade_pool = NORMAL_GRADE_3 if n == 3 else NORMAL_GRADE_POOL
     units, _grades = _make_enemies(hook, n, grade_pool, chapter, layer=layer)
     if n > 1:
-        scale = STAT_SCALE[n] * _early_game_multi_scale(plv)
-        _apply_stat_scale(units, scale)
+        # 일반 다대일은 app/Map.py와 같은 규칙 — 튜너 우회 + 가산 배율.
+        # (예전엔 STAT_SCALE[n] * _early_game_multi_scale(plv)였다.)
+        _apply_stat_scale(units, _multi_stat_scale(plv, n))
     esnaps = [EntitySnapshot.from_enemy(u) for u in units]
     return esnaps, units, False
 

@@ -242,10 +242,28 @@ class BalanceHook:
         Enemy_Class의 Make_Goblin / Make_Bat 중급 기준으로 생성 → 수치 출처 단일화.
         폴백 사용 여부는 로그로 기록한다.
         """
-        maker = self._FALLBACK_MAKERS.get(enemy_type, Make_Goblin)
-        unit  = maker(self.player.lv, "중")
         if self.verbose:
             print(f"  [AI] 시뮬 대기 중 — {enemy_type} 폴백 사용 (Lv{self.player.lv} 중급 기준)")
+        return self.make_graded_enemy(enemy_type, "중")
+
+    # 난이도 라벨 — 등급 팩토리 경로도 튜닝 경로와 같은 라벨을 달아야
+    # UI/로그가 두 경로를 구분 없이 읽을 수 있다.
+    _GRADE_DIFFICULTY = {"하": "easy", "중": "normal", "상": "hard"}
+
+    def make_graded_enemy(self, enemy_type: str, grade: str = "중") -> EntitySnapshot:
+        """등급(하/중/상) 팩토리로 몬스터를 만든다 — **자동 튜닝을 거치지 않는다.**
+
+        쓰는 곳:
+          · 시뮬 대기 중 폴백(_make_fallback).
+          · **다대일 노드**(app/Map.py의 _make_enemies) — 2마리 이상은 이 경로를 쓴다.
+            이유는 그쪽 주석에 길게 적어 뒀다: 튜너는 1v1이 목표 승률(약 55%)이 되도록
+            몬스터를 맞추는데, 그 "칼날 위" 상대를 2~3마리 붙이면 산수상 이길 수 없다.
+            실측(N=150, 실전 스폰 규칙): 1v1은 46.7~64.7%로 정확한데 1v2/1v3은 전 직업
+            0.0~1.3%였고, 패배 시 적 HP가 63~93% 남았다. 보스 팩토리가 이미 같은 이유로
+            튜너를 우회한다(Make_MidBoss/Make_FinalBoss).
+        """
+        maker = self._FALLBACK_MAKERS.get(enemy_type, Make_Goblin)
+        unit  = maker(self.player.lv, grade)
         # Unit → EntitySnapshot 변환 (Phase 1 신규 필드 보존)
         _snap = EntitySnapshot(
             name=unit.name,
@@ -255,7 +273,7 @@ class BalanceHook:
             sparm=unit.sparm, sp=unit.sp,
             luc=unit.luc,   lv=unit.lv,
             spd=getattr(unit, "spd", 10),
-            difficulty="normal",
+            difficulty=self._GRADE_DIFFICULTY.get(grade, "normal"),
             # 역할 기반 메커니즘
             physical_resist=getattr(unit, "physical_resist", 1.0),
             magical_resist=getattr(unit, "magical_resist", 1.0),
@@ -342,6 +360,15 @@ class BalanceHook:
         _write_to_monitor("__DONE__")
 
     # ── 백그라운드 시뮬레이션 ────────────────
+
+    def prewarm(self, enemy_type: str, chapter: int = 1) -> None:
+        """이 (종류, 챕터)의 자동 튜닝을 미리 걸어 두기만 한다 — 결과를 기다리지 않는다.
+
+        다대일 노드는 등급 팩토리를 쓰므로(app/Map.py의 _make_enemies) get_enemy()를
+        부르지 않는데, get_enemy()가 겸하던 "처음 만난 종류의 튜닝 시작"도 같이
+        사라지면 나중에 그 종류를 1v1로 만날 때 2초 폴백에 걸린다. 그 예열만
+        떼어낸 것이라 이미 제출된 작업이 있으면 아무 일도 하지 않는다."""
+        self._start_background_sim(enemy_type, chapter)
 
     def _start_background_sim(self, enemy_type: str, chapter: int = 1):
         """백그라운드 스레드에서 시뮬레이션 시작"""
