@@ -28,12 +28,12 @@ for f in TestFile/test_*.py; do python3 "$f"; done   # full quick suite
 ```
 Each prints `✅`/`❌` per assertion and exits non-zero on failure. `TestFile/montecarlo.py` is a long-running balance simulation (many thousands of simulated battles), not a pass/fail regression test — don't include it in a "run the suite" pass.
 
-Local DB is SQLite at `ai_rpg.db` (gitignored, auto-created by `init_db()` on boot). Delete the file to reset local state; schema changes need no migration tool since `init_db()` just calls `Base.metadata.create_all()`.
+Local DB is SQLite at `ai_rpg.db` (gitignored, auto-created by `init_db()` on boot). Delete the file to reset local state; schema changes need no migration tool since `init_db()` just calls `Base.metadata.create_all()`. **That stops being true once a deployed DB holds data you care about** — `create_all()` creates missing tables but never adds a column to an existing one, so adding a field to `PlayerState`/`BattleLog` after launch needs a migration step (Alembic or a hand-written script) plus a backup first. Not set up yet; decide before the first schema change on live data.
 
 ## Architecture
 
 ### Backend layering (bottom to top)
-- `DB/` — SQLAlchemy models (`Models.py`) + `get_session()` context manager (auto commit/rollback/close). `DATABASE_URL` env var switches SQLite → Postgres with no code change.
+- `DB/` — SQLAlchemy models (`Models.py`) + `get_session()` context manager (auto commit/rollback/close). `DATABASE_URL` env var switches SQLite → Postgres with no code change. That fallback is guarded in production: `_guard_production_db_url()` (called from `init_db()`) raises if the `RENDER` env var is present and `DATABASE_URL` is missing or points at SQLite — otherwise a dropped setting boots "successfully" onto the container's ephemeral disk and every redeploy silently wipes player state and the `BattleLog` rows the whole project exists to collect. Locally (`RENDER` unset) behavior is unchanged. `TestFile/test_db_guard.py` covers both sides.
 - `game/` — domain models: `Player_Class.py`, `Enemy_Class.py`, `Inventory.py`, `Lv.py` (leveling), `Skill.py`, `Rewards.py`, `Map.py` (node-map generation/spawn tables).
 - `ai/battle/` — the stateless battle engine (`Entity`, `ATB`, `Actions`, `Elements`, `Damage`, `Skills`, `Items`, `Engine`, `MonsterKit`, `EliteKit`). Pure calculation: no Flask, no session state. Its `__init__.py` docstring states the internal dependency layering — read it before adding a new module here.
 - `ai/Battlesession.py` + `ai/battle_session/` — the stateful, Flask-facing wrapper. `BattleSession` (in `Battlesession.py`) is composed from mixins in the `battle_session/` package (`Targeting`, `ATB_Flow`, `Rewards`, `Player_Actions`, `Enemy_Actions`, `Elite_Actions`, `State`, `Battle_Log`) — `step(action)` is the only entry point routes call. When changing turn/reward/logging behavior, find the right mixin rather than adding to `Battlesession.py` itself.

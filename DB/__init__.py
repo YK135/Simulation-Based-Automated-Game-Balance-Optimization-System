@@ -16,6 +16,35 @@ DATABASE_URL = os.environ.get("DATABASE_URL", DEFAULT_DB_URL)
 
 
 # ─────────────────────────────────────────────
+# 운영 환경 가드
+# ─────────────────────────────────────────────
+# 위 폴백은 로컬 개발에는 편하지만 운영에서는 위험하다 — DATABASE_URL이 빠지거나
+# 오타가 나도 서버가 "정상처럼" 뜨면서 컨테이너 로컬 디스크의 SQLite 파일에
+# 저장한다. Render의 디스크는 ephemeral이라 재배포 때마다 유저 상태와 학습용
+# BattleLog가 통째로 사라지고, 그 사실이 에러 하나 없이 조용히 진행된다.
+#
+# RENDER는 Render가 서비스에 자동 주입하는 변수다 — app/__init__.py가 MASTER_MODE를
+# 끄는 데 쓰는 것과 같은 "여기는 배포 환경"의 신호이고, 같은 패턴을 재사용한다.
+# 로컬에는 이 변수가 없으므로 개발 동작은 전과 완전히 동일하다.
+def _guard_production_db_url() -> None:
+    if not os.environ.get("RENDER"):
+        return  # 로컬/테스트 — SQLite 폴백 그대로 허용
+    if not os.environ.get("DATABASE_URL"):
+        raise RuntimeError(
+            "DATABASE_URL이 없는 채로 배포 환경에서 부팅하려 했습니다. "
+            "이대로 뜨면 유저 상태와 BattleLog가 컨테이너의 임시 SQLite 파일에 저장되고 "
+            "재배포 때 사라집니다. render.yaml의 fromDatabase 설정 또는 서비스 환경변수를 "
+            "확인하세요."
+        )
+    if DATABASE_URL.startswith("sqlite"):
+        raise RuntimeError(
+            f"배포 환경인데 DATABASE_URL이 SQLite({_masked_db_url()})를 가리킵니다. "
+            "컨테이너 디스크는 ephemeral이라 재배포 때 데이터가 사라집니다. "
+            "관리형 PostgreSQL 연결 문자열을 사용하세요."
+        )
+
+
+# ─────────────────────────────────────────────
 # SQLAlchemy 엔진 + 세션 팩토리
 # ─────────────────────────────────────────────
 # SQLite 전용 옵션: check_same_thread=False (Flask 다중 스레드 대응)
@@ -39,6 +68,7 @@ def init_db():
     모델에 등록된 모든 테이블을 DB에 생성 (이미 있으면 스킵).
     SQLite는 ai_rpg.db 파일이 자동 생성됨.
     """
+    _guard_production_db_url()
     # 모델을 import 해야 Base.metadata에 등록됨
     from DB import Models  # noqa: F401
     Base.metadata.create_all(bind=engine)
