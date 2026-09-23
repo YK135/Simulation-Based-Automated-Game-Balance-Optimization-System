@@ -99,9 +99,20 @@ _SIM_EXECUTOR = _BoundedDaemonPool(max_workers=4)
 
 
 def _player_to_snap(player, item_list: list) -> EntitySnapshot:
+    # ★ 스킬 조회는 ai/battle/Entity.py의 EntitySnapshot.from_player와 **같은 2단**이어야 한다.
+    #   여긴 1단(player.skill)만 보고 있었다. 실전은 app/Game.py가 player.skill을 세우고
+    #   game/Lv.py의 _sync_skill_object가 계속 맞춰 주므로 값이 같았지만, player.skill이
+    #   None이고 player.learned_skills만 있는 플레이어(테스트 하네스·측정 스크립트가
+    #   create_player_by_job으로 바로 만드는 형태)에서는 **튜너만 스킬 0개로 봤다**.
+    #   그러면 튜너는 "스킬 하나 없는 플레이어"를 기준으로 몬스터를 맞춘다 —
+    #   마법사는 전 화력이 스킬이라 시뮬 승률이 0%로 찍히고, 튜너는 몬스터를 바닥까지
+    #   깎는다. 실측 격차가 최대 100%p였다(튜너 시뮬 0.0% 대 실전 100.0%).
+    #   실전 경로의 동작은 이 변경으로 바뀌지 않는다(그쪽은 1단에서 이미 맞았다).
     skills = []
-    if hasattr(player, 'skill') and player.skill:
+    if hasattr(player, "skill") and player.skill and hasattr(player.skill, "learned_skills"):
         skills = list(player.skill.learned_skills)
+    elif hasattr(player, "learned_skills") and player.learned_skills:
+        skills = list(player.learned_skills)
     return EntitySnapshot(
         name=player.name,
         hp=player.hp,       maxhp=player.maxhp,
