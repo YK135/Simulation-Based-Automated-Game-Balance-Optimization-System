@@ -95,14 +95,14 @@ def _level_curve_mult(lv: int) -> float:
     커지는 가속 성장)과 몬스터 쪽 선형 성장(`기본값 + 계수*(lv-1)`)의 격차가
     후반으로 갈수록 벌어짐. 그래서 전 구간에 기본 상향을 걸고, 레벨이
     오를수록 추가로 더 올린다. 다대일(1v2/1v3/엘리트)은 이 위에 별도
-    STAT_SCALE로 낮추므로 과하게 어려워지지 않음 — 실측하며 조정.
+    다대일 배율로 조정하므로 과하게 어려워지지 않음 — 실측하며 조정.
     보스(중간/최종)는 이미 별도로 잘 맞춰져 있어 이 배율을 안 탐
     (Make_MidBoss/Make_FinalBoss는 _apply_grade를 안 씀).
 
-    ★ 다대일 초반 완화(app/Map.py의 _early_game_multi_scale)와 이 함수는
+    ★ 다대일 배율(app/Map.py의 _multi_stat_scale · _elite_stat_scale)과 이 함수는
       서로 다른 문제를 겨냥한 별도 배율이라 함께 곱해진다 — 다음에 밸런스를
       다시 만질 땐 이 함수만 보지 말고 그쪽도 같이 봐야 최종 스탯을 제대로
-      가늠할 수 있음(GRADE_MULT * 이 배율 * STAT_SCALE * _early_game_multi_scale).
+      가늠할 수 있음(GRADE_MULT * 이 배율 * 다대일 배율).
     """
     if lv <= 5:
         return 1.10

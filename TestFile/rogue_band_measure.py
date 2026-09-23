@@ -56,8 +56,21 @@ from game.Player_Class import create_player_by_job
 from game.Lv import LV_, Allocate_Stat_Points, auto_resolve_skill_choices
 import game.Lv as LvMod
 from game import Enemy_Class as EC
-from app.Map import (STAT_SCALE, NORMAL_GRADE_POOL, NORMAL_GRADE_3,
-                     _early_game_multi_scale, _apply_stat_scale)
+from app.Map import NORMAL_GRADE_POOL, NORMAL_GRADE_3, _apply_stat_scale
+
+# ★ 이 스크립트는 11차 당시의 규칙을 그대로 재현한다 — 그때 app/Map.py가 쓰던
+#   "다대일 = 할인" 표를 여기에 복사해 둔다. 12·13차에서 다대일이 튜너를 우회하며
+#   전제가 깨져 본체에서는 삭제됐다(지금 실전은 _multi_stat_scale의 **가산**이다).
+#   여기 값을 바꾸면 rogue_band_measure.out이 더 이상 재현되지 않는다.
+_STAT_SCALE_11TH = {1: 1.00, 2: 0.90, 3: 0.80}
+
+
+def _early_game_multi_scale_11th(player_lv: int) -> float:
+    if player_lv <= 2:
+        return 0.80
+    if player_lv <= 5:
+        return 0.90
+    return 1.0
 
 SEED = 20260923
 N = int(os.environ.get("N", "150"))
@@ -87,12 +100,12 @@ def _multi(lv, n):
     ★ 등급을 실전 풀에서 뽑는다 — 처음엔 세 칸 모두 「상」으로 고정했다가 3마리 칸이
       전 팔 0~2.7%로 바닥에 붙었는데, `app/Map.py`는 **3마리 노드에서 「상」을 금지**한다
       (`NORMAL_GRADE_3` = 하/중). 실전에 없는 조합으로 레버를 판정할 뻔했다.
-    보정도 실전과 같다(STAT_SCALE × _early_game_multi_scale). 등급 추첨은 `run_one`이
+    보정은 **11차 당시의** 할인 표를 쓴다(위 _STAT_SCALE_11TH 주석 참고). 등급 추첨은 `run_one`이
     전투 시드를 심은 직후에 일어나므로 같은 전투 번호면 모든 팔에서 같은 구성이 나온다."""
     pool = NORMAL_GRADE_3 if n == 3 else NORMAL_GRADE_POOL
     grades = random.choices(list(pool), weights=list(pool.values()), k=n)
     units = [EC.Make_Goblin(lv, g) for g in grades]
-    _apply_stat_scale(units, STAT_SCALE[n] * _early_game_multi_scale(lv))
+    _apply_stat_scale(units, _STAT_SCALE_11TH[n] * _early_game_multi_scale_11th(lv))
     return units
 
 

@@ -11,7 +11,7 @@ test_multi_scale.py — 일반 다대일의 "튜너 우회 + 가산 배율" 계�
      오를수록 줄어든다 — `_level_curve_mult`가 이미 레벨당 +6%를 올려 주기 때문.
   4. `_apply_stat_scale`이 **1.0 초과 배율을 실제로 적용**한다. 예전엔 `scale >= 1.0`
      조기 반환이 있어서 가산이 통째로 무시됐다.
-  5. 엘리트는 이 경로를 쓰지 않는다 — `ELITE_STAT_SCALE`(할인)이 그대로다.
+  5. 엘리트는 별도 사다리(`_elite_stat_scale`)를 쓰고, 옛 할인 표는 모듈에서 사라졌다.
 
 DB를 쓰지 않는다(BalanceHook은 가짜 객체로 대체).
 
@@ -24,7 +24,7 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from app.Map import (
     _multi_stat_scale, _elite_stat_scale, _apply_stat_scale,
     _make_enemies, _make_elite_encounter,
-    STAT_SCALE, ELITE_STAT_SCALE, NORMAL_GRADE_POOL, NORMAL_GRADE_3,
+    NORMAL_GRADE_POOL, NORMAL_GRADE_3,
 )
 
 PASS = FAIL = 0
@@ -101,8 +101,16 @@ for lv in (1, 5, 10, 15, 20, 25):
     for n in (2, 3):
         check(f"Lv{lv} {n}마리 배율 >= 1.0", _multi_stat_scale(lv, n) >= 1.0,
               _multi_stat_scale(lv, n))
-check("예전 STAT_SCALE은 할인이었다 (대조 — 엘리트용으로 남는다)",
-      STAT_SCALE[2] < 1.0 and STAT_SCALE[3] < 1.0, STAT_SCALE)
+# ★ 옛 할인 표(STAT_SCALE / ELITE_STAT_SCALE)와 _early_game_multi_scale()은
+#   13차에서 삭제했다 — 실전 경로가 전부 가산으로 바뀌어 미사용이 됐고, 죽은 값이
+#   모듈에 남아 있으면 "아직 쓰는 손잡이"로 읽힌다. 과거 측정을 재현하는
+#   TestFile/rogue_band_measure.py · elite_logic_measure.py가 각자 들고 있다.
+import app.Map as _Map
+check("app/Map.py에 옛 할인 표가 남아 있지 않다",
+      not any(hasattr(_Map, n) for n in
+              ("STAT_SCALE", "ELITE_STAT_SCALE", "_early_game_multi_scale")),
+      [n for n in ("STAT_SCALE", "ELITE_STAT_SCALE", "_early_game_multi_scale")
+       if hasattr(_Map, n)])
 
 s2 = [_multi_stat_scale(lv, 2) for lv in (1, 5, 10, 15, 20, 25)]
 s3 = [_multi_stat_scale(lv, 3) for lv in (1, 5, 10, 15, 20, 25)]
@@ -164,8 +172,8 @@ if len(units) > 1:
 else:
     check("단독이면 스탯을 건드리지 않는다", units[0].hp == 100.0, units[0].hp)
 
-check("(대조) 옛 ELITE_STAT_SCALE은 할인이었다 — 실전 경로에서는 더 이상 안 쓴다",
-      ELITE_STAT_SCALE[2] < 1.0, ELITE_STAT_SCALE)
+check("엘리트 2마리 가산이 일반 2마리 가산과 다르다 (같은 값이면 배선이 섞인 것)",
+      _elite_stat_scale(10, 2) != _multi_stat_scale(10, 2))
 
 print(f"\n결과: {PASS} passed, {FAIL} failed")
 sys.exit(1 if FAIL else 0)

@@ -93,7 +93,7 @@ class BattleSession(
             raise ValueError("BattleSession은 enemy 또는 enemies 중 하나를 받아야 합니다")
 
         # 다대일 스탯 보정은 app/Map.py의 _apply_stat_scale()이 스폰 시점에
-        # 외부에서 한 번만 적용한다(STAT_SCALE/ELITE_STAT_SCALE). 예전엔 여기서
+        # 외부에서 한 번만 적용한다(app/Map.py의 _multi_stat_scale/_elite_stat_scale). 예전엔 여기서
         # 또 한 번 90%/80%를 곱해 결과적으로 81%/64%까지 이중 적용되고
         # 있었다 — BattleSession은 넘어온 스탯을 그대로 신뢰하고 다시 건드리지
         # 않는다. 이 함수를 호출하는 모든 경로(app/Map.py, app/Master.py)가

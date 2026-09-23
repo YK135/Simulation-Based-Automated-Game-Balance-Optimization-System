@@ -63,45 +63,16 @@ _ITEM_DROP_POOL = [
 # ─────────────────────────────────────────────
 # 일반 전투: 1~3마리, 3마리일 때 hard 금지
 # 엘리트:    1~2마리, hard 고정
-# 스탯 보정:
-#   일반 1마리: 100%  / 2마리: 90%  / 3마리: 80%
-#   엘리트 1마리: 100% / 2마리: 90%
+# 스탯 보정: _multi_stat_scale(일반) · _elite_stat_scale(엘리트) — 둘 다 **가산**이다.
+#   옛 할인 표(STAT_SCALE 0.90·0.80, ELITE_STAT_SCALE 0.90)와 _early_game_multi_scale()은
+#   12·13차에서 다대일이 튜너를 우회하며 전제가 깨져 삭제했다. 과거 측정을 재현하는
+#   TestFile/rogue_band_measure.py · elite_logic_measure.py가 각자 그 값을 들고 있다.
 
 NORMAL_GRADE_POOL  = {"하": 0.35, "중": 0.45, "상": 0.20}
 NORMAL_GRADE_3     = {"하": 0.45, "중": 0.55}          # 3마리: hard 금지
 
-# ⚠️ 아래 두 표와 _early_game_multi_scale()은 **더 이상 실전 경로에서 쓰이지 않는다.**
-#   다대일이 튜너를 우회하면서(12차: 일반, 13차: 엘리트 2마리) "할인"이라는 전제가
-#   깨졌고, _multi_stat_scale() / _elite_stat_scale()의 **가산** 사다리가 대신한다.
-#   지우지 않고 남겨 둔 이유는 둘뿐이다 — (1) 예전 측정 기록을 재현하는
-#   TestFile/rogue_band_measure.py가 아직 import한다, (2) "다대일은 할인이었다"는
-#   과거 설계를 읽을 수 있게 한다. **새 코드에서 쓰지 말 것.**
-STAT_SCALE         = {1: 1.00, 2: 0.90, 3: 0.80}
-ELITE_STAT_SCALE   = {1: 1.00, 2: 0.90}
-
-
-def _early_game_multi_scale(player_lv: int) -> float:
-    """다대일 조기 완화 (밸런스 v6) — n_enemies 롤은 레벨과 무관하게 25%
-    확률로 3마리가 나올 수 있는데, 전사가 광역기(슬래시1)를 배우기 전인
-    Lv1~5 구간에서는 단일 대상 스킬로 3마리를 상대해야 해서 기존 -20%
-    보정만으로는 부족했음 (MC 실측: 전사 Lv1 1v3 30%, 목표 45%↑).
-
-    ⚠️ **지금은 어떤 실전 경로에서도 안 쓴다.** 일반 다대일은 _multi_stat_scale(),
-      엘리트는 _elite_stat_scale()이 맡고 두 사다리가 이 완화까지 흡수했다.
-      TestFile/rogue_band_measure.py가 옛 규칙을 재현하느라 아직 import한다.
-
-    ★ game/Enemy_Class.py의 _level_curve_mult()와는 별개 배율(다른 문제를
-      겨냥함)이라 두 배율이 함께 곱해진다 — 밸런스 재조정 시 이 함수만
-      보지 말고 그쪽도 같이 확인할 것."""
-    if player_lv <= 2:
-        return 0.80
-    if player_lv <= 5:
-        return 0.90
-    return 1.0
-
-
 # ── 일반 다대일 배율 (튜너 우회 경로 전용) ──────────────────────────
-# ★ 할인이 아니라 **가산**이다. STAT_SCALE(0.90/0.80)은 "1v1이 약 55%가 되게
+# ★ 할인이 아니라 **가산**이다. 옛 할인 표(0.90/0.80)는 "1v1이 약 55%가 되게
 #   튜닝된 칼날 위 몬스터"를 n마리 붙일 때의 할인이었다. _make_enemies가
 #   다대일에서 튜너를 우회하면서 전제가 깨졌다 — 등급 팩토리 몬스터는 1v1
 #   승률이 이미 100% 수준이라, 깎아 주면 2~3마리도 90~100%가 된다
@@ -247,7 +218,7 @@ def _make_enemies(hook, n: int, grade_pool: dict, chapter: int = 1, layer: int =
       (hook.make_graded_enemy) — **다대일은 튜너를 거치지 않는다.**
 
       튜너는 "1v1이 목표 승률(약 55%)이 되도록" 몬스터 하나를 맞춘다. 그렇게
-      칼날 위에 세운 상대를 2~3마리 뽑아 평평한 STAT_SCALE(0.90/0.80)만
+      칼날 위에 세운 상대를 2~3마리 뽑아 평평한 할인(0.90/0.80)만
       곱하면 산수가 안 맞는다 — 턴제에서 n마리는 받는 피해도, 깎아야 할 HP도
       n배다. 실측(N=150, 실전 스폰 규칙 그대로):
 
@@ -315,7 +286,7 @@ def _make_elite_encounter(hook, chapter: int = 1, layer: int = 1, player_lv: int
 
     ★ **배율을 이 함수 안에서 적용해서 돌려준다** — 호출부가 셋(app/Map.py의 라우트,
       app/Master.py, TestFile/montecarlo.py)인데 이미 갈라져 있었다(montecarlo만
-      _early_game_multi_scale을 빼먹어, 스윕이 재는 저레벨 엘리트가 실전과 달랐다).
+      저레벨 완화 배율을 빼먹어, 스윕이 재는 저레벨 엘리트가 실전과 달랐다).
       호출부에서 또 곱하지 말 것.
     """
     leader_type = choice(ELITE_CHAPTER_POOL.get(chapter) or ELITE_CHAPTER_POOL[1])

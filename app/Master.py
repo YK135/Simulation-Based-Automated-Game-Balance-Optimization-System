@@ -175,7 +175,7 @@ def master_battle_elite():
     layer = gs.get("battle_map_layer") or 1
     # ★ 다대일 보정은 _make_elite_encounter()가 안에서 적용해 돌려준다 — 여기서 또
     #   곱하면 두 번 걸린다. 예전엔 이 세 호출부가 각자 곱했고 실제로 갈라져 있었다
-    #   (montecarlo.py만 _early_game_multi_scale을 빼먹어 저레벨 엘리트가 실전과 달랐다).
+    #   (montecarlo.py만 저레벨 완화 배율을 빼먹어 저레벨 엘리트가 실전과 달랐다).
     enemies, _grades = _make_elite_encounter(hook, chapter=chapter, layer=layer,
                                              player_lv=gs["player"].lv)
 

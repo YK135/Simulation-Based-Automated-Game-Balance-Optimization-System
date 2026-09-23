@@ -46,8 +46,13 @@ from ai.battle.Actions import Action
 from game.Player_Class import create_player_by_job
 from game.Lv import LV_, Allocate_Stat_Points, auto_resolve_skill_choices
 from core.Balance_Hook import BalanceHook
-from app.Map import ELITE_STAT_SCALE, _apply_stat_scale
+from app.Map import _apply_stat_scale
 import ai.battle_session.Elite_Actions as EA
+
+# ★ 8차 당시 app/Map.py의 엘리트 할인 표. 13차에서 엘리트 2마리가 튜너를
+#   우회하며 전제가 깨져 본체에서는 삭제됐다(지금은 _elite_stat_scale의 가산).
+#   이 스크립트는 8차 결과를 재현하는 기록이라 그때 값을 그대로 둔다.
+_ELITE_STAT_SCALE_8TH = {1: 1.00, 2: 0.90}
 
 SEED = 20260922
 N = int(os.environ.get("N", "120"))
@@ -135,7 +140,7 @@ def tuned_snap(job, level, enemy_type, chapter=1):
 
 def elite_units(job, leader_type, level, escort_type=None, chapter=1):
     """app/Map._make_elite_encounter와 같은 구성 — 리더(hard, elite_leader) + 선택적 동료(hard).
-    동료가 있으면 실전과 같이 ELITE_STAT_SCALE[2]를 적용한다."""
+    동료가 있으면 실전과 같이 _ELITE_STAT_SCALE_8TH[2]를 적용한다."""
     hook = get_hook(job, level)
     leader = hook.make_battle_unit(copy.deepcopy(tuned_snap(job, level, leader_type, chapter)))
     leader.is_elite = True
@@ -146,7 +151,7 @@ def elite_units(job, leader_type, level, escort_type=None, chapter=1):
         escort.is_elite = True
         escort.elite_leader = False
         units.append(escort)
-        _apply_stat_scale(units, ELITE_STAT_SCALE[2])
+        _apply_stat_scale(units, _ELITE_STAT_SCALE_8TH[2])
     return units
 
 
@@ -339,7 +344,7 @@ def main():
     say(f"# 브리프 3장 엘리트 로직 3건 측정 — 커밋 {git_rev()} · 시드 {SEED} · N={N}/셀 · AI={AI_MODE}")
     say("상대는 실전 엘리트 노드와 같은 경로 — hook.get_enemy(difficulty='hard')로 자동 튜닝된 스탯을")
     say("(직업,레벨,몬스터)당 한 번 뽑아 모든 팔이 같은 적을 상대한다. 동료가 있는 셀은")
-    say("실전과 같이 ELITE_STAT_SCALE[2]=0.90을 적용한다.")
+    say("실전과 같이 _ELITE_STAT_SCALE_8TH[2]=0.90을 적용한다.")
     say("")
     for subject in subjects:
         subject = subject.strip()

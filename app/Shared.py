@@ -626,7 +626,7 @@ _code_revision_cache: Optional[str] = None
 def _code_revision() -> str:
     """현재 배포된 코드의 짧은 git 커밋 해시(가능하면) — best-effort, 실패하면
     'unknown'.
-    ★ 밸런스 상수(GRADE_MULT, STAT_SCALE 등)가 수동 버전 문자열 없이 자주
+    ★ 밸런스 상수(GRADE_MULT, _multi_stat_scale 등)가 수동 버전 문자열 없이 자주
       바뀌는 프로젝트라, 사람이 매번 올려야 하는 "balance_version" 문자열은
       깜빡하고 안 올리면 오히려 거짓 정보가 된다 — 커밋 해시는 커밋할 때마다
       자동으로 바뀌므로 유지보수 없이도 "이 로그가 정확히 어느 코드 시점에

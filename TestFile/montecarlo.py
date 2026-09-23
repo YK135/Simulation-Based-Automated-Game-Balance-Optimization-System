@@ -4,7 +4,7 @@
 밸런스 3차(BALANCE_PATCH_3)에서 몬스터 생성 경로를 core/Balance_Hook.py의
 실전 파이프라인(hook.get_enemy())으로 교체했다 — 예전엔 game/Enemy_Class.py의
 등급(하/중/상) 팩토리를 직접 호출해 BalanceHook의 자동 파워인덱스 튜닝
-레이어를 완전히 건너뛰었다. 몬스터 타입/등급 선택, STAT_SCALE 적용은
+레이어를 완전히 건너뛰었다. 몬스터 타입/등급 선택, 다대일 배율 적용은
 app/Map.py의 실제 라우트 함수(_make_enemies, _make_elite_encounter)를 그대로
 재사용한다 — 별도로 베낀 로직이 실전과 갈라질 위험을 없애기 위함.
 
@@ -12,7 +12,7 @@ app/Map.py의 실제 라우트 함수(_make_enemies, _make_elite_encounter)를 �
 시도도 했지만, 이진탐색이 승률-배율 곡선이 가파른 조합에서 재현 불가능한
 값에 수렴하는 문제가 확인돼 app/Map.py 쪽 연결은 철회했다 — 이 스크립트는
 항상 최신 app/Map.py를 그대로 재사용하므로 특별한 스위치 없이 자동으로
-개별 튜닝+STAT_SCALE 경로만 탄다. 자세한 내용은 BALANCE_PATCH_3.md 참고.)
+개별 튜닝 경로만 탄다. 자세한 내용은 BALANCE_PATCH_3.md 참고.)
 """
 import sys, io, os, json, time, contextlib, re
 from random import choice, seed
@@ -34,8 +34,7 @@ except ImportError:                                      # 2택 1이 없던 트�
 import random as _random_mod
 from app.Map import (
     _make_enemies, _make_elite_encounter,
-    STAT_SCALE, ELITE_STAT_SCALE, _early_game_multi_scale, _apply_stat_scale,
-    _multi_stat_scale,
+    _apply_stat_scale, _multi_stat_scale,
     NORMAL_GRADE_POOL, NORMAL_GRADE_3,
 )
 
@@ -122,7 +121,7 @@ def player_snap(p, items):
 
 def build_battle(btype, plv, job):
     """app/Map.py의 실제 라우트 로직을 그대로 재사용 — 몬스터 생성/
-    STAT_SCALE 적용까지 실전과 100% 동일하게 결정된다."""
+    다대일 배율 적용까지 실전과 100% 동일하게 결정된다."""
     chapter = 1 if plv < 8 else 2
     layer   = choice(range(1, NORMAL_LAYERS + 1))
     hook    = get_hook(job, plv)
@@ -136,7 +135,7 @@ def build_battle(btype, plv, job):
 
     if btype == "elite":
         # 배율은 _make_elite_encounter()가 안에서 적용한다(여기서 또 곱하면 두 번 걸린다).
-        # ★ 예전엔 이 줄이 ELITE_STAT_SCALE만 곱하고 _early_game_multi_scale을 빼먹어서,
+        # ★ 예전엔 이 줄이 엘리트 할인만 곱하고 저레벨 완화를 빼먹어서,
         #   스윕이 재는 저레벨 엘리트가 실전보다 20% 셌다.
         units, _grades = _make_elite_encounter(hook, chapter, layer=layer, player_lv=plv)
         esnaps = [EntitySnapshot.from_enemy(u) for u in units]
@@ -147,7 +146,7 @@ def build_battle(btype, plv, job):
     units, _grades = _make_enemies(hook, n, grade_pool, chapter, layer=layer)
     if n > 1:
         # 일반 다대일은 app/Map.py와 같은 규칙 — 튜너 우회 + 가산 배율.
-        # (예전엔 STAT_SCALE[n] * _early_game_multi_scale(plv)였다.)
+        # (예전엔 할인 표 STAT_SCALE[n] × 저레벨 완화였다 — 둘 다 12차에 삭제.)
         _apply_stat_scale(units, _multi_stat_scale(plv, n))
     esnaps = [EntitySnapshot.from_enemy(u) for u in units]
     return esnaps, units, False
